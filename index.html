@@ -129,6 +129,11 @@
   tr.today-row { background: rgba(61,220,151,.07); }
   td.why { color: var(--muted); font-size: .8rem; line-height: 1.45; min-width: 220px; }
   td .sub { display: block; color: var(--muted); font-size: .72rem; margin-top: 2px; }
+  .live-bar { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; justify-content: space-between; margin: 0 0 8px; color: var(--muted); font-size: .82rem; }
+  .live-bar strong { color: var(--text); font-weight: 650; }
+  .live-bar button { background: var(--card); color: var(--text); border: 1px solid var(--line); border-radius: 999px; padding: 6px 12px; cursor: pointer; font: inherit; }
+  .live-bar button:hover { border-color: var(--blue); }
+  .live-note { color: var(--muted); font-size: .75rem; line-height: 1.5; margin: 0 0 14px; }
 </style>
 </head>
 <body>
@@ -138,6 +143,11 @@
     <h1>纳指定投日报 · 159501</h1>
     <div class="meta" id="asofMeta">数据加载中…</div>
   </header>
+  <div class="live-bar">
+    <div id="liveStatus"><strong>行情更新时间</strong> 等待公开行情…</div>
+    <button type="button" id="liveRefresh">刷新行情</button>
+  </div>
+  <p class="live-note">盘中溢价来自公开网页行情转载（腾讯财经，非券商授权源），可能与券商 App 有零点几偏差；下单以券商 IOPV/溢价为准。距高点回撤、单日净值涨跌、P60 和较上月净值仍用定时快照，不是实时数。</p>
 
   <!-- HERO: daily briefing -->
   <div class="hero" id="hero">
@@ -217,7 +227,8 @@
           <strong>回撤口径</strong>：回撤系数看「距近一年最高净值的回撤」（最新净值 ÷ 近 365 天内最高净值 − 1，取正数）。<strong>较上月净值</strong>（约一个月前同一天）只显示作参照，不进入系数。<br/>
           回撤系数，档内线性、不再卡在 2：&lt;5%→1.0；5–10% 从 1.0 到 1.5；10–20% 从 1.5 到 2.5；20–30% 从 2.5 到 3.5；30–40% 从 3.5 到 5.0；&gt;40%→5.0。最新净值日相对前一净值日下跌 ≥3%，当天再 +0.5。<br/>
           溢价系数相对自己的 P60 连续变化：比 P60 低 5 个点及以上为 1.30，持平为 1.00，高出 5 个点及以上为 0.50，中间线性。另外设绝对下限：P≥15% 时系数不超过 0.75，P≥18% 或比最便宜同类贵 5 个点及以上时不超过 0.50。这样长期高溢价不会被抬高的 P60 洗成中性。<br/>
-          建议金额 = 基准 × 回撤系数 × 溢价系数，<strong>没有 2 倍上限</strong>。159501 明显贵时，买入代码仍指向纳指短名单里更合适的一只。标普500不参与这个金额。
+          建议金额 = 基准 × 回撤系数 × 溢价系数，<strong>没有 2 倍上限</strong>。159501 明显贵时，买入代码仍指向纳指短名单里更合适的一只。标普500不参与这个金额。<br/>
+          盘中「今日溢价 P」在页面打开且处于 A 股交易时段时，大约每 20 秒从公开行情重取，并重算溢价系数、建议金额和短名单排序。P60、高点回撤、单日净值涨跌不跟着这 20 秒变。
         </p>
       </details>
       <div class="calc-out" id="calcOut"></div>
@@ -483,14 +494,20 @@
       momRef.textContent = `较上月净值（参照，不进系数）：${mom == null ? '—' : (mom >= 0 ? '+' : '') + fmt(mom) + '%'}（${etf.mom_from_date || '—'} → ${etf.mom_to_date || '—'}）`;
     }
   }
+  const liveMap = {};
+  let pLocked = false;
+  let peerLocked = false;
   function applyEtf(code) {
     const etf = calculatorEtfs().find(e => e.code === code) || calculatorEtfs()[0];
     if (!etf) return;
+    pLocked = false;
+    peerLocked = false;
+    const q = liveMap[etf.code];
     document.getElementById('peakDd').value = fmt(etf.peak_dd_pct);
     document.getElementById('dayChg').value = fmt(etf.day_chg_pct);
-    document.getElementById('pToday').value = fmt(etf.p);
+    document.getElementById('pToday').value = fmt(q ? q.premium : etf.p);
     document.getElementById('p60').value = fmt(etf.p60);
-    document.getElementById('peerMin').value = fmt(etf.peer_min_premium);
+    document.getElementById('peerMin').value = fmt(cheapestOtherPremium(etf.code));
     document.getElementById('navHigh').value = etf.is_nav_60_high ? 1 : 0;
     setPeakHint(etf);
     recompute();
@@ -527,13 +544,14 @@
     if (p.is_primary) tr.className = 'primary';
     else if (p.code === cheapCode) tr.className = 'cheap';
     const note = p.is_primary ? '主标的' : (p.code === cheapCode ? '同类最低溢价' : '');
+    tr.dataset.code = p.code;
     tr.innerHTML = `
       <td><strong>${p.code}</strong></td>
       <td>${p.name || ''}</td>
-      <td>${p.ref_premium_pct == null ? '—' : fmt(p.ref_premium_pct) + '%'}</td>
+      <td class="js-prem">${p.ref_premium_pct == null ? '—' : fmt(p.ref_premium_pct) + '%'}</td>
       <td>${p.nav_premium_pct == null ? '—' : fmt(p.nav_premium_pct) + '%'}</td>
-      <td>${p.live_price != null ? fmt(p.live_price, 3) : (p.close != null ? fmt(p.close, 3) : '—')}</td>
-      <td>${p.iopv != null ? fmt(p.iopv, 3) : '—'}</td>
+      <td class="js-px">${p.live_price != null ? fmt(p.live_price, 3) : (p.close != null ? fmt(p.close, 3) : '—')}</td>
+      <td class="js-iopv">${p.iopv != null ? fmt(p.iopv, 3) : '—'}</td>
       <td>${note}</td>`;
     tbody.appendChild(tr);
   });
@@ -568,6 +586,8 @@
   loadCash();
   ['baseline','peakDd','dayChg','pToday','p60','peerMin','navHigh','monthInvested','reserve'].forEach(id => {
     document.getElementById(id).addEventListener('input', () => {
+      if (id === 'pToday') pLocked = true;
+      if (id === 'peerMin') peerLocked = true;
       if (id === 'monthInvested' || id === 'reserve') saveCash();
       recompute();
     });
@@ -585,6 +605,39 @@
     const asof = it.tracking_asof ? `截至 ${it.tracking_asof}` : '';
     return `${fmt(it.tracking_error_pct)}%<span class="sub">${asof}</span>`;
   }
+  const PICK_SPREAD = 2;
+  const PICK_MIN_TURNOVER = 50000000;
+  function chooseTodayLive(items) {
+    const pool = items.filter(it => it.ref_premium_pct != null && !it.nav_stale && (it.turnover_cny == null || it.turnover_cny >= PICK_MIN_TURNOVER));
+    const usable = pool.length ? pool : items.filter(it => it.ref_premium_pct != null && !it.nav_stale);
+    if (!usable.length) return null;
+    const floor = Math.min.apply(null, usable.map(it => it.ref_premium_pct));
+    const band = usable.filter(it => it.ref_premium_pct <= floor + PICK_SPREAD);
+    band.sort((a, b) => {
+      const fa = a.fee_total_pct == null ? 999 : a.fee_total_pct;
+      const fb = b.fee_total_pct == null ? 999 : b.fee_total_pct;
+      if (fa !== fb) return fa - fb;
+      return (b.aum_cny || 0) - (a.aum_cny || 0);
+    });
+    return band[0] || null;
+  }
+  function groupsForView() {
+    const picks = D.picks;
+    if (!picks) return [];
+    return (picks.groups || []).map(group => {
+      const items = (group.items || []).map(it => {
+        const q = liveMap[it.code];
+        if (!q) return it;
+        return Object.assign({}, it, { ref_premium_pct: q.premium, live_price: q.price, iopv: q.iopv });
+      });
+      if (!Object.keys(liveMap).length) return Object.assign({}, group, { items });
+      const today = chooseTodayLive(items);
+      const ranked = items.map(it => Object.assign({}, it, { is_today: !!(today && it.code === today.code) }));
+      ranked.sort((a, b) => (b.is_today - a.is_today) || ((a.ref_premium_pct == null ? 999 : a.ref_premium_pct) - (b.ref_premium_pct == null ? 999 : b.ref_premium_pct)));
+      const todayLine = today ? `今日优先 ${today.code} ${today.name || ''} · 参考溢价 ${fmt(today.ref_premium_pct)}%` : (group.today_line || '');
+      return Object.assign({}, group, { items: ranked, today_line: todayLine, today_code: today ? today.code : group.today_code });
+    });
+  }
   function renderPicks() {
     const root = document.getElementById('picksRoot');
     const picks = D.picks;
@@ -593,7 +646,11 @@
       root.textContent = '短名单暂无数据。';
       return;
     }
-    root.innerHTML = (picks.groups || []).map(group => {
+    const groups = groupsForView();
+    const liveNote = Object.keys(liveMap).length && liveMeta.stampText
+      ? ` 现价 / IOPV / 参考溢价已按公开行情更新（${liveMeta.stampText}）。`
+      : '';
+    root.innerHTML = groups.map(group => {
       const rows = (group.items || []).map(it => {
         const wait = it.role === 'conditional' && !it.is_today;
         const stale = it.nav_stale ? '<span class="tag wait">净值未齐</span>' : '';
@@ -624,11 +681,204 @@
           </table>
         </div>
       </div>`;
-    }).join('') + `<p class="pick-src">参考溢价截至 ${picks.premium_date || '—'} 收盘（QDII Lens）。管理费与托管费为年费率，规模截至 ${picks.aum_as_of || '—'}。年化跟踪误差来自东方财富特色数据，截至 ${picks.tracking_asof || '—'}。${picks.rule || ''}</p>`;
+    }).join('') + `<p class="pick-src">费率与年化跟踪误差仍是定时快照（规模截至 ${picks.aum_as_of || '—'}，跟踪误差截至 ${picks.tracking_asof || '—'}）。${picks.rule || ''}${liveNote}</p>`;
   }
+
+  const LIVE_POLL_MS = 20000;
+  const liveMeta = { stampText: '', error: '' };
+  function quoteCodes() {
+    const set = new Set();
+    (D.peers || []).forEach(p => p.code && set.add(p.code));
+    ((D.picks && D.picks.groups) || []).forEach(g => (g.items || []).forEach(it => it.code && set.add(it.code)));
+    calculatorEtfs().forEach(e => e.code && set.add(e.code));
+    return Array.from(set);
+  }
+  function tencentSymbol(code) {
+    return (code.charAt(0) === '5' || code.charAt(0) === '6' ? 'sh' : 'sz') + code;
+  }
+  function snapshotPremium(code) {
+    const peer = (D.peers || []).find(p => p.code === code);
+    if (peer && peer.ref_premium_pct != null) return peer.ref_premium_pct;
+    const etf = calculatorEtfs().find(e => e.code === code);
+    if (etf && etf.p != null) return etf.p;
+    const groups = (D.picks && D.picks.groups) || [];
+    for (const g of groups) {
+      const it = (g.items || []).find(x => x.code === code);
+      if (it && it.ref_premium_pct != null) return it.ref_premium_pct;
+    }
+    return null;
+  }
+  function cheapestOtherPremium(code) {
+    const universe = (D.peers || []).map(p => p.code).filter(Boolean);
+    const codes = universe.length ? universe : quoteCodes();
+    let best = null;
+    codes.forEach(c => {
+      if (c === code) return;
+      const q = liveMap[c];
+      const v = q ? q.premium : snapshotPremium(c);
+      if (v == null || Number.isNaN(v)) return;
+      if (best == null || v < best) best = v;
+    });
+    if (best == null) {
+      const etf = calculatorEtfs().find(e => e.code === code);
+      return etf ? etf.peer_min_premium : null;
+    }
+    return best;
+  }
+  function shanghaiClock(date) {
+    const parts = Object.fromEntries(new Intl.DateTimeFormat('en-US', {
+      timeZone: 'Asia/Shanghai', weekday: 'short', hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
+      year: 'numeric', month: '2-digit', day: '2-digit'
+    }).formatToParts(date || new Date()).map(p => [p.type, p.value]));
+    const weekday = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 }[parts.weekday];
+    return {
+      weekday,
+      mins: Number(parts.hour) * 60 + Number(parts.minute),
+      ymd: `${parts.year}${parts.month}${parts.day}`
+    };
+  }
+  function inTradingSession(clock) {
+    if (clock.weekday === 0 || clock.weekday === 6) return false;
+    const morning = clock.mins >= 9 * 60 + 30 && clock.mins <= 11 * 60 + 30;
+    const afternoon = clock.mins >= 13 * 60 && clock.mins <= 15 * 60;
+    return morning || afternoon;
+  }
+  function formatStamp(stamp) {
+    if (!/^\d{14}$/.test(stamp || '')) return '';
+    return `${stamp.slice(0, 4)}-${stamp.slice(4, 6)}-${stamp.slice(6, 8)} ${stamp.slice(8, 10)}:${stamp.slice(10, 12)}:${stamp.slice(12, 14)}`;
+  }
+  function parseTencent(text) {
+    const out = {};
+    text.split(/\n/).forEach(line => {
+      const m = line.match(/v_(?:sz|sh)(\d+)="(.*)"/);
+      if (!m) return;
+      const f = m[2].split('~');
+      const price = parseFloat(f[3]);
+      const iopv = parseFloat(f[78]);
+      if (!price || !iopv) return;
+      out[m[1]] = {
+        price,
+        iopv,
+        premium: (price / iopv - 1) * 100,
+        stamp: f[30] || ''
+      };
+    });
+    return out;
+  }
+  function paintLiveStatus(mode) {
+    const el = document.getElementById('liveStatus');
+    if (!el) return;
+    const when = liveMeta.stampText ? `行情更新时间 ${liveMeta.stampText}` : '行情更新时间 —';
+    if (mode === 'error') {
+      el.innerHTML = `<strong>${when}</strong> · 行情刷新失败，仍显示上一笔。可再点「刷新行情」。`;
+      return;
+    }
+    if (mode === 'closed') {
+      el.innerHTML = `<strong>${when}</strong> · 非交易时段，显示最近一笔公开行情，已停止自动刷新。`;
+      return;
+    }
+    el.innerHTML = `<strong>${when}</strong> · 交易时段约每 ${LIVE_POLL_MS / 1000} 秒刷新现价 / IOPV / 溢价。`;
+  }
+  function paint159501HeroFromLive() {
+    if ((document.getElementById('etfSelect').value || '159501') === '159501') return;
+    const etf = calculatorEtfs().find(e => e.code === '159501');
+    if (!etf) return;
+    const q = liveMap['159501'];
+    paintHero(
+      Number(etf.peak_dd_pct),
+      Number(etf.day_chg_pct),
+      Number(etf.mom_pct),
+      q ? q.premium : Number(etf.p),
+      Number(etf.p60),
+      Number(cheapestOtherPremium('159501')),
+      !!etf.is_nav_60_high,
+      Number(document.getElementById('baseline').value) || 0,
+      etf
+    );
+  }
+  function applyLiveQuotes() {
+    const selected = document.getElementById('etfSelect').value;
+    if (!pLocked && liveMap[selected]) {
+      document.getElementById('pToday').value = fmt(liveMap[selected].premium);
+    }
+    if (!peerLocked) {
+      const peer = cheapestOtherPremium(selected);
+      if (peer != null) document.getElementById('peerMin').value = fmt(peer);
+    }
+    (D.peers || []).forEach(p => {
+      const q = liveMap[p.code];
+      const tr = document.querySelector(`#peerBody tr[data-code="${p.code}"]`);
+      if (!q || !tr) return;
+      const prem = tr.querySelector('.js-prem');
+      const px = tr.querySelector('.js-px');
+      const iopv = tr.querySelector('.js-iopv');
+      if (prem) prem.textContent = fmt(q.premium) + '%';
+      if (px) px.textContent = fmt(q.price, 3);
+      if (iopv) iopv.textContent = fmt(q.iopv, 4);
+    });
+    recompute();
+    paint159501HeroFromLive();
+    renderPicks();
+  }
+  let liveTimer = null;
+  let liveBusy = false;
+  async function refreshLiveQuotes() {
+    if (liveBusy) return;
+    liveBusy = true;
+    const codes = quoteCodes();
+    try {
+      const url = 'https://qt.gtimg.cn/q=' + codes.map(tencentSymbol).join(',');
+      const res = await fetch(url, { cache: 'no-store', referrerPolicy: 'no-referrer' });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const buf = await res.arrayBuffer();
+      const text = new TextDecoder('gbk').decode(buf);
+      const parsed = parseTencent(text);
+      if (!Object.keys(parsed).length) throw new Error('空行情');
+      Object.keys(parsed).forEach(code => { liveMap[code] = parsed[code]; });
+      const stamp = Object.values(parsed).map(q => q.stamp).sort().pop();
+      liveMeta.stampText = formatStamp(stamp);
+      liveMeta.error = '';
+      applyLiveQuotes();
+      const clock = shanghaiClock(new Date());
+      const session = inTradingSession(clock) && stamp && stamp.slice(0, 8) === clock.ymd;
+      paintLiveStatus(session ? 'live' : 'closed');
+      return session;
+    } catch (err) {
+      liveMeta.error = String(err && err.message || err);
+      paintLiveStatus('error');
+      return inTradingSession(shanghaiClock(new Date()));
+    } finally {
+      liveBusy = false;
+    }
+  }
+  function stopLivePoll() {
+    if (liveTimer) clearInterval(liveTimer);
+    liveTimer = null;
+  }
+  function startLivePoll() {
+    stopLivePoll();
+    if (document.hidden) return;
+    if (!inTradingSession(shanghaiClock(new Date()))) return;
+    liveTimer = setInterval(() => {
+      if (!document.hidden) refreshLiveQuotes().then(session => { if (!session) stopLivePoll(); });
+    }, LIVE_POLL_MS);
+  }
+  document.getElementById('liveRefresh').addEventListener('click', () => {
+    pLocked = false;
+    peerLocked = false;
+    refreshLiveQuotes().then(startLivePoll);
+  });
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) {
+      stopLivePoll();
+      return;
+    }
+    refreshLiveQuotes().then(startLivePoll);
+  });
 
   recompute();
   renderPicks();
+  refreshLiveQuotes().then(startLivePoll);
 
   // Chart
   const hist = D.history || [];
