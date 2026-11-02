@@ -1,0 +1,102 @@
+# 交易日早盘前刷新纳指定投日报，并用 GitHub Pages 官方 Action 发布。
+# 定时为 01:00 UTC，约等于北京时间 09:00，周一至周五。不使用任何密钥。
+name: 刷新并部署日报
+
+on:
+  schedule:
+    - cron: "0 1 * * 1-5"
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+  actions: read
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    name: 刷新数据
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: 检出仓库
+        uses: actions/checkout@v6
+        with:
+          ref: main
+          persist-credentials: true
+
+      - name: 安装 Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: 拉取净值、行情与同类溢价
+        run: python3 refresh.py
+
+      - name: 把刷新结果写回仓库
+        continue-on-error: true
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          for f in data.js data/premium_159501.csv data/peers_latest.csv data/dashboard_payload.json data/nav_159501.csv; do
+            [ -f "$f" ] && git add "$f"
+          done
+          if git diff --staged --quiet; then
+            echo "数据无变化，跳过提交"
+          else
+            git commit -m "chore: 自动刷新纳指定投日报数据"
+            git push origin HEAD:main
+          fi
+
+      - name: 组装站点目录
+        run: |
+          rm -rf _site
+          mkdir -p _site/vendor _site/data
+          cp index.html data.js .nojekyll _site/
+          cp vendor/chart.umd.min.js _site/vendor/
+          cp data/premium_159501.csv data/peers_latest.csv data/dashboard_payload.json _site/data/
+
+      - name: 上传 Pages 产物
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: _site
+
+  deploy:
+    name: 部署到 GitHub Pages
+    needs: refresh
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: 检查 Pages 发布源
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          code=$(curl -sS -o /tmp/pages.json -w "%{http_code}" \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${{ github.repository }}/pages" || true)
+          echo "Pages API HTTP ${code}"
+          if [ "${code}" != "200" ]; then
+            echo "::warning::GitHub Pages 还没打开，或发布源不是 GitHub Actions。请打开 Settings → Pages，Source 选 GitHub Actions，然后重新运行「刷新并部署日报」。站点地址：https://fan930450-cpu.github.io/nazhietf/"
+            exit 0
+          fi
+          python3 - << 'PY'
+          import json
+          data = json.load(open("/tmp/pages.json", encoding="utf-8"))
+          print("build_type=", data.get("build_type"), "html_url=", data.get("html_url"))
+          if data.get("build_type") != "workflow":
+              print("::warning::Pages 当前不是 GitHub Actions 发布。请到 Settings → Pages 把 Source 改成 GitHub Actions，否则本工作流无法更新 https://fan930450-cpu.github.io/nazhietf/")
+          PY
+
+      - name: 发布到 GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

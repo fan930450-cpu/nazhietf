@@ -1,0 +1,477 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>纳指定投日报 · 159501</title>
+<style>
+  :root {
+    --bg: #0b1220;
+    --bg2: #111a2e;
+    --card: #151f36;
+    --card2: #1a2742;
+    --line: #2a3a5c;
+    --text: #e8eefc;
+    --muted: #8fa3c8;
+    --green: #3ddc97;
+    --red: #ff6b7a;
+    --amber: #ffb020;
+    --blue: #5b8cff;
+    --purple: #a78bfa;
+    --shadow: 0 10px 40px rgba(0,0,0,.35);
+    --radius: 16px;
+    --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    --sans: "PingFang SC", "Noto Sans SC", "Microsoft YaHei", system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: var(--bg); color: var(--text); font-family: var(--sans); }
+  body { min-height: 100vh; background:
+    radial-gradient(1200px 600px at 10% -10%, rgba(91,140,255,.18), transparent 60%),
+    radial-gradient(900px 500px at 100% 0%, rgba(61,220,151,.08), transparent 50%),
+    var(--bg); }
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 20px 16px 64px; }
+  header.top { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: baseline; justify-content: space-between; margin-bottom: 18px; }
+  header.top h1 { font-size: 1.25rem; margin: 0; font-weight: 700; letter-spacing: .02em; }
+  header.top .meta { color: var(--muted); font-size: .85rem; }
+  .hero {
+    background: linear-gradient(145deg, #1a2b4d 0%, #132038 50%, #182744 100%);
+    border: 1px solid var(--line); border-radius: 22px; padding: 22px 22px 18px;
+    box-shadow: var(--shadow); position: relative; overflow: hidden;
+  }
+  .hero::before {
+    content: ""; position: absolute; inset: -40% auto auto -20%; width: 280px; height: 280px;
+    background: radial-gradient(circle, rgba(91,140,255,.25), transparent 70%); pointer-events: none;
+  }
+  .hero-label { color: var(--muted); font-size: .9rem; margin-bottom: 6px; }
+  .hero-amount {
+    font-size: clamp(2.4rem, 8vw, 3.6rem); font-weight: 800; letter-spacing: -.02em;
+    font-variant-numeric: tabular-nums; line-height: 1.1; margin: 4px 0 10px;
+  }
+  .hero-amount .yen { font-size: .55em; opacity: .85; margin-right: 2px; }
+  .hero-target {
+    display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap;
+    background: rgba(61,220,151,.12); border: 1px solid rgba(61,220,151,.35);
+    color: var(--green); padding: 8px 12px; border-radius: 999px; font-size: .92rem; font-weight: 600;
+  }
+  .hero-target.alt { background: rgba(255,176,32,.12); border-color: rgba(255,176,32,.4); color: var(--amber); }
+  .hero-reason { margin-top: 14px; color: var(--muted); font-size: .92rem; line-height: 1.55; }
+  .hero-reason strong { color: var(--text); font-weight: 600; }
+  .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 14px; }
+  @media (max-width: 800px) { .grid { grid-template-columns: 1fr 1fr; } }
+  @media (max-width: 520px) { .grid { grid-template-columns: 1fr; } }
+  .kpi {
+    background: rgba(255,255,255,.03); border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px;
+  }
+  .kpi .k { color: var(--muted); font-size: .78rem; margin-bottom: 4px; }
+  .kpi .v { font-size: 1.25rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .kpi .s { color: var(--muted); font-size: .75rem; margin-top: 2px; }
+  .up { color: var(--red); } .down { color: var(--green); } .flat { color: var(--amber); }
+  /* A-share convention: up red down green */
+  .badge {
+    display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: .75rem; font-weight: 700;
+  }
+  .badge.exp { background: rgba(255,107,122,.15); color: var(--red); }
+  .badge.mid { background: rgba(255,176,32,.15); color: var(--amber); }
+  .badge.ok { background: rgba(61,220,151,.15); color: var(--green); }
+  .badge.sell { background: rgba(167,139,250,.18); color: var(--purple); }
+  .badge.nosell { background: rgba(143,163,200,.12); color: var(--muted); }
+  section { margin-top: 22px; }
+  section h2 { font-size: 1.05rem; margin: 0 0 10px; display: flex; align-items: center; gap: 8px; }
+  section h2 .hint { color: var(--muted); font-size: .8rem; font-weight: 400; }
+  .card {
+    background: var(--card); border: 1px solid var(--line); border-radius: var(--radius);
+    padding: 16px; box-shadow: var(--shadow);
+  }
+  .chart-box { position: relative; height: 320px; }
+  canvas, svg.fallback-chart { width: 100%; height: 100%; display: block; }
+  table { width: 100%; border-collapse: collapse; font-size: .9rem; }
+  th, td { padding: 10px 8px; text-align: left; border-bottom: 1px solid var(--line); }
+  th { color: var(--muted); font-weight: 600; font-size: .78rem; }
+  tr.primary { background: rgba(91,140,255,.12); }
+  tr.cheap { background: rgba(61,220,151,.08); }
+  .form-row { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+  @media (max-width: 640px) { .form-row { grid-template-columns: 1fr; } }
+  label { display: block; color: var(--muted); font-size: .8rem; margin-bottom: 4px; }
+  input[type=number], input[type=text] {
+    width: 100%; background: var(--bg2); border: 1px solid var(--line); color: var(--text);
+    border-radius: 10px; padding: 10px 12px; font-size: 1rem; font-variant-numeric: tabular-nums;
+  }
+  input:focus { outline: 2px solid rgba(91,140,255,.45); border-color: var(--blue); }
+  .calc-out {
+    margin-top: 14px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;
+  }
+  @media (max-width: 700px) { .calc-out { grid-template-columns: 1fr; } }
+  .checklist { list-style: none; padding: 0; margin: 0; }
+  .checklist li {
+    padding: 10px 12px; border-bottom: 1px solid var(--line); display: flex; gap: 10px; align-items: flex-start;
+  }
+  .checklist li:last-child { border-bottom: none; }
+  .checklist .n {
+    flex: 0 0 24px; height: 24px; border-radius: 8px; background: rgba(91,140,255,.2); color: var(--blue);
+    display: grid; place-items: center; font-size: .8rem; font-weight: 700;
+  }
+  footer { margin-top: 28px; color: var(--muted); font-size: .78rem; line-height: 1.6; }
+  .legend { display: flex; flex-wrap: wrap; gap: 10px 16px; color: var(--muted); font-size: .78rem; margin-top: 8px; }
+  .legend i { display: inline-block; width: 18px; height: 3px; border-radius: 2px; vertical-align: middle; margin-right: 4px; }
+  details.advanced { margin-top: 10px; color: var(--muted); }
+  details.advanced summary { cursor: pointer; color: var(--blue); }
+  .pill-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+</style>
+</head>
+<body>
+<noscript><p style="padding:16px">请启用 JavaScript 以查看定投建议。本页不需要登录，也不需要 Grok Bot。</p></noscript>
+<div class="wrap">
+  <header class="top">
+    <h1>纳指定投日报 · 159501</h1>
+    <div class="meta" id="asofMeta">数据加载中…</div>
+  </header>
+
+  <!-- HERO: daily briefing -->
+  <div class="hero" id="hero">
+    <div class="hero-label">今日建议定投金额（自动计算）</div>
+    <div class="hero-amount"><span class="yen">¥</span><span id="heroAmount">—</span></div>
+    <div id="heroTarget" class="hero-target">建议标的加载中…</div>
+    <div class="pill-row" id="heroPills"></div>
+    <div class="hero-reason" id="heroReason"></div>
+    <div class="grid" id="kpiGrid"></div>
+  </div>
+
+  <section>
+    <h2>定投计算器 <span class="hint">已用最新数据预填；一般只需改「基准金额」</span></h2>
+    <div class="card">
+      <div class="form-row">
+        <div>
+          <label for="baseline">基准金额（元）</label>
+          <input id="baseline" type="number" min="0" step="100" value="4000" />
+        </div>
+        <div>
+          <label for="mom">较上月净值涨跌 %（可改）</label>
+          <input id="mom" type="number" step="0.01" />
+        </div>
+        <div>
+          <label for="pToday">今日溢价 P %（可改）</label>
+          <input id="pToday" type="number" step="0.01" />
+        </div>
+        <div>
+          <label for="p60">近60日溢价中位数 P60 %（可改）</label>
+          <input id="p60" type="number" step="0.01" />
+        </div>
+        <div>
+          <label for="peerMin">最便宜同类溢价 %（可改）</label>
+          <input id="peerMin" type="number" step="0.01" />
+        </div>
+        <div>
+          <label for="navHigh">净值是否近60日新高（1=是 0=否）</label>
+          <input id="navHigh" type="number" min="0" max="1" step="1" />
+        </div>
+      </div>
+      <details class="advanced">
+        <summary>系数规则说明</summary>
+        <p style="font-size:.85rem;line-height:1.55;margin:.6rem 0 0">
+          回撤系数：涨≥5%→0.4；涨&gt;2%→0.7；±2%→1.0；回撤2–5%→1.2；回撤5–10%线性1.5→2.0；≥10%→2.0。<br/>
+          溢价系数：明显贵（P−P60≥5 或 P−同类最低≥5 或 P≥18）→0.5；略贵→0.75；中性→1.0；相对便宜（P60−P≥3）→1.3。<br/>
+          建议金额 = min(基准×回撤×溢价, 基准×2)。159501 明显贵时，标的优先指向同类更便宜的一只。
+        </p>
+      </details>
+      <div class="calc-out" id="calcOut"></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>历史溢价 <span class="hint">净值折溢价 = 收盘价 ÷ 单位净值 − 1 · 含 P60 / 10% / 18% 参考线</span></h2>
+    <div class="card">
+      <div class="chart-box">
+        <canvas id="premChart"></canvas>
+        <svg class="fallback-chart" id="svgChart" style="display:none" viewBox="0 0 1000 320" preserveAspectRatio="none"></svg>
+      </div>
+      <div class="legend">
+        <span><i style="background:#5b8cff"></i>日溢价</span>
+        <span><i style="background:#ffb020"></i>P60（近60日中位数）</span>
+        <span><i style="background:#ff6b7a"></i>18% 极贵线</span>
+        <span><i style="background:#8fa3c8"></i>10% 参考线</span>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>同类对比 <span class="hint">按收盘参考溢价从低到高 · 数据截至上一交易日快照</span></h2>
+    <div class="card" style="overflow-x:auto">
+      <table>
+        <thead>
+          <tr>
+            <th>代码</th><th>名称</th><th>参考溢价</th><th>净值溢价</th><th>收盘/现价</th><th>IOPV</th><th>备注</th>
+          </tr>
+        </thead>
+        <tbody id="peerBody"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2>159501 今日概览</h2>
+    <div class="card" id="overviewCard"></div>
+  </section>
+
+  <section>
+    <h2>每日 / 定投日操作清单</h2>
+    <div class="card">
+      <ul class="checklist">
+        <li><span class="n">1</span><div>看本页顶部<strong>今日建议定投金额</strong>与建议标的（约 09:00 开盘前/后打开即可）。</div></li>
+        <li><span class="n">2</span><div>核对<strong>今日溢价 P</strong>与<strong>P60</strong>：明显贵时优先买表格里溢价更低的同类，不必死磕 159501。</div></li>
+        <li><span class="n">3</span><div>看<strong>较上月净值涨跌</strong>：回撤越大建议金额越高（已自动计入系数）。</div></li>
+        <li><span class="n">4</span><div>若提示「建议卖战术仓」：只卖总市值 5–8%，底仓≥75%不动；一年累计减仓建议≤20%。</div></li>
+        <li><span class="n">5</span><div>数据在每个交易日约 <strong>09:00（北京时间）</strong>由 GitHub Actions 自动更新，也可在仓库 Actions 里手动运行「刷新并部署日报」。不需要 Grok Bot。</div></li>
+      </ul>
+    </div>
+  </section>
+
+  <footer>
+    仅供个人定投记录与执行辅助，<strong>非投资建议</strong>。溢价与净值存在披露时滞；盘中请以券商 IOPV / 行情为准。
+    数据来源：东方财富基金净值、新浪财经 / 腾讯财经 K 线、QDII Lens 同类参考溢价快照。每个交易日约 09:00（北京时间）自动刷新。
+  </footer>
+</div>
+
+<script src="data.js"></script>
+<script src="vendor/chart.umd.min.js"></script>
+<script>
+(function () {
+  const D = window.DASHBOARD_DATA;
+  if (!D) {
+    document.getElementById('asofMeta').textContent = '未找到 data.js，请与 index.html 放在同一目录。';
+    return;
+  }
+
+  const fmt = (n, d=2) => (n == null || Number.isNaN(n)) ? '—' : Number(n).toFixed(d);
+  const fmtYen = (n) => {
+    if (n == null || Number.isNaN(n)) return '—';
+    return Math.round(n).toLocaleString('zh-CN');
+  };
+  const signCls = (n) => n > 0.05 ? 'up' : (n < -0.05 ? 'down' : 'flat');
+
+  function drawdownCoef(chg) {
+    if (chg == null || Number.isNaN(chg)) return { c: 1, label: '数据不足' };
+    if (chg >= 5) return { c: 0.4, label: '上涨≥5%' };
+    if (chg > 2) return { c: 0.7, label: '上涨0–5%' };
+    if (chg >= -2) return { c: 1.0, label: '持平±2%' };
+    if (chg > -5) return { c: 1.2, label: '回撤2–5%' };
+    if (chg > -10) {
+      const t = (-chg - 5) / 5;
+      return { c: 1.5 + 0.5 * t, label: '回撤5–10%' };
+    }
+    return { c: 2.0, label: '回撤≥10%' };
+  }
+
+  function premiumCoef(p, p60, peerMin) {
+    if ((p - p60 >= 5) || (peerMin != null && p - peerMin >= 5) || p >= 18) {
+      return { c: 0.5, label: '明显贵', expensive: true };
+    }
+    if (p60 - p >= 3) return { c: 1.3, label: '相对便宜', expensive: false };
+    if (Math.abs(p - p60) <= 2) return { c: 1.0, label: '中性', expensive: false };
+    if (p > p60) return { c: 0.75, label: '略贵', expensive: false };
+    return { c: 1.0, label: '中性', expensive: false };
+  }
+
+  function cheapestPeer() {
+    const peers = (D.peers || []).filter(p => p.code !== '159501' && p.ref_premium_pct != null);
+    peers.sort((a,b) => a.ref_premium_pct - b.ref_premium_pct);
+    return peers[0] || null;
+  }
+
+  function recompute() {
+    const baseline = Number(document.getElementById('baseline').value) || 0;
+    const mom = Number(document.getElementById('mom').value);
+    const p = Number(document.getElementById('pToday').value);
+    const p60 = Number(document.getElementById('p60').value);
+    const peerMin = Number(document.getElementById('peerMin').value);
+    const navHigh = Number(document.getElementById('navHigh').value) === 1;
+
+    const dd = drawdownCoef(mom);
+    const pr = premiumCoef(p, p60, peerMin);
+    const raw = baseline * dd.c * pr.c;
+    const amount = Math.min(raw, baseline * 2);
+    const sell = navHigh && pr.expensive;
+    const cheap = cheapestPeer();
+    let targetCode = '159501', targetName = '嘉实纳斯达克100', targetPrem = p, targetNote = '主标的';
+    if (pr.expensive && cheap) {
+      targetCode = cheap.code;
+      targetName = cheap.name;
+      targetPrem = cheap.ref_premium_pct;
+      targetNote = '159501明显贵，优先同类更便宜';
+    }
+
+    const reasonParts = [
+      `较上月净值${mom >= 0 ? '+' : ''}${fmt(mom)}% → 回撤系数 ${fmt(dd.c)}（${dd.label}）`,
+      `溢价 ${fmt(p)}%（${pr.label}）→ 溢价系数 ${fmt(pr.c)}`,
+    ];
+    if (targetCode !== '159501') {
+      reasonParts.push(`建议买 ${targetCode}（同类溢价约 ${fmt(targetPrem)}%）`);
+    } else {
+      reasonParts.push('建议买 159501');
+    }
+    reasonParts.push(sell ? '净值近60日新高且明显贵 → 可卖战术仓 5–8%' : '暂不触发卖战术仓');
+    const reason = reasonParts.join('；');
+
+    // Hero
+    document.getElementById('heroAmount').textContent = fmtYen(amount);
+    const ht = document.getElementById('heroTarget');
+    ht.className = 'hero-target' + (targetCode !== '159501' ? ' alt' : '');
+    ht.innerHTML = targetCode !== '159501'
+      ? `建议买入 <strong>${targetCode}</strong> ${targetName} · 其参考溢价约 ${fmt(targetPrem)}%（${targetNote}）`
+      : `建议买入 <strong>159501</strong> 嘉实纳斯达克100 · 当前溢价约 ${fmt(p)}%`;
+    document.getElementById('heroReason').innerHTML = '<strong>一句话理由：</strong>' + reason;
+
+    const pills = document.getElementById('heroPills');
+    pills.innerHTML = `
+      <span class="badge ${pr.expensive ? 'exp' : (pr.label === '相对便宜' ? 'ok' : 'mid')}">溢价状态：${pr.label}</span>
+      <span class="badge ${sell ? 'sell' : 'nosell'}">${sell ? '建议卖战术仓 5–8%' : '不卖战术仓'}</span>
+      <span class="badge mid">回撤系数 ${fmt(dd.c)} · 溢价系数 ${fmt(pr.c)}</span>
+    `;
+
+    document.getElementById('kpiGrid').innerHTML = `
+      <div class="kpi"><div class="k">今日溢价 P</div><div class="v">${fmt(p)}%</div><div class="s">相对 P60 ${fmt(p - p60)} 个百分点</div></div>
+      <div class="kpi"><div class="k">近60日溢价中位数 P60</div><div class="v">${fmt(p60)}%</div><div class="s">净值折溢价滚动中位数</div></div>
+      <div class="kpi"><div class="k">较上月净值涨跌</div><div class="v ${signCls(mom)}">${mom >= 0 ? '+' : ''}${fmt(mom)}%</div><div class="s">${D.primary.mom_from_date || ''} → ${D.primary.mom_to_date || ''}</div></div>
+      <div class="kpi"><div class="k">溢价状态</div><div class="v">${pr.label}</div><div class="s">系数 ${fmt(pr.c)}</div></div>
+      <div class="kpi"><div class="k">是否建议卖战术仓</div><div class="v">${sell ? '是' : '否'}</div><div class="s">${sell ? '建议卖总市值 5–8%' : '未同时满足新高+明显贵'}</div></div>
+      <div class="kpi"><div class="k">最便宜同类</div><div class="v">${cheap ? cheap.code : '—'}</div><div class="s">${cheap ? (cheap.name + ' · ' + fmt(cheap.ref_premium_pct) + '%') : ''}</div></div>
+    `;
+
+    document.getElementById('calcOut').innerHTML = `
+      <div class="kpi"><div class="k">回撤系数</div><div class="v">${fmt(dd.c)}</div><div class="s">${dd.label}</div></div>
+      <div class="kpi"><div class="k">溢价系数</div><div class="v">${fmt(pr.c)}</div><div class="s">${pr.label}</div></div>
+      <div class="kpi"><div class="k">建议买入金额</div><div class="v">¥${fmtYen(amount)}</div><div class="s">上限 2×基准；原始 ${fmtYen(raw)}</div></div>
+    `;
+  }
+
+  // Prefill
+  const B = D.briefing;
+  const P = D.primary;
+  document.getElementById('baseline').value = B.baseline || 4000;
+  document.getElementById('mom').value = fmt(B.mom_pct);
+  document.getElementById('pToday').value = fmt(B.P);
+  document.getElementById('p60').value = fmt(B.P60);
+  document.getElementById('peerMin').value = fmt(B.peer_min_premium);
+  document.getElementById('navHigh').value = P.is_nav_60_high ? 1 : 0;
+
+  let meta = `构建 ${D.asof.built_at} · 行情/收盘 ${P.close_date} · 净值日 ${P.nav_date} · 参考溢价快照 ${P.premium_ref_date || ''}`;
+  if (D.asof.warnings && D.asof.warnings.length) {
+    meta += ' · 注意：' + D.asof.warnings.join('；');
+  }
+  document.getElementById('asofMeta').textContent = meta;
+
+  document.getElementById('overviewCard').innerHTML = `
+    <div class="grid" style="margin-top:0">
+      <div class="kpi"><div class="k">最新收盘价</div><div class="v">${fmt(P.close, 3)}</div><div class="s">${P.close_date}</div></div>
+      <div class="kpi"><div class="k">单位净值</div><div class="v">${fmt(P.nav, 4)}</div><div class="s">估值日 ${P.nav_date}</div></div>
+      <div class="kpi"><div class="k">净值折溢价</div><div class="v">${fmt(P.premium_nav_pct)}%</div><div class="s">收盘价÷净值−1</div></div>
+      <div class="kpi"><div class="k">收盘参考溢价(IOPV)</div><div class="v">${fmt(P.premium_ref_iopv_pct)}%</div><div class="s">${P.premium_ref_date}</div></div>
+      <div class="kpi"><div class="k">P60</div><div class="v">${fmt(P.p60)}%</div><div class="s">近60日净值溢价中位数</div></div>
+      <div class="kpi"><div class="k">60日净值新高</div><div class="v">${P.is_nav_60_high ? '是' : '否'}</div><div class="s">60日最高净值 ${fmt(P.nav_60_high, 4)}</div></div>
+    </div>
+  `;
+
+  // Peers table
+  const tbody = document.getElementById('peerBody');
+  const cheapCode = (cheapestPeer() || {}).code;
+  (D.peers || []).forEach(p => {
+    const tr = document.createElement('tr');
+    if (p.is_primary) tr.className = 'primary';
+    else if (p.code === cheapCode) tr.className = 'cheap';
+    const note = p.is_primary ? '主标的' : (p.code === cheapCode ? '同类最低溢价' : '');
+    tr.innerHTML = `
+      <td><strong>${p.code}</strong></td>
+      <td>${p.name || ''}</td>
+      <td>${p.ref_premium_pct == null ? '—' : fmt(p.ref_premium_pct) + '%'}</td>
+      <td>${p.nav_premium_pct == null ? '—' : fmt(p.nav_premium_pct) + '%'}</td>
+      <td>${p.live_price != null ? fmt(p.live_price, 3) : (p.close != null ? fmt(p.close, 3) : '—')}</td>
+      <td>${p.iopv != null ? fmt(p.iopv, 3) : '—'}</td>
+      <td>${note}</td>`;
+    tbody.appendChild(tr);
+  });
+
+  ['baseline','mom','pToday','p60','peerMin','navHigh'].forEach(id => {
+    document.getElementById(id).addEventListener('input', recompute);
+  });
+  recompute();
+
+  // Chart
+  const hist = D.history || [];
+  const labels = hist.map(r => r.date);
+  const prem = hist.map(r => r.premium_pct);
+  // rolling P60 series
+  const p60series = prem.map((_, i) => {
+    const slice = prem.slice(Math.max(0, i - 59), i + 1);
+    const sorted = slice.slice().sort((a,b)=>a-b);
+    const mid = Math.floor(sorted.length / 2);
+    return sorted.length % 2 ? sorted[mid] : (sorted[mid-1] + sorted[mid]) / 2;
+  });
+
+  function drawSvgFallback() {
+    const svg = document.getElementById('svgChart');
+    document.getElementById('premChart').style.display = 'none';
+    svg.style.display = 'block';
+    const W = 1000, H = 320, pad = 28;
+    const vals = prem.concat([10, 18], p60series);
+    const minV = Math.min(...vals) - 1;
+    const maxV = Math.max(...vals) + 1;
+    const x = (i) => pad + (W - 2 * pad) * (i / Math.max(1, prem.length - 1));
+    const y = (v) => H - pad - (H - 2 * pad) * ((v - minV) / (maxV - minV));
+    const line = (arr, color, w=1.5) => {
+      let d = '';
+      arr.forEach((v, i) => { d += (i ? 'L' : 'M') + x(i).toFixed(1) + ',' + y(v).toFixed(1); });
+      return `<path d="${d}" fill="none" stroke="${color}" stroke-width="${w}" />`;
+    };
+    const href = (v, color) => `<line x1="${pad}" x2="${W-pad}" y1="${y(v)}" y2="${y(v)}" stroke="${color}" stroke-dasharray="4 4" stroke-width="1"/>`;
+    svg.innerHTML = `
+      <rect width="100%" height="100%" fill="#151f36"/>
+      ${href(10, '#8fa3c8')}${href(18, '#ff6b7a')}
+      ${line(p60series, '#ffb020', 1.8)}
+      ${line(prem, '#5b8cff', 1.4)}
+      <text x="${pad}" y="16" fill="#8fa3c8" font-size="12">SVG 备用图（Chart.js 未加载）</text>
+    `;
+  }
+
+  function tryChart() {
+    if (typeof Chart === 'undefined') { drawSvgFallback(); return; }
+    const ctx = document.getElementById('premChart').getContext('2d');
+    new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels,
+        datasets: [
+          { label: '日溢价%', data: prem, borderColor: '#5b8cff', backgroundColor: 'rgba(91,140,255,.15)',
+            borderWidth: 1.5, pointRadius: 0, fill: true, tension: 0.15 },
+          { label: 'P60', data: p60series, borderColor: '#ffb020', borderWidth: 1.8, pointRadius: 0, fill: false, tension: 0.1 },
+          { label: '10%', data: prem.map(() => 10), borderColor: '#8fa3c8', borderDash: [4,4], borderWidth: 1, pointRadius: 0, fill: false },
+          { label: '18%', data: prem.map(() => 18), borderColor: '#ff6b7a', borderDash: [4,4], borderWidth: 1, pointRadius: 0, fill: false },
+        ]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        interaction: { mode: 'index', intersect: false },
+        plugins: {
+          legend: { labels: { color: '#8fa3c8', boxWidth: 12 } },
+          tooltip: { callbacks: { label: (c) => `${c.dataset.label}: ${Number(c.raw).toFixed(2)}%` } }
+        },
+        scales: {
+          x: { ticks: { color: '#8fa3c8', maxTicksLimit: 8 }, grid: { color: 'rgba(42,58,92,.5)' } },
+          y: { ticks: { color: '#8fa3c8', callback: (v) => v + '%' }, grid: { color: 'rgba(42,58,92,.5)' } }
+        }
+      }
+    });
+  }
+
+  if (typeof Chart !== 'undefined') tryChart();
+  else {
+    // wait a bit for CDN
+    let n = 0;
+    const t = setInterval(() => {
+      n++;
+      if (typeof Chart !== 'undefined') { clearInterval(t); tryChart(); }
+      else if (n > 20) { clearInterval(t); drawSvgFallback(); }
+    }, 200);
+  }
+})();
+</script>
+</body>
+</html>
