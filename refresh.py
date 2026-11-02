@@ -23,6 +23,19 @@ DATA.mkdir(exist_ok=True)
 
 CST = timezone(timedelta(hours=8))
 PRIMARY = "159501"
+# 计算器与顶部金额的默认基准。页面预填、自检和写入 briefing 都用这个数。
+DEFAULT_BASELINE = 3000.0
+# 距高点回撤（正数百分点）→ 回撤系数。不足 5% 为 1.0；超过最后一档封顶。
+# 相邻锚点之间线性。例如 7.5%→2.5，12.5%→5.0。
+_DD_ANCHORS: tuple[tuple[float, float], ...] = (
+    (5.0, 1.67),
+    (10.0, 3.33),
+    (15.0, 6.67),
+    (20.0, 8.33),
+    (25.0, 10.0),
+    (30.0, 11.67),
+    (40.0, 13.33),
+)
 # 页面策略只在「纳指100」同类里挑更便宜的一只，不拿标普/日经来替换。
 KNOWN_NASDAQ = {
     "159501",
@@ -119,28 +132,25 @@ def short_name(name: str) -> str:
 def drawdown_coef(dd: float | None, day_chg: float | None = None) -> tuple[float, str]:
     """距近一年最高净值的回撤（正数，单位百分点）。与 index.html 一致。
 
-    <5% → 1.0；5–10% 线性 1.0→1.5；10–20% 线性 1.5→2.5；
-    20–30% 线性 2.5→3.5；30–40% 线性 3.5→5.0；>40% → 5.0。
-    最新净值日相对前一净值日下跌达到 3%，当天再 +0.5。没有 2 倍上限。
+    <5% → 1.0。之后按锚点分段线性：
+    5%→1.67，10%→3.33，15%→6.67，20%→8.33，25%→10.0，30%→11.67，40%→13.33。
+    >40% → 13.33。例如 7.5%≈2.5，12.5%≈5.0。
+    最新净值日相对前一净值日下跌达到 3%，在分段值上再 +0.5。没有 2 倍上限。
     """
     if dd is None:
         base, label = 1.0, "数据不足"
     elif dd < 5:
         base, label = 1.0, "距高点<5%"
-    elif dd <= 10:
-        base = 1.0 + 0.5 * ((dd - 5) / 5.0)
-        label = "距高点5–10%"
-    elif dd <= 20:
-        base = 1.5 + (dd - 10) / 10.0
-        label = "距高点10–20%"
-    elif dd <= 30:
-        base = 2.5 + (dd - 20) / 10.0
-        label = "距高点20–30%"
-    elif dd <= 40:
-        base = 3.5 + 1.5 * ((dd - 30) / 10.0)
-        label = "距高点30–40%"
+    elif dd > 40:
+        base, label = _DD_ANCHORS[-1][1], "距高点>40%"
     else:
-        base, label = 5.0, "距高点>40%"
+        base, label = _DD_ANCHORS[-1][1], "距高点>40%"
+        for (lo, lo_c), (hi, hi_c) in zip(_DD_ANCHORS, _DD_ANCHORS[1:]):
+            if dd <= hi:
+                t = (dd - lo) / (hi - lo)
+                base = lo_c + t * (hi_c - lo_c)
+                label = f"距高点{lo:g}–{hi:g}%"
+                break
     if day_chg is not None and day_chg <= -3:
         return base + 0.5, label + " · 单日跌≥3% +0.5"
     return base, label
@@ -212,30 +222,44 @@ def _self_check() -> None:
     expect = [
         (0, 1.0),
         (4.9, 1.0),
-        (5, 1.0),
-        (7.5, 1.25),
-        (10, 1.5),
-        (15, 2.0),
-        (20, 2.5),
-        (25, 3.0),
-        (30, 3.5),
-        (35, 4.25),
-        (40, 5.0),
-        (50, 5.0),
+        (5, 1.67),
+        (7.5, 2.5),
+        (10, 3.33),
+        (12.5, 5.0),
+        (15, 6.67),
+        (17.5, 7.5),
+        (20, 8.33),
+        (22.5, 9.165),
+        (25, 10.0),
+        (27.5, 10.835),
+        (30, 11.67),
+        (35, 12.5),
+        (40, 13.33),
+        (50, 13.33),
     ]
     for dd, coef in expect:
         got, _ = drawdown_coef(dd)
         if abs(got - coef) > 1e-9:
             raise SystemExit(f"回撤系数自检失败 dd={dd} got={got} expect={coef}")
     got, label = drawdown_coef(20, -3)
-    if abs(got - 3.0) > 1e-9 or "单日跌" not in label:
+    if abs(got - 8.83) > 1e-9 or "单日跌" not in label:
         raise SystemExit(f"单日急跌加分自检失败 got={got} {label}")
-    if abs(drawdown_coef(20, -2.99)[0] - 2.5) > 1e-9:
+    if abs(drawdown_coef(20, -2.99)[0] - 8.33) > 1e-9:
         raise SystemExit("未满 3% 的单日跌不应加分")
-    amount20 = 4000 * drawdown_coef(20)[0] * 1
-    amount30 = 4000 * drawdown_coef(30)[0] * 1
-    if amount20 != 10000 or amount30 != 14000 or amount30 <= 8000:
-        raise SystemExit(f"取消 2 倍上限自检失败 {amount20} {amount30}")
+    # 基准 3000，溢价系数 1.0，单日涨跌 0。锚点金额取两位小数系数，接近整千。
+    amount_expect = {
+        5: 5010.0,
+        10: 9990.0,
+        15: 20010.0,
+        20: 24990.0,
+        40: 39990.0,
+    }
+    for dd, want in amount_expect.items():
+        amount = DEFAULT_BASELINE * drawdown_coef(dd)[0] * 1
+        if abs(amount - want) > 1e-6:
+            raise SystemExit(f"阶梯金额自检失败 dd={dd} amount={amount} expect={want}")
+    if amount_expect[40] <= DEFAULT_BASELINE * 2:
+        raise SystemExit("取消 2 倍上限自检失败")
     if abs(premium_coef(10, 10, 9)[0] - 1.0) > 1e-9:
         raise SystemExit("溢价中性自检失败")
     coef, label, expensive = premium_coef(5, 10, 4)
@@ -261,16 +285,16 @@ def _self_check() -> None:
         raise SystemExit("相对 P60 ≥+5 自检失败")
     if abs(_premium_relative(18, 15) - 0.91) > 1e-9:
         raise SystemExit(f"相对 P60 线性自检失败 {_premium_relative(18, 15)}")
-    # 基准 4000，peakDd=10，dayChg=0，P=18，P60=15，peerMin=12。
+    # 基准 3000，peakDd=10，dayChg=0，P=18，P60=15，peerMin=12。
     # 相对 ~0.91 → 绝对软顶 0.90 → 同类 0.90 → 回撤下限 0.90。
-    # 金额 = 4000 × 1.5 × 0.90 = 5400。旧规则这里大约是 0.50 → 3000。
+    # 回撤系数 3.33。金额 = 3000 × 3.33 × 0.90 = 8991。
     coef, label, expensive = premium_coef(18, 15, 12, 10)
     sample_dd, _sample_label = drawdown_coef(10, 0)
-    sample_amount = 4000 * sample_dd * coef
+    sample_amount = DEFAULT_BASELINE * sample_dd * coef
     if (
         abs(coef - 0.90) > 1e-9
-        or abs(sample_dd - 1.5) > 1e-9
-        or abs(sample_amount - 5400) > 1e-6
+        or abs(sample_dd - 3.33) > 1e-9
+        or abs(sample_amount - 8991) > 1e-6
         or label != "偏贵"
         or not expensive
     ):
@@ -1283,7 +1307,7 @@ def build_payload(
     picks = align_pick_nav_dates(picks, nav_dates)
     dc, dlabel = drawdown_coef(peak_dd, day_chg)
     pc, plabel, is_expensive = premium_coef(p_for_calc, p60, peer_min, peak_dd)
-    base = 4000.0
+    base = DEFAULT_BASELINE
     amount = base * dc * pc
     suggest_sell = bool(is_nav_60_high and is_expensive)
     today = _nasdaq_today(picks) if is_expensive else None
