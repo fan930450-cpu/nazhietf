@@ -116,6 +116,18 @@
   details.advanced { margin-top: 10px; color: var(--muted); }
   details.advanced summary { cursor: pointer; color: var(--blue); }
   .pill-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+  .pick-intro { color: var(--muted); font-size: .84rem; line-height: 1.55; margin: 0 0 12px; }
+  .pick-block + .pick-block { margin-top: 16px; }
+  .pick-head { display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: baseline; justify-content: space-between; margin-bottom: 8px; }
+  .pick-head h3 { margin: 0; font-size: .95rem; }
+  .pick-today { color: var(--green); font-size: .84rem; font-weight: 650; }
+  .pick-src { color: var(--muted); font-size: .75rem; line-height: 1.5; margin: 10px 0 0; }
+  .tag { display: inline-block; margin-left: 6px; padding: 1px 6px; border-radius: 999px; font-size: .72rem; font-weight: 700; vertical-align: 1px; }
+  .tag.today { background: rgba(61,220,151,.15); color: var(--green); }
+  .tag.wait { background: rgba(255,176,32,.15); color: var(--amber); }
+  tr.today-row { background: rgba(61,220,151,.07); }
+  td.why { color: var(--muted); font-size: .8rem; line-height: 1.45; min-width: 220px; }
+  td .sub { display: block; color: var(--muted); font-size: .72rem; margin-top: 2px; }
 </style>
 </head>
 <body>
@@ -135,6 +147,14 @@
     <div class="hero-reason" id="heroReason"></div>
     <div class="grid" id="kpiGrid"></div>
   </div>
+
+  <section id="picksSection">
+    <h2>今日同类怎么选 <span class="hint">先纳指100，再标普500 · 不改顶部的定投金额</span></h2>
+    <div class="card">
+      <p class="pick-intro">顶部的金额仍按 159501 的溢价和较上月净值计算。这里只回答今天买哪只：成交够用时先看更低溢价；价差在约 1–2 个点内，再偏向更低的管理+托管费和更大规模。159501 等溢价回到纳指同类中枢，再当主买点。</p>
+      <div id="picksRoot">短名单加载中…</div>
+    </div>
+  </section>
 
   <section>
     <h2>定投计算器 <span class="hint">已用最新数据预填；一般只需改「基准金额」</span></h2>
@@ -172,7 +192,7 @@
           <strong>回撤口径</strong>：回撤系数的输入是「较上月净值涨跌」，也就是最新净值相对约一个月前同一天的涨跌（页面标出起止日期）。<strong>不是</strong>相对近期高点的回撤，也不是「从高点跌了约 9%」那种算法。<br/>
           回撤系数（只按较上月涨跌）：较上月上涨≥5%→0.4；较上月上涨&gt;2%→0.7；较上月持平±2%→1.0；较上月回撤2–5%→1.2；较上月回撤5–10%线性1.5→2.0；较上月回撤≥10%→2.0。<br/>
           溢价系数：明显贵（P−P60≥5 或 P−同类最低≥5 或 P≥18）→0.5；略贵→0.75；中性→1.0；相对便宜（P60−P≥3）→1.3。<br/>
-          建议金额 = min(基准×回撤×溢价, 基准×2)。159501 明显贵时，标的优先指向同类更便宜的一只。
+          建议金额 = min(基准×回撤×溢价, 基准×2)。159501 明显贵时，买入代码改到纳指短名单的今日优先（价差约 2 个点内再比费率和规模）。标普500不参与这个金额。
         </p>
       </details>
       <div class="calc-out" id="calcOut"></div>
@@ -196,7 +216,7 @@
   </section>
 
   <section>
-    <h2>同类对比 <span class="hint">按收盘参考溢价从低到高 · 数据截至上一交易日快照</span></h2>
+    <h2>同类对比 <span class="hint">纳指100全表，按参考溢价从低到高 · 今天怎么选看上面的短名单</span></h2>
     <div class="card" style="overflow-x:auto">
       <table>
         <thead>
@@ -219,7 +239,7 @@
     <div class="card">
       <ul class="checklist">
         <li><span class="n">1</span><div>看本页顶部<strong>今日建议定投金额</strong>与建议标的（约 09:00 开盘前/后打开即可）。</div></li>
-        <li><span class="n">2</span><div>核对<strong>今日溢价 P</strong>与<strong>P60</strong>：明显贵时优先买表格里溢价更低的同类，不必死磕 159501。</div></li>
+        <li><span class="n">2</span><div>核对<strong>今日溢价 P</strong>与<strong>P60</strong>。159501 明显贵时，到「今日同类怎么选」里看纳指短名单的今日优先；标普500是另一条可选，不替换顶部金额。</div></li>
         <li><span class="n">3</span><div>看<strong>较上月净值涨跌</strong>：最新净值相对约一个月前同一天（页面写了起止日期），<strong>不是</strong>从近期高点回撤。这个数越低，建议金额越高（已自动计入系数）。</div></li>
         <li><span class="n">4</span><div>若提示「建议卖战术仓」：只卖总市值 5–8%，底仓≥75%不动；一年累计减仓建议≤20%。</div></li>
         <li><span class="n">5</span><div>数据在每个交易日约 <strong>09:00（北京时间）</strong>由 GitHub Actions 自动更新，也可在仓库 Actions 里手动运行「刷新并部署日报」。不需要 Grok Bot。</div></li>
@@ -273,6 +293,13 @@
     return { c: 1.0, label: '中性', expensive: false };
   }
 
+  function nasdaqToday() {
+    const groups = (D.picks && D.picks.groups) || [];
+    const group = groups.find(g => g.id === 'nasdaq-100');
+    if (!group || !group.today_code) return null;
+    return (group.items || []).find(it => it.code === group.today_code) || null;
+  }
+
   function cheapestPeer() {
     const peers = (D.peers || []).filter(p => p.code !== '159501' && p.ref_premium_pct != null);
     peers.sort((a,b) => a.ref_premium_pct - b.ref_premium_pct);
@@ -293,8 +320,14 @@
     const amount = Math.min(raw, baseline * 2);
     const sell = navHigh && pr.expensive;
     const cheap = cheapestPeer();
+    const ndxToday = nasdaqToday();
     let targetCode = '159501', targetName = '嘉实纳斯达克100', targetPrem = p, targetNote = '主标的';
-    if (pr.expensive && cheap) {
+    if (pr.expensive && ndxToday) {
+      targetCode = ndxToday.code;
+      targetName = ndxToday.name;
+      targetPrem = ndxToday.ref_premium_pct;
+      targetNote = '159501明显贵；价差约 2 个点内优先更低费率或更大规模';
+    } else if (pr.expensive && cheap) {
       targetCode = cheap.code;
       targetName = cheap.name;
       targetPrem = cheap.ref_premium_pct;
@@ -405,7 +438,61 @@
   ['baseline','mom','pToday','p60','peerMin','navHigh'].forEach(id => {
     document.getElementById(id).addEventListener('input', recompute);
   });
+
+  function feeCell(it) {
+    if (it.fee_total_pct == null) return '—';
+    const mgmt = it.fee_mgmt_pct == null ? '—' : fmt(it.fee_mgmt_pct);
+    const cus = it.fee_custody_pct == null ? '—' : fmt(it.fee_custody_pct);
+    return `${fmt(it.fee_total_pct)}%<span class="sub">管理 ${mgmt} + 托管 ${cus}</span>`;
+  }
+  function teCell(it) {
+    if (it.tracking_error_pct == null) return '—<span class="sub">暂无公开年化跟踪误差</span>';
+    const asof = it.tracking_asof ? `截至 ${it.tracking_asof}` : '';
+    return `${fmt(it.tracking_error_pct)}%<span class="sub">${asof}</span>`;
+  }
+  function renderPicks() {
+    const root = document.getElementById('picksRoot');
+    const picks = D.picks;
+    if (!root) return;
+    if (!picks || !(picks.groups || []).length) {
+      root.textContent = '短名单暂无数据。';
+      return;
+    }
+    root.innerHTML = (picks.groups || []).map(group => {
+      const rows = (group.items || []).map(it => {
+        const wait = it.role === 'conditional' && !it.is_today;
+        const tag = it.is_today
+          ? '<span class="tag today">今日优先</span>'
+          : (wait ? '<span class="tag wait">等溢价回落</span>' : '');
+        return `<tr class="${it.is_today ? 'today-row' : ''}">
+          <td><strong>${it.code}</strong></td>
+          <td>${it.name || ''}${tag}</td>
+          <td>${feeCell(it)}</td>
+          <td>${it.ref_premium_pct == null ? '—' : fmt(it.ref_premium_pct) + '%'}</td>
+          <td>${teCell(it)}</td>
+          <td class="why">${it.why || ''}</td>
+        </tr>`;
+      }).join('');
+      const median = group.median_premium_pct == null ? '' : ` · 同类溢价中枢约 ${fmt(group.median_premium_pct)}%`;
+      return `<div class="pick-block">
+        <div class="pick-head">
+          <h3>${group.title}</h3>
+          <div class="pick-today">${group.today_line || ''}${median}</div>
+        </div>
+        <div style="overflow-x:auto">
+          <table>
+            <thead><tr>
+              <th>代码</th><th>名称</th><th>管理+托管费</th><th>参考溢价</th><th>年化跟踪误差</th><th>为何入选 / 何时优先</th>
+            </tr></thead>
+            <tbody>${rows}</tbody>
+          </table>
+        </div>
+      </div>`;
+    }).join('') + `<p class="pick-src">参考溢价截至 ${picks.premium_date || '—'} 收盘（QDII Lens）。管理费与托管费为年费率，规模截至 ${picks.aum_as_of || '—'}。年化跟踪误差来自东方财富特色数据，截至 ${picks.tracking_asof || '—'}。${picks.rule || ''}</p>`;
+  }
+
   recompute();
+  renderPicks();
 
   // Chart
   const hist = D.history || [];

@@ -38,6 +38,24 @@ KNOWN_NASDAQ = {
     "513390",
     "513870",
 }
+# 短名单：先纳指，再标普。条件性代码始终展示，但只在价差回到约 2 个点内才可能成为今日优先。
+PICK_GROUPS = (
+    {
+        "id": "nasdaq-100",
+        "title": "纳指100",
+        "core": ("159513", "159632", "513110"),
+        "conditional": ("159501",),
+    },
+    {
+        "id": "sp-500",
+        "title": "标普500",
+        "core": ("159655", "513650"),
+        "conditional": ("513500",),
+    },
+)
+PICK_CODES = tuple(dict.fromkeys(c for g in PICK_GROUPS for c in (*g["core"], *g["conditional"])))
+PICK_SPREAD = 2.0
+PICK_MIN_TURNOVER = 50_000_000.0
 
 UA = {
     "User-Agent": (
@@ -160,6 +178,25 @@ def _self_check() -> None:
     amount = min(4000 * 1.2 * 0.5, 8000)
     if amount != 2400:
         raise SystemExit("建议金额自检失败")
+    nasdaq_today = choose_today(
+        [
+            {"code": "159513", "ref_premium_pct": 12.92, "fee_total_pct": 1.0, "aum_cny": 82e8, "turnover_cny": 2.7e8},
+            {"code": "513110", "ref_premium_pct": 12.93, "fee_total_pct": 1.0, "aum_cny": 52e8, "turnover_cny": 3.3e8},
+            {"code": "159632", "ref_premium_pct": 13.24, "fee_total_pct": 0.8, "aum_cny": 118e8, "turnover_cny": 4e8},
+            {"code": "159501", "ref_premium_pct": 20.24, "fee_total_pct": 0.6, "aum_cny": 134e8, "turnover_cny": 1.5e8},
+        ]
+    )
+    if not nasdaq_today or nasdaq_today["code"] != "159632":
+        raise SystemExit(f"纳指短名单自检失败: {nasdaq_today}")
+    sp_today = choose_today(
+        [
+            {"code": "159655", "ref_premium_pct": 7.91, "fee_total_pct": 0.75, "aum_cny": 42e8, "turnover_cny": 2e8},
+            {"code": "513650", "ref_premium_pct": 8.16, "fee_total_pct": 0.75, "aum_cny": 87e8, "turnover_cny": 5e8},
+            {"code": "513500", "ref_premium_pct": 10.28, "fee_total_pct": 0.8, "aum_cny": 252e8, "turnover_cny": 3e8},
+        ]
+    )
+    if not sp_today or sp_today["code"] != "513650":
+        raise SystemExit(f"标普短名单自检失败: {sp_today}")
 
 
 def _official_bars(bars: list[dict]) -> list[dict]:
@@ -345,7 +382,22 @@ def _brace_object(text: str, open_at: int) -> str | None:
     return None
 
 
-def parse_qdiilens(html: str) -> tuple[list[dict], str | None]:
+def _fee_pair(fees: list) -> tuple[float | None, float | None]:
+    mgmt = custody = None
+    for fee in fees or []:
+        kind = str(fee.get("fee_type") or "")
+        rate = fee.get("rate_pct")
+        if rate is None:
+            continue
+        if kind == "management":
+            mgmt = float(rate)
+        elif kind == "custody":
+            custody = float(rate)
+    return mgmt, custody
+
+
+def parse_qdiilens(html: str) -> tuple[list[dict], str | None, dict]:
+    """纳指同类表，外加纳指/标普短名单用的费率、规模、成交和全市场溢价。"""
     text = html
     if '\\"code\\"' in html or '\\"quote\\"' in html:
         text = html.replace('\\"', '"').replace("\\/", "/")
@@ -356,9 +408,11 @@ def parse_qdiilens(html: str) -> tuple[list[dict], str | None]:
         r'"premium_pct":([-0-9.]+)'
     )
     by_code: dict[str, dict] = {}
+    index_premiums: dict[str, list[float]] = {"nasdaq-100": [], "sp-500": []}
     for code, name, index, tdate, prem in prem_re.findall(text):
-        if index != "nasdaq-100" and code not in KNOWN_NASDAQ:
-            continue
+        premium = float(prem)
+        if index in index_premiums:
+            index_premiums[index].append(premium)
         if index != "nasdaq-100":
             continue
         by_code[code] = {
@@ -386,9 +440,9 @@ def parse_qdiilens(html: str) -> tuple[list[dict], str | None]:
         except json.JSONDecodeError:
             continue
         code = str(q.get("code") or "")
-        if code not in by_code:
+        row = by_code.get(code)
+        if row is None:
             continue
-        row = by_code[code]
         if q.get("market_price") is not None:
             row["close"] = float(q["market_price"])
         if q.get("iopv") is not None:
@@ -402,6 +456,72 @@ def parse_qdiilens(html: str) -> tuple[list[dict], str | None]:
         if q.get("name"):
             row["name"] = short_name(str(q["name"]))
 
+    funds: dict[str, dict] = {}
+    start = 0
+    while True:
+        i = text.find('"aum_cny":', start)
+        if i < 0:
+            break
+        j = text.rfind('{"code":"', 0, i)
+        start = i + 10
+        if j < 0:
+            continue
+        blob = _brace_object(text, j)
+        if not blob:
+            continue
+        try:
+            fund = json.loads(blob)
+        except json.JSONDecodeError:
+            continue
+        code = str(fund.get("code") or "")
+        if code not in PICK_CODES:
+            continue
+        mgmt, custody = _fee_pair(fund.get("fees") or [])
+        total = None
+        if mgmt is not None or custody is not None:
+            total = round((mgmt or 0) + (custody or 0), 4)
+        funds[code] = {
+            "code": code,
+            "name": short_name(str(fund.get("name") or code)),
+            "index": fund.get("index"),
+            "fee_mgmt_pct": mgmt,
+            "fee_custody_pct": custody,
+            "fee_total_pct": total,
+            "fee_note": "管理费+托管费，年费率",
+            "aum_cny": fund.get("aum_cny"),
+            "aum_as_of": fund.get("aum_as_of"),
+        }
+
+    # 第二遍行情：短名单需要成交额，纳指全表不展示它。
+    start = 0
+    while True:
+        i = text.find(marker, start)
+        if i < 0:
+            break
+        blob = _brace_object(text, i + len(marker) - 1)
+        start = i + len(marker)
+        if not blob:
+            continue
+        try:
+            q = json.loads(blob)
+        except json.JSONDecodeError:
+            continue
+        code = str(q.get("code") or "")
+        if code not in funds and code not in PICK_CODES:
+            continue
+        slot = funds.setdefault(
+            code,
+            {"code": code, "name": short_name(str(q.get("name") or code))},
+        )
+        if q.get("indicative_premium_pct") is not None:
+            slot["ref_premium_pct"] = round(float(q["indicative_premium_pct"]), 4)
+        if q.get("turnover_cny") is not None:
+            slot["turnover_cny"] = float(q["turnover_cny"])
+        if q.get("trading_date"):
+            slot["trading_date"] = q["trading_date"]
+        if q.get("name"):
+            slot["name"] = short_name(str(q["name"]))
+
     peers = [by_code[c] for c in sorted(by_code)]
     ref_date = None
     primary = by_code.get(PRIMARY)
@@ -409,16 +529,208 @@ def parse_qdiilens(html: str) -> tuple[list[dict], str | None]:
         ref_date = primary.get("trading_date")
     elif peers:
         ref_date = peers[0].get("trading_date")
-    return peers, ref_date
+    catalog = {"premiums": index_premiums, "funds": funds, "ref_date": ref_date}
+    return peers, ref_date, catalog
 
 
-def fetch_qdiilens_peers() -> tuple[list[dict], str | None]:
+def fetch_tracking_error(code: str) -> dict | None:
+    url = f"https://fundf10.eastmoney.com/tsdata_{code}.html"
+    html = get(url, {"Referer": url}, retries=2, timeout=25).decode("utf-8", "replace")
+    m = re.search(
+        r"年化跟踪误差</th>.*?<tr>\s*<td[^>]*>([^<]*)</td>\s*<td[^>]*>([\d.]+)%</td>",
+        html,
+        re.S,
+    )
+    if not m:
+        return None
+    tail = html[m.end() : m.end() + 400]
+    d = re.search(r"截止至：(\d{4}-\d{2}-\d{2})", tail) or re.search(r"截止至：(\d{4}-\d{2}-\d{2})", html)
+    return {
+        "index_name": m.group(1).strip(),
+        "tracking_error_pct": float(m.group(2)),
+        "asof": d.group(1) if d else None,
+    }
+
+
+def fetch_tracking_errors(codes: tuple[str, ...] = PICK_CODES) -> dict[str, dict]:
+    out: dict[str, dict] = {}
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        futs = {pool.submit(fetch_tracking_error, code): code for code in codes}
+        for fut in futs:
+            code = futs[fut]
+            try:
+                row = fut.result()
+            except Exception as e:  # noqa: BLE001
+                print("跟踪误差失败", code, e)
+                continue
+            if row:
+                out[code] = row
+    print("跟踪误差", ",".join(f"{k}:{v['tracking_error_pct']}" for k, v in out.items()) or "无")
+    return out
+
+
+def _load_saved_picks() -> dict | None:
+    path = DATA / "dashboard_payload.json"
+    if not path.exists():
+        return None
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return None
+    picks = payload.get("picks")
+    return picks if isinstance(picks, dict) and picks.get("groups") else None
+
+
+def choose_today(items: list[dict]) -> dict | None:
+    """价差约 2 个点以内时，在成交够用的里面偏向更低费率、再偏向更大规模。"""
+    usable = []
+    for item in items:
+        if item.get("ref_premium_pct") is None:
+            continue
+        turn = item.get("turnover_cny")
+        if turn is not None and turn < PICK_MIN_TURNOVER:
+            continue
+        usable.append(item)
+    if not usable:
+        return None
+    floor = min(item["ref_premium_pct"] for item in usable)
+    band = [item for item in usable if item["ref_premium_pct"] <= floor + PICK_SPREAD]
+
+    def sort_key(item: dict) -> tuple:
+        fee = item.get("fee_total_pct")
+        return (
+            999.0 if fee is None else float(fee),
+            -(item.get("aum_cny") or 0),
+            item["ref_premium_pct"],
+        )
+
+    return min(band, key=sort_key)
+
+
+def _yi(amount: float | None) -> str:
+    if amount is None:
+        return ""
+    return f"{amount / 1e8:.1f} 亿"
+
+
+def _why(item: dict, today: dict, floor: float, median: float | None, anchor: str) -> str:
+    gap = item["ref_premium_pct"] - floor
+    fee = item.get("fee_total_pct")
+    if item["code"] == today["code"]:
+        parts = []
+        if gap <= 0.05:
+            parts.append("短名单里参考溢价最低")
+        else:
+            parts.append(f"与最低溢价只差 {gap:.2f} 个点")
+        turn = item.get("turnover_cny")
+        parts.append(f"成交约 {_yi(turn)}" if turn else "成交够用")
+        if fee is not None:
+            parts.append(f"管理+托管费 {fee:.2f}%")
+        return "今日优先：" + "，".join(parts) + "。"
+    if item["code"] == anchor and median is not None and item["ref_premium_pct"] > median + 1:
+        return (
+            f"溢价 {item['ref_premium_pct']:.2f}%，高于同类中枢约 {median:.2f}%。"
+            "等溢价回到中枢附近再当主买点；今天先看更便宜的同类。"
+        )
+    if gap <= 0.05:
+        return (
+            f"溢价和短名单最低一档几乎一样（差 {gap:.2f} 个点），成交够用。"
+            "价差在约 2 个点内，今天让给了费率更低或规模更大的一只。"
+        )
+    if gap <= PICK_SPREAD:
+        return (
+            f"溢价只高 {gap:.2f} 个点，成交够用。"
+            "价差在约 1–2 个点内可改看费率或规模；今天已偏向更合适的一只。"
+        )
+    return (
+        f"溢价比短名单低位高 {gap:.2f} 个点。"
+        "价差拉开时先买更便宜的；回到约 2 个点内再比费率和规模。"
+    )
+
+
+def build_picks(catalog: dict, tracking: dict[str, dict]) -> dict:
+    funds: dict[str, dict] = catalog.get("funds") or {}
+    premiums: dict[str, list[float]] = catalog.get("premiums") or {}
+    groups = []
+    for spec in PICK_GROUPS:
+        items = []
+        for code in (*spec["core"], *spec["conditional"]):
+            src = funds.get(code)
+            if not src or src.get("ref_premium_pct") is None:
+                continue
+            te = tracking.get(code) or {}
+            items.append(
+                {
+                    "code": code,
+                    "name": src.get("name") or code,
+                    "role": "conditional" if code in spec["conditional"] else "core",
+                    "ref_premium_pct": src["ref_premium_pct"],
+                    "fee_mgmt_pct": src.get("fee_mgmt_pct"),
+                    "fee_custody_pct": src.get("fee_custody_pct"),
+                    "fee_total_pct": src.get("fee_total_pct"),
+                    "aum_cny": src.get("aum_cny"),
+                    "aum_as_of": src.get("aum_as_of"),
+                    "turnover_cny": src.get("turnover_cny"),
+                    "trading_date": src.get("trading_date"),
+                    "tracking_error_pct": te.get("tracking_error_pct"),
+                    "tracking_asof": te.get("asof"),
+                }
+            )
+        today = choose_today(items)
+        series = premiums.get(spec["id"]) or [it["ref_premium_pct"] for it in items]
+        median = round(statistics.median(series), 4) if series else None
+        floor = min(it["ref_premium_pct"] for it in items) if items else None
+        anchor = spec["conditional"][0]
+        for item in items:
+            item["is_today"] = bool(today and item["code"] == today["code"])
+            item["why"] = _why(item, today or item, floor if floor is not None else item["ref_premium_pct"], median, anchor)
+        items.sort(key=lambda it: (not it["is_today"], it["ref_premium_pct"]))
+        today_line = ""
+        if today:
+            today_line = f"今日优先 {today['code']} {today.get('name') or ''} · 参考溢价 {today['ref_premium_pct']:.2f}%"
+        groups.append(
+            {
+                "id": spec["id"],
+                "title": spec["title"],
+                "median_premium_pct": median,
+                "today_code": today["code"] if today else None,
+                "today_line": today_line.strip(),
+                "items": items,
+            }
+        )
+    dates = [it.get("trading_date") for g in groups for it in g["items"] if it.get("trading_date")]
+    te_dates = [it.get("tracking_asof") for g in groups for it in g["items"] if it.get("tracking_asof")]
+    aum_dates = [it.get("aum_as_of") for g in groups for it in g["items"] if it.get("aum_as_of")]
+    return {
+        "premium_date": max(dates) if dates else catalog.get("ref_date"),
+        "tracking_asof": max(te_dates) if te_dates else None,
+        "aum_as_of": max(aum_dates) if aum_dates else None,
+        "spread_pct": PICK_SPREAD,
+        "rule": "成交够用的前提下先看更低溢价；价差在约 2 个点内，再偏向更低的管理+托管费，然后是更大规模。",
+        "groups": groups,
+    }
+
+
+def fetch_qdiilens_bundle() -> tuple[list[dict], str | None, dict]:
     html = get("https://qdiilens.com/", timeout=40).decode("utf-8", "replace")
-    peers, ref_date = parse_qdiilens(html)
+    peers, ref_date, catalog = parse_qdiilens(html)
     if not any(p["code"] == PRIMARY for p in peers) or len(peers) < 5:
         raise RuntimeError(f"QDII Lens 解析到的纳指 ETF 不足: {len(peers)}")
-    print(f"QDII Lens peers: {len(peers)} ref_date={ref_date}")
-    return peers, ref_date
+    try:
+        tracking = fetch_tracking_errors()
+    except Exception as e:  # noqa: BLE001
+        print("跟踪误差批次失败:", e)
+        tracking = {}
+    picks = build_picks(catalog, tracking)
+    print(
+        "QDII Lens peers:",
+        len(peers),
+        "ref_date=",
+        ref_date,
+        "picks=",
+        [(g["id"], g["today_code"]) for g in picks["groups"]],
+    )
+    return peers, ref_date, picks
 
 
 def _load_peers_csv() -> list[dict]:
@@ -555,6 +867,18 @@ def merge_history(fresh: list[dict], old: list[dict]) -> tuple[list[dict], bool]
     return rows, True
 
 
+def _nasdaq_today(picks: dict | None) -> dict | None:
+    if not picks:
+        return None
+    for group in picks.get("groups") or []:
+        if group.get("id") != "nasdaq-100" or not group.get("today_code"):
+            continue
+        for item in group.get("items") or []:
+            if item.get("code") == group["today_code"]:
+                return item
+    return None
+
+
 def build_payload(
     premium_rows: list[dict],
     nav_rows: list[dict],
@@ -563,6 +887,7 @@ def build_payload(
     spot: dict[str, dict],
     ref_date: str | None,
     warnings: list[str],
+    picks: dict | None = None,
 ) -> dict:
     if len(premium_rows) < 30:
         raise RuntimeError(f"溢价历史过短: {len(premium_rows)}")
@@ -644,7 +969,15 @@ def build_payload(
     raw = base * dc * pc
     amount = min(raw, base * 2)
     suggest_sell = bool(is_nav_60_high and is_expensive)
-    if is_expensive and peer_min_fund:
+    today = _nasdaq_today(picks) if is_expensive else None
+    if is_expensive and today:
+        buy_target = {
+            "code": today["code"],
+            "name": today.get("name") or today["code"],
+            "premium": today["ref_premium_pct"],
+            "reason": "159501明显贵；短名单在约 2 个点价差内优先更低费率或更大规模",
+        }
+    elif is_expensive and peer_min_fund:
         buy_target = {
             "code": peer_min_fund["code"],
             "name": peer_min_fund["name"],
@@ -679,7 +1012,8 @@ def build_payload(
             "sources": [
                 "eastmoney pingzhongdata / lsjz NAV",
                 "sina or tencent daily K-line",
-                "qdiilens.com nasdaq-100 premium snapshot",
+                "qdiilens.com nasdaq-100 and sp-500 premium, fee and turnover",
+                "eastmoney tsdata annualized tracking error",
             ],
             "warnings": warnings,
         },
@@ -721,6 +1055,7 @@ def build_payload(
         },
         "history": premium_rows,
         "peers": peers_sorted,
+        "picks": picks,
     }
     atomic_write(
         ROOT / "data.js",
@@ -747,11 +1082,12 @@ def main() -> None:
     closes: list[dict] = []
     peers: list[dict] = []
     ref_date: str | None = None
+    picks: dict | None = None
 
     with ThreadPoolExecutor(max_workers=3) as pool:
         fut_nav = pool.submit(fetch_nav, PRIMARY)
         fut_close = pool.submit(fetch_closes)
-        fut_lens = pool.submit(fetch_qdiilens_peers)
+        fut_lens = pool.submit(fetch_qdiilens_bundle)
         try:
             nav_rows = fut_nav.result()
             _save_nav_csv(nav_rows)
@@ -765,10 +1101,11 @@ def main() -> None:
             print("行情拉取失败:", e)
             warnings.append("行情接口失败，溢价历史沿用本地 CSV")
         try:
-            peers, ref_date = fut_lens.result()
+            peers, ref_date, picks = fut_lens.result()
         except Exception as e:  # noqa: BLE001
             print("QDII Lens 失败:", e)
             peers = _load_peers_csv() or [dict(p) for p in BAKED_PEERS]
+            picks = _load_saved_picks()
             warnings.append("同类溢价接口失败，已用上一份快照")
 
     official_closes = _official_bars(closes) if closes else []
@@ -795,7 +1132,7 @@ def main() -> None:
             codes.append(code)
     spot = fetch_spot(codes)
 
-    payload = build_payload(premium_rows, nav_rows, closes, peers, spot, ref_date, warnings)
+    payload = build_payload(premium_rows, nav_rows, closes, peers, spot, ref_date, warnings, picks)
     b = payload["briefing"]
     print(
         f"建议 ¥{b['suggested_amount']:.0f} 买入 {b['buy_target']['code']} "
