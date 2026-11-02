@@ -819,6 +819,78 @@ def fetch_spot(codes: list[str]) -> dict[str, dict]:
     return {}
 
 
+def fetch_pingzhong_nav(code: str) -> list[dict]:
+    """东财一次拉完全部净值。给同类计算器用，不再走慢的分页接口。"""
+    raw = get(
+        f"https://fund.eastmoney.com/pingzhongdata/{code}.js",
+        {"Referer": f"https://fund.eastmoney.com/{code}.html"},
+        retries=2,
+        timeout=30,
+    ).decode("utf-8", "replace")
+    m = re.search(r"var Data_netWorthTrend = (\[.*?\]);", raw)
+    if not m:
+        raise RuntimeError("没有净值序列")
+    rows = []
+    for item in json.loads(m.group(1)):
+        y, x = item.get("y"), item.get("x")
+        if y is None or x is None:
+            continue
+        rows.append(
+            {
+                "date": datetime.fromtimestamp(x / 1000, CST).strftime("%Y-%m-%d"),
+                "nav": float(y),
+            }
+        )
+    rows.sort(key=lambda r: r["date"])
+    if len(rows) < 40:
+        raise RuntimeError(f"净值过短 {len(rows)}")
+    return rows
+
+
+def etf_calc_stats(code: str) -> dict:
+    """一只 ETF 自己的较上月净值、P60、是否近 60 日净值新高。"""
+    nav_rows = fetch_pingzhong_nav(code)
+    closes = _official_bars(fetch_tencent_kline(code))
+    premium_rows = align_premium(nav_rows, closes)
+    if len(premium_rows) < 30:
+        raise RuntimeError(f"溢价样本不足 {len(premium_rows)}")
+    p60 = statistics.median([r["premium_pct"] for r in premium_rows[-60:]])
+    latest = nav_rows[-1]
+    mom_pct, prev_date = mom_nav_change(nav_rows, latest["date"], latest["nav"])
+    window = nav_rows[-60:]
+    nav_high = max(r["nav"] for r in window)
+    return {
+        "mom_pct": round(mom_pct, 4) if mom_pct is not None else None,
+        "mom_from_date": prev_date,
+        "mom_to_date": latest["date"],
+        "p60": round(p60, 4),
+        "is_nav_60_high": latest["nav"] >= nav_high - 1e-12,
+    }
+
+
+def fetch_peer_calc_stats(codes: list[str]) -> dict[str, dict]:
+    def one(code: str) -> tuple[str, dict | None]:
+        try:
+            stats = etf_calc_stats(code)
+            print(
+                f"计算器 {code}: 较上月 {stats['mom_pct']} ({stats['mom_from_date']}→{stats['mom_to_date']}) "
+                f"P60 {stats['p60']}"
+            )
+            return code, stats
+        except Exception as e:  # noqa: BLE001
+            print("计算器字段失败", code, e)
+            return code, None
+
+    out: dict[str, dict] = {}
+    if not codes:
+        return out
+    with ThreadPoolExecutor(max_workers=6) as pool:
+        for code, stats in pool.map(one, codes):
+            if stats and stats.get("mom_pct") is not None and stats.get("p60") is not None:
+                out[code] = stats
+    return out
+
+
 def mom_nav_change(nav_sorted: list[dict], latest_date: str, latest_nav: float):
     """较上月净值：最新净值相对约一个月前同一天。不是相对近期高点回撤。"""
     ld = datetime.strptime(latest_date, "%Y-%m-%d")
@@ -867,6 +939,53 @@ def merge_history(fresh: list[dict], old: list[dict]) -> tuple[list[dict], bool]
     return rows, True
 
 
+def _calculator_etfs(peers_sorted: list[dict], stats: dict[str, dict], primary_calc: dict) -> list[dict]:
+    """159501 用主流程数字，保证默认金额不变；其余纳指用各自的净值与溢价。"""
+    premiums = {
+        p["code"]: p["ref_premium_pct"]
+        for p in peers_sorted
+        if p.get("ref_premium_pct") is not None
+    }
+    ordered = [p for p in peers_sorted if p["code"] == PRIMARY] + [
+        p for p in peers_sorted if p["code"] != PRIMARY
+    ]
+    etfs: list[dict] = []
+    for p in ordered:
+        code = p["code"]
+        if code == PRIMARY:
+            row = {
+                "code": code,
+                "name": p.get("name") or "嘉实纳斯达克100",
+                "p": primary_calc.get("p"),
+                "p60": primary_calc.get("p60"),
+                "mom_pct": primary_calc.get("mom_pct"),
+                "mom_from_date": primary_calc.get("mom_from_date"),
+                "mom_to_date": primary_calc.get("mom_to_date"),
+                "is_nav_60_high": bool(primary_calc.get("is_nav_60_high")),
+                "peer_min_premium": primary_calc.get("peer_min_premium"),
+            }
+        else:
+            st = stats.get(code)
+            if not st or p.get("ref_premium_pct") is None:
+                continue
+            others = [v for c, v in premiums.items() if c != code]
+            row = {
+                "code": code,
+                "name": p.get("name") or code,
+                "p": round(float(p["ref_premium_pct"]), 4),
+                "p60": st["p60"],
+                "mom_pct": st["mom_pct"],
+                "mom_from_date": st.get("mom_from_date"),
+                "mom_to_date": st.get("mom_to_date"),
+                "is_nav_60_high": bool(st.get("is_nav_60_high")),
+                "peer_min_premium": round(min(others), 4) if others else None,
+            }
+        if row["p"] is None or row["p60"] is None or row["mom_pct"] is None or row["peer_min_premium"] is None:
+            continue
+        etfs.append(row)
+    return etfs
+
+
 def _nasdaq_today(picks: dict | None) -> dict | None:
     if not picks:
         return None
@@ -888,6 +1007,7 @@ def build_payload(
     ref_date: str | None,
     warnings: list[str],
     picks: dict | None = None,
+    peer_stats: dict[str, dict] | None = None,
 ) -> dict:
     if len(premium_rows) < 30:
         raise RuntimeError(f"溢价历史过短: {len(premium_rows)}")
@@ -1056,6 +1176,21 @@ def build_payload(
         "history": premium_rows,
         "peers": peers_sorted,
         "picks": picks,
+        "calculator": {
+            "etfs": _calculator_etfs(
+                peers_sorted,
+                peer_stats or {},
+                {
+                    "p": round(p_for_calc, 4),
+                    "p60": round(p60, 4),
+                    "mom_pct": round(mom_pct, 4) if mom_pct is not None else None,
+                    "mom_from_date": prev_date,
+                    "mom_to_date": latest_nav_date,
+                    "is_nav_60_high": is_nav_60_high,
+                    "peer_min_premium": round(peer_min, 4) if peer_min is not None else None,
+                },
+            )
+        },
     }
     atomic_write(
         ROOT / "data.js",
@@ -1131,8 +1266,15 @@ def main() -> None:
             seen.add(code)
             codes.append(code)
     spot = fetch_spot(codes)
+    peer_codes = [c for c in codes if c != PRIMARY]
+    peer_stats = fetch_peer_calc_stats(peer_codes)
+    missing = [c for c in peer_codes if c not in peer_stats]
+    if missing:
+        warnings.append("部分同类缺少较上月净值或 P60：" + "、".join(missing))
 
-    payload = build_payload(premium_rows, nav_rows, closes, peers, spot, ref_date, warnings, picks)
+    payload = build_payload(
+        premium_rows, nav_rows, closes, peers, spot, ref_date, warnings, picks, peer_stats
+    )
     b = payload["briefing"]
     print(
         f"建议 ¥{b['suggested_amount']:.0f} 买入 {b['buy_target']['code']} "

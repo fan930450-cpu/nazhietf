@@ -92,10 +92,11 @@
   .form-row { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
   @media (max-width: 640px) { .form-row { grid-template-columns: 1fr; } }
   label { display: block; color: var(--muted); font-size: .8rem; margin-bottom: 4px; }
-  input[type=number], input[type=text] {
+  input[type=number], input[type=text], select {
     width: 100%; background: var(--bg2); border: 1px solid var(--line); color: var(--text);
     border-radius: 10px; padding: 10px 12px; font-size: 1rem; font-variant-numeric: tabular-nums;
   }
+  select { appearance: none; background-image: linear-gradient(45deg, transparent 50%, var(--muted) 50%), linear-gradient(135deg, var(--muted) 50%, transparent 50%); background-position: calc(100% - 18px) 50%, calc(100% - 12px) 50%; background-size: 6px 6px, 6px 6px; background-repeat: no-repeat; padding-right: 32px; }
   input:focus { outline: 2px solid rgba(91,140,255,.45); border-color: var(--blue); }
   .calc-out {
     margin-top: 14px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;
@@ -159,6 +160,13 @@
   <section>
     <h2>定投计算器 <span class="hint">已用最新数据预填；一般只需改「基准金额」</span></h2>
     <div class="card">
+      <div class="form-row" style="grid-template-columns:1fr;margin-bottom:12px">
+        <div>
+          <label for="etfSelect">选择 ETF</label>
+          <select id="etfSelect"></select>
+          <div class="field-hint" style="font-size:.75rem;color:var(--muted);margin-top:.35rem;line-height:1.45">回撤系数基本各只相同（同跟纳指100，净值涨跌接近）；溢价系数按各只自己的今日溢价与自己的 P60 比较，所以不同 ETF 建议金额主要差在溢价。</div>
+        </div>
+      </div>
       <div class="form-row">
         <div>
           <label for="baseline">基准金额（元）</label>
@@ -306,14 +314,7 @@
     return peers[0] || null;
   }
 
-  function recompute() {
-    const baseline = Number(document.getElementById('baseline').value) || 0;
-    const mom = Number(document.getElementById('mom').value);
-    const p = Number(document.getElementById('pToday').value);
-    const p60 = Number(document.getElementById('p60').value);
-    const peerMin = Number(document.getElementById('peerMin').value);
-    const navHigh = Number(document.getElementById('navHigh').value) === 1;
-
+  function paintHero(mom, p, p60, peerMin, navHigh, baseline) {
     const dd = drawdownCoef(mom);
     const pr = premiumCoef(p, p60, peerMin);
     const raw = baseline * dd.c * pr.c;
@@ -333,7 +334,6 @@
       targetPrem = cheap.ref_premium_pct;
       targetNote = '159501明显贵，优先同类更便宜';
     }
-
     const from = (D.primary && D.primary.mom_from_date) || '';
     const to = (D.primary && D.primary.mom_to_date) || '';
     const windowText = from && to ? `（${from}→${to}，非高点回撤）` : '（非高点回撤）';
@@ -341,30 +341,21 @@
       `较上月净值${mom >= 0 ? '+' : ''}${fmt(mom)}%${windowText} → 回撤系数 ${fmt(dd.c)}（${dd.label}）`,
       `溢价 ${fmt(p)}%（${pr.label}）→ 溢价系数 ${fmt(pr.c)}`,
     ];
-    if (targetCode !== '159501') {
-      reasonParts.push(`建议买 ${targetCode}（同类溢价约 ${fmt(targetPrem)}%）`);
-    } else {
-      reasonParts.push('建议买 159501');
-    }
+    if (targetCode !== '159501') reasonParts.push(`建议买 ${targetCode}（同类溢价约 ${fmt(targetPrem)}%）`);
+    else reasonParts.push('建议买 159501');
     reasonParts.push(sell ? '净值近60日新高且明显贵 → 可卖战术仓 5–8%' : '暂不触发卖战术仓');
-    const reason = reasonParts.join('；');
-
-    // Hero
     document.getElementById('heroAmount').textContent = fmtYen(amount);
     const ht = document.getElementById('heroTarget');
     ht.className = 'hero-target' + (targetCode !== '159501' ? ' alt' : '');
     ht.innerHTML = targetCode !== '159501'
       ? `建议买入 <strong>${targetCode}</strong> ${targetName} · 其参考溢价约 ${fmt(targetPrem)}%（${targetNote}）`
       : `建议买入 <strong>159501</strong> 嘉实纳斯达克100 · 当前溢价约 ${fmt(p)}%`;
-    document.getElementById('heroReason').innerHTML = '<strong>一句话理由：</strong>' + reason;
-
-    const pills = document.getElementById('heroPills');
-    pills.innerHTML = `
+    document.getElementById('heroReason').innerHTML = '<strong>一句话理由：</strong>' + reasonParts.join('；');
+    document.getElementById('heroPills').innerHTML = `
       <span class="badge ${pr.expensive ? 'exp' : (pr.label === '相对便宜' ? 'ok' : 'mid')}">溢价状态：${pr.label}</span>
       <span class="badge ${sell ? 'sell' : 'nosell'}">${sell ? '建议卖战术仓 5–8%' : '不卖战术仓'}</span>
       <span class="badge mid">回撤系数 ${fmt(dd.c)} · 溢价系数 ${fmt(pr.c)}</span>
     `;
-
     document.getElementById('kpiGrid').innerHTML = `
       <div class="kpi"><div class="k">今日溢价 P</div><div class="v">${fmt(p)}%</div><div class="s">相对 P60 ${fmt(p - p60)} 个百分点</div></div>
       <div class="kpi"><div class="k">近60日溢价中位数 P60</div><div class="v">${fmt(p60)}%</div><div class="s">净值折溢价滚动中位数</div></div>
@@ -373,31 +364,74 @@
       <div class="kpi"><div class="k">是否建议卖战术仓</div><div class="v">${sell ? '是' : '否'}</div><div class="s">${sell ? '建议卖总市值 5–8%' : '未同时满足新高+明显贵'}</div></div>
       <div class="kpi"><div class="k">最便宜同类</div><div class="v">${cheap ? cheap.code : '—'}</div><div class="s">${cheap ? (cheap.name + ' · ' + fmt(cheap.ref_premium_pct) + '%') : ''}</div></div>
     `;
+  }
 
+  function recompute() {
+    const baseline = Number(document.getElementById('baseline').value) || 0;
+    const mom = Number(document.getElementById('mom').value);
+    const p = Number(document.getElementById('pToday').value);
+    const p60 = Number(document.getElementById('p60').value);
+    const peerMin = Number(document.getElementById('peerMin').value);
+    const navHigh = Number(document.getElementById('navHigh').value) === 1;
+    const dd = drawdownCoef(mom);
+    const pr = premiumCoef(p, p60, peerMin);
+    const raw = baseline * dd.c * pr.c;
+    const amount = Math.min(raw, baseline * 2);
     document.getElementById('calcOut').innerHTML = `
       <div class="kpi"><div class="k">回撤系数</div><div class="v">${fmt(dd.c)}</div><div class="s">${dd.label}</div></div>
       <div class="kpi"><div class="k">溢价系数</div><div class="v">${fmt(pr.c)}</div><div class="s">${pr.label}</div></div>
       <div class="kpi"><div class="k">建议买入金额</div><div class="v">¥${fmtYen(amount)}</div><div class="s">上限 2×基准；原始 ${fmtYen(raw)}</div></div>
     `;
+    const selected = (document.getElementById('etfSelect') || {}).value;
+    if (!selected || selected === '159501') paintHero(mom, p, p60, peerMin, navHigh, baseline);
   }
 
   // Prefill
   const B = D.briefing;
   const P = D.primary;
   document.getElementById('baseline').value = B.baseline || 4000;
-  document.getElementById('mom').value = fmt(B.mom_pct);
-  const momHint = document.getElementById('momHint');
-  if (momHint) {
-    const hintFrom = P.mom_from_date || '';
-    const hintTo = P.mom_to_date || '';
-    momHint.textContent = hintFrom && hintTo
-      ? `口径：最新净值相对约一个月前同一天的涨跌（${hintFrom} → ${hintTo}）。不是从近期高点回撤。`
+
+  function calculatorEtfs() {
+    const rows = ((D.calculator && D.calculator.etfs) || []).filter(e => e && e.code);
+    if (rows.length) return rows;
+    return [{
+      code: '159501',
+      name: '嘉实纳斯达克100',
+      p: B.P,
+      p60: B.P60,
+      mom_pct: B.mom_pct,
+      mom_from_date: P.mom_from_date,
+      mom_to_date: P.mom_to_date,
+      is_nav_60_high: !!P.is_nav_60_high,
+      peer_min_premium: B.peer_min_premium,
+    }];
+  }
+  function setMomHint(etf) {
+    const momHint = document.getElementById('momHint');
+    if (!momHint) return;
+    const from = (etf && etf.mom_from_date) || '';
+    const to = (etf && etf.mom_to_date) || '';
+    momHint.textContent = from && to
+      ? `口径：最新净值相对约一个月前同一天的涨跌（${from} → ${to}）。不是从近期高点回撤。`
       : '口径：最新净值相对约一个月前同一天的涨跌。不是从近期高点回撤。';
   }
-  document.getElementById('pToday').value = fmt(B.P);
-  document.getElementById('p60').value = fmt(B.P60);
-  document.getElementById('peerMin').value = fmt(B.peer_min_premium);
-  document.getElementById('navHigh').value = P.is_nav_60_high ? 1 : 0;
+  function applyEtf(code) {
+    const etf = calculatorEtfs().find(e => e.code === code) || calculatorEtfs()[0];
+    if (!etf) return;
+    document.getElementById('mom').value = fmt(etf.mom_pct);
+    document.getElementById('pToday').value = fmt(etf.p);
+    document.getElementById('p60').value = fmt(etf.p60);
+    document.getElementById('peerMin').value = fmt(etf.peer_min_premium);
+    document.getElementById('navHigh').value = etf.is_nav_60_high ? 1 : 0;
+    setMomHint(etf);
+    recompute();
+  }
+  const etfSelect = document.getElementById('etfSelect');
+  etfSelect.innerHTML = calculatorEtfs().map(e =>
+    `<option value="${e.code}">${e.code} ${e.name || ''}</option>`
+  ).join('');
+  etfSelect.value = calculatorEtfs().some(e => e.code === '159501') ? '159501' : (calculatorEtfs()[0] || {}).code;
+  applyEtf(etfSelect.value);
 
   let meta = `构建 ${D.asof.built_at} · 行情/收盘 ${P.close_date} · 净值日 ${P.nav_date} · 参考溢价快照 ${P.premium_ref_date || ''}`;
   if (D.asof.warnings && D.asof.warnings.length) {
@@ -438,6 +472,7 @@
   ['baseline','mom','pToday','p60','peerMin','navHigh'].forEach(id => {
     document.getElementById(id).addEventListener('input', recompute);
   });
+  etfSelect.addEventListener('change', () => applyEtf(etfSelect.value));
 
   function feeCell(it) {
     if (it.fee_total_pct == null) return '—';

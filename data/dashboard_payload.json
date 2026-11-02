@@ -1,6 +1,6 @@
 {
   "asof": {
-    "built_at": "2026-11-02 19:42:11 北京时间",
+    "built_at": "2026-11-02 20:09:16 北京时间",
     "price_date": "2026-11-02",
     "nav_date": "2026-10-30",
     "premium_method": "历史：收盘价/单位净值-1；今日展示溢价优先用 QDII Lens 收盘参考溢价（价/IOPV-1）",
@@ -5204,7 +5204,7 @@
             "turnover_cny": 511165171.0,
             "trading_date": "2026-11-02",
             "tracking_error_pct": 1.04,
-            "tracking_asof": "2026-10-29",
+            "tracking_asof": "2026-10-30",
             "is_today": true,
             "why": "今日优先：与最低溢价只差 0.25 个点，成交约 5.1 亿，管理+托管费 0.75%。"
           },
@@ -5243,6 +5243,142 @@
             "why": "溢价 10.28%，高于同类中枢约 8.28%。等溢价回到中枢附近再当主买点；今天先看更便宜的同类。"
           }
         ]
+      }
+    ]
+  },
+  "calculator": {
+    "etfs": [
+      {
+        "code": "159501",
+        "name": "嘉实纳斯达克100",
+        "p": 20.24,
+        "p60": 12.7027,
+        "mom_pct": -6.9897,
+        "mom_from_date": "2026-09-30",
+        "mom_to_date": "2026-10-30",
+        "is_nav_60_high": false,
+        "peer_min_premium": 12.9247
+      },
+      {
+        "code": "159513",
+        "name": "大成纳斯达克100",
+        "p": 12.9247,
+        "p60": 8.9688,
+        "mom_pct": -7.0816,
+        "mom_from_date": "2026-09-30",
+        "mom_to_date": "2026-10-30",
+        "is_nav_60_high": false,
+        "peer_min_premium": 12.9262
+      },
+      {
+        "code": "513110",
+        "name": "华泰柏瑞纳斯达克100",
+        "p": 12.9262,
+        "p60": 9.1815,
+        "mom_pct": -6.9975,
+        "mom_from_date": "2026-09-30",
+        "mom_to_date": "2026-10-30",
+        "is_nav_60_high": false,
+        "peer_min_premium": 12.9247
+      },
+      {
+        "code": "159632",
+        "name": "华安纳斯达克100",
+        "p": 13.239,
+        "p60": 9.3372,
+        "mom_pct": -7.0188,
+        "mom_from_date": "2026-09-30",
+        "mom_to_date": "2026-10-30",
+        "is_nav_60_high": false,
+        "peer_min_premium": 12.9247
+      },
+      {
+        "code": "513390",
+        "name": "博时纳斯达克100",
+        "p": 13.8444,
+        "p60": 9.3206,
+        "mom_pct": -7.0228,
+        "mom_from_date": "2026-09-30",
+        "mom_to_date": "2026-10-30",
+        "is_nav_60_high": false,
+        "peer_min_premium": 12.9247
+      },
+      {
+        "code": "513300",
+        "name": "华夏纳斯达克100",
+        "p": 14.0705,
+        "p60": 9.721,
+        "mom_pct": -3.7489,
+        "mom_from_date": "2026-09-29",
+        "mom_to_date": "2026-10-29",
+        "is_nav_60_high": false,
+        "peer_min_premium": 12.9247
+      },
+      {
+        "code": "159660",
+        "name": "汇添富纳斯达克100",
+        "p": 14.1218,
+        "p60": 9.4301,
+        "mom_pct": -6.9904,
+        "mom_from_date": "2026-09-30",
+        "mom_to_date": "2026-10-30",
+        "is_nav_60_high": false,
+        "peer_min_premium": 12.9247
+      },
+      {
+        "code": "513870",
+        "name": "富国纳斯达克100",
+        "p": 14.6951,
+        "p60": 9.6043,
+        "mom_pct": -6.9959,
+        "mom_from_date": "2026-09-30",
+        "mom_to_date": "2026-10-30",
+        "is_nav_60_high": false,
+        "peer_min_premium": 12.9247
+      },
+      {
+        "code": "159659",
+        "name": "招商纳斯达克100",
+        "p": 15.124,
+        "p60": 9.7495,
+        "mom_pct": -6.9725,
+        "mom_from_date": "2026-09-30",
+        "mom_to_date": "2026-10-30",
+        "is_nav_60_high": false,
+        "peer_min_premium": 12.9247
+      },
+      {
+        "code": "159941",
+        "name": "广发纳指100",
+        "p": 16.4248,
+        "p60": 11.619,
+        "mom_pct": -7.1069,
+        "mom_from_date": "2026-09-30",
+        "mom_to_date": "2026-10-30",
+        "is_nav_60_high": false,
+        "peer_min_premium": 12.9247
+      },
+      {
+        "code": "159696",
+        "name": "易方达纳斯达克100",
+        "p": 17.321,
+        "p60": 10.269,
+        "mom_pct": -6.9726,
+        "mom_from_date": "2026-09-30",
+        "mom_to_date": "2026-10-30",
+        "is_nav_60_high": false,
+        "peer_min_premium": 12.9247
+      },
+      {
+        "code": "513100",
+        "name": "国泰纳斯达克100",
+        "p": 18.2609,
+        "p60": 12.4569,
+        "mom_pct": -3.5134,
+        "mom_from_date": "2026-09-29",
+        "mom_to_date": "2026-10-29",
+        "is_nav_60_high": false,
+        "peer_min_premium": 12.9247
       }
     ]
   }
