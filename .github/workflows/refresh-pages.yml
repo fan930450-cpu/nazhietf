@@ -1,10 +1,12 @@
-# 交易日早盘前刷新纳指定投日报，并用 GitHub Pages 官方 Action 发布。
-# 定时为 01:00 UTC，约等于北京时间 09:00，周一至周五。不使用任何密钥。
+# 交易日盘中刷新纳指定投日报，并用 GitHub Pages 官方 Action 发布。
+# GitHub 的 schedule 只用 UTC，不认 CRON_TZ。
+# 20 2-6 * * 1-5 = UTC 02:20–06:20 = 北京时间 10:20、11:20、12:20、13:20、14:20，周一至周五。
+# 不是实时行情。不使用任何密钥。
 name: 刷新并部署日报
 
 on:
   schedule:
-    - cron: "0 1 * * 1-5"
+    - cron: "20 2-6 * * 1-5"
   workflow_dispatch:
   push:
     branches: [main]
