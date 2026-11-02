@@ -1,6 +1,6 @@
 {
   "asof": {
-    "built_at": "2026-11-02 21:00:11 北京时间",
+    "built_at": "2026-11-02 22:46:04 北京时间",
     "price_date": "2026-11-02",
     "nav_date": "2026-10-30",
     "premium_method": "历史：收盘价/单位净值-1；今日展示溢价优先用 QDII Lens 收盘参考溢价（价/IOPV-1）",
@@ -46,11 +46,11 @@
     "day_chg_pct": -3.4649,
     "drawdown_coef": 1.8984,
     "drawdown_label": "距高点5–10% · 单日跌≥3% +0.5",
-    "premium_coef": 0.5,
+    "premium_coef": 0.85,
     "premium_label": "明显贵",
     "is_obviously_expensive": true,
-    "suggested_amount": 3796.74,
-    "suggested_raw": 3796.74,
+    "suggested_amount": 6454.46,
+    "suggested_raw": 6454.46,
     "buy_target": {
       "code": "159632",
       "name": "华安纳斯达克100",
@@ -62,7 +62,7 @@
       5,
       8
     ],
-    "reason": "距近一年高点回撤8.98%（高点2026-06-02→净值日2026-10-30）→回撤系数1.90（距高点5–10% · 单日跌≥3% +0.5）；溢价20.24%（明显贵）→溢价系数0.50；较上月净值-6.99%（2026-09-30→2026-10-30，只作参照）；建议买159632（同类更低溢价13.24%）；暂不触发卖出",
+    "reason": "距近一年高点回撤8.98%（高点2026-06-02→净值日2026-10-30）→回撤系数1.90（距高点5–10% · 单日跌≥3% +0.5）；溢价20.24%（明显贵）→溢价系数0.85；较上月净值-6.99%（2026-09-30→2026-10-30，只作参照）；建议买159632（同类更低溢价13.24%）；暂不触发卖出",
     "peer_min_premium": 12.9247
   },
   "history": [
@@ -4982,7 +4982,7 @@
       "close": 1.785,
       "iopv": 1.5807,
       "ref_premium_pct": 12.9247,
-      "nav_premium_pct": 11.6742,
+      "nav_premium_pct": 12.6431,
       "live_price": 1.785,
       "live_asof": "2026-11-02 15:35:15",
       "is_primary": false
@@ -4993,7 +4993,7 @@
       "close": 2.461,
       "iopv": 2.1793,
       "ref_premium_pct": 12.9262,
-      "nav_premium_pct": 11.9823,
+      "nav_premium_pct": 12.6302,
       "live_price": 2.461,
       "live_asof": "2026-11-02 15:34:59",
       "is_primary": false
@@ -5015,7 +5015,7 @@
       "close": 2.425,
       "iopv": 2.1301,
       "ref_premium_pct": 13.8444,
-      "nav_premium_pct": 12.4354,
+      "nav_premium_pct": 13.6044,
       "live_price": 2.425,
       "live_asof": "2026-11-02 15:34:59",
       "is_primary": false
@@ -5026,7 +5026,7 @@
       "close": 2.681,
       "iopv": 2.3503,
       "ref_premium_pct": 14.0705,
-      "nav_premium_pct": 12.6616,
+      "nav_premium_pct": 13.763,
       "live_price": 2.681,
       "live_asof": "2026-11-02 15:34:59",
       "is_primary": false
@@ -5037,7 +5037,7 @@
       "close": 2.367,
       "iopv": 2.0741,
       "ref_premium_pct": 14.1218,
-      "nav_premium_pct": 12.4814,
+      "nav_premium_pct": 13.6769,
       "live_price": 2.367,
       "live_asof": "2026-11-02 15:35:00",
       "is_primary": false
@@ -5092,7 +5092,7 @@
       "close": 2.244,
       "iopv": 1.8975,
       "ref_premium_pct": 18.2609,
-      "nav_premium_pct": 16.4624,
+      "nav_premium_pct": 17.9476,
       "live_price": 2.244,
       "live_asof": "2026-11-02 15:34:59",
       "is_primary": false
@@ -5103,7 +5103,7 @@
       "close": 2.144,
       "iopv": 1.7831,
       "ref_premium_pct": 20.24,
-      "nav_premium_pct": 18.2935,
+      "nav_premium_pct": 21.0252,
       "live_price": 2.144,
       "live_asof": "2026-11-02 15:35:45",
       "is_primary": true
@@ -5242,9 +5242,9 @@
             "tracking_error_pct": 2.14,
             "tracking_asof": "2026-10-30",
             "is_today": false,
-            "why": "溢价和短名单最低一档几乎一样（差 0.00 个点），成交够用。价差在约 2 个点内，今天让给了费率更低或规模更大的一只。 净值日 2026-10-29，落后于同类最新净值日 2026-10-30，不拿它的回撤和其他基金比。",
-            "nav_date": "2026-10-29",
-            "nav_stale": true
+            "why": "溢价和短名单最低一档几乎一样（差 0.00 个点），成交够用。价差在约 2 个点内，今天让给了费率更低或规模更大的一只。",
+            "nav_date": "2026-10-30",
+            "nav_stale": false
           },
           {
             "code": "513500",
@@ -5371,19 +5371,19 @@
         "code": "513300",
         "name": "华夏纳斯达克100",
         "p": 14.0705,
-        "p60": 9.721,
-        "peak_dd_pct": 5.69,
+        "p60": 9.7299,
+        "peak_dd_pct": 9.0188,
         "peak_nav": 2.5835,
         "peak_date": "2026-06-02",
-        "day_chg_pct": -1.464,
-        "day_from_date": "2026-10-28",
-        "mom_pct": -3.7489,
-        "mom_from_date": "2026-09-29",
-        "mom_to_date": "2026-10-29",
-        "nav_date": "2026-10-29",
+        "day_chg_pct": -3.5297,
+        "day_from_date": "2026-10-29",
+        "mom_pct": -7.3695,
+        "mom_from_date": "2026-09-30",
+        "mom_to_date": "2026-10-30",
+        "nav_date": "2026-10-30",
         "is_nav_60_high": false,
         "peer_min_premium": 12.9247,
-        "nav_stale": true,
+        "nav_stale": false,
         "nav_freshest": "2026-10-30"
       },
       {
@@ -5485,19 +5485,19 @@
         "code": "513100",
         "name": "国泰纳斯达克100",
         "p": 18.2609,
-        "p60": 12.4569,
-        "peak_dd_pct": 5.7834,
+        "p60": 12.5621,
+        "peak_dd_pct": 9.0417,
         "peak_nav": 2.087,
         "peak_date": "2026-06-02",
-        "day_chg_pct": -1.404,
-        "day_from_date": "2026-10-28",
-        "mom_pct": -3.5134,
-        "mom_from_date": "2026-09-29",
-        "mom_to_date": "2026-10-29",
-        "nav_date": "2026-10-29",
+        "day_chg_pct": -3.4583,
+        "day_from_date": "2026-10-29",
+        "mom_pct": -6.9871,
+        "mom_from_date": "2026-09-30",
+        "mom_to_date": "2026-10-30",
+        "nav_date": "2026-10-30",
         "is_nav_60_high": false,
         "peer_min_premium": 12.9247,
-        "nav_stale": true,
+        "nav_stale": false,
         "nav_freshest": "2026-10-30"
       }
     ]
