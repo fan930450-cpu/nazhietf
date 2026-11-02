@@ -147,34 +147,61 @@ def drawdown_coef(dd: float | None, day_chg: float | None = None) -> tuple[float
 
 
 def _premium_relative(p: float, p60: float) -> float:
-    """相对自己的 P60 连续变化。d = P−P60。"""
+    """相对自己的 P60 连续变化。d = P−P60。
+
+    d≤−5 → 1.15；d=0 → 1.00；d≥+5 → 0.85；两端之间线性。
+    """
     d = p - p60
     if d <= -5:
-        return 1.3
+        return 1.15
     if d <= 0:
         t = (d + 5) / 5.0
-        return 1.3 + t * (1.0 - 1.3)
+        return 1.15 + t * (1.0 - 1.15)
     if d <= 5:
         t = d / 5.0
-        return 1.0 + t * (0.5 - 1.0)
-    return 0.5
+        return 1.0 + t * (0.85 - 1.0)
+    return 0.85
 
 
-def premium_coef(p: float, p60: float, peer_min_p: float | None) -> tuple[float, str, bool]:
-    """相对 P60 连续计算，再用绝对溢价和同类价差封顶。"""
+def premium_coef(
+    p: float,
+    p60: float,
+    peer_min_p: float | None,
+    peak_dd: float | None = None,
+) -> tuple[float, str, bool]:
+    """相对 P60 连续计算，再用绝对溢价、同类价差封顶，深回撤时抬底。
+
+    买多少仍主要由回撤系数决定；这里只轻度修正（大约 0.85–1.15）。
+    1. 相对 P60：≤−5 → 1.15，=0 → 1.00，≥+5 → 0.85，中间线性。
+    2. 绝对软顶：P≥22 → ≤0.85；P≥18 → ≤0.90；P≥15 → ≤0.95。
+    3. 比最便宜同类贵 ≥5 个点 → ≤0.90。
+    4. 回撤下限：距高点 ≥15% → ≥0.95；≥10% → ≥0.90。
+    """
     coef = _premium_relative(p, p60)
-    if peer_min_p is not None and p - peer_min_p >= 5:
-        coef = min(coef, 0.5)
-    if p >= 18:
-        coef = min(coef, 0.5)
+    if p >= 22:
+        coef = min(coef, 0.85)
+    elif p >= 18:
+        coef = min(coef, 0.90)
     elif p >= 15:
-        coef = min(coef, 0.75)
+        coef = min(coef, 0.95)
+    if peer_min_p is not None and p - peer_min_p >= 5:
+        coef = min(coef, 0.90)
+    if peak_dd is not None:
+        if peak_dd >= 15:
+            coef = max(coef, 0.95)
+        elif peak_dd >= 10:
+            coef = max(coef, 0.90)
     expensive = (p >= 15) or (peer_min_p is not None and p - peer_min_p >= 5) or (p - p60 >= 5)
-    if expensive and coef <= 0.5 + 1e-9:
+    # 新区间是 0.85–1.15（旧为 0.50–1.30）。标签按同一形状换算，
+    # 不再因为系数落到已经取消的 0.50 地板就叫「明显贵」。
+    # 相对便宜：c≥1.075，对应比 P60 低约 2.5 个点（旧阈值 c≥1.15 的同一位置）。
+    # 偏贵：c≤0.97，对应比 P60 高约 1 个点（旧阈值 c≤0.90 的同一位置），或 P≥15。
+    # 明显贵：系数贴在新的贵端锚点 0.85，且本身已判为偏贵情形。
+    if expensive and coef <= 0.85 + 1e-9:
         label = "明显贵"
-    elif p >= 15 or coef <= 0.9:
+    elif p >= 15 or coef <= 0.97:
         label = "偏贵"
-    elif coef >= 1.15:
+    elif coef >= 1.075:
         label = "相对便宜"
     else:
         label = "中性"
@@ -211,17 +238,57 @@ def _self_check() -> None:
         raise SystemExit(f"取消 2 倍上限自检失败 {amount20} {amount30}")
     if abs(premium_coef(10, 10, 9)[0] - 1.0) > 1e-9:
         raise SystemExit("溢价中性自检失败")
-    if abs(premium_coef(5, 10, 4)[0] - 1.3) > 1e-9:
-        raise SystemExit("溢价偏便宜自检失败")
-    coef, _label, expensive = premium_coef(16, 16, 15.5)
-    if abs(coef - 0.75) > 1e-9 or not expensive:
-        raise SystemExit(f"绝对溢价 15% 地板自检失败 {coef}")
+    coef, label, expensive = premium_coef(5, 10, 4)
+    if abs(coef - 1.15) > 1e-9 or label != "相对便宜" or expensive:
+        raise SystemExit(f"溢价偏便宜自检失败 {coef} {label} {expensive}")
+    coef, label, expensive = premium_coef(16, 16, 15.5)
+    if abs(coef - 0.95) > 1e-9 or label != "偏贵" or not expensive:
+        raise SystemExit(f"绝对溢价 15% 软顶自检失败 {coef} {label}")
     coef, label, expensive = premium_coef(20.24, 20.24, 12.92)
-    if abs(coef - 0.5) > 1e-9 or label != "明显贵" or not expensive:
-        raise SystemExit(f"绝对溢价 18% 地板自检失败 {coef} {label}")
+    if abs(coef - 0.90) > 1e-9 or label != "偏贵" or not expensive:
+        raise SystemExit(f"绝对溢价 18% 软顶自检失败 {coef} {label}")
+    coef, label, expensive = premium_coef(22, 22, 21)
+    if abs(coef - 0.85) > 1e-9 or label != "明显贵" or not expensive:
+        raise SystemExit(f"绝对溢价 22% 软顶自检失败 {coef} {label}")
     coef, label, expensive = premium_coef(12, 12, 6)
-    if abs(coef - 0.5) > 1e-9 or not expensive:
-        raise SystemExit(f"同类价差封顶自检失败 {coef}")
+    if abs(coef - 0.90) > 1e-9 or label != "偏贵" or not expensive:
+        raise SystemExit(f"同类价差封顶自检失败 {coef} {label}")
+    if abs(_premium_relative(10, 15) - 1.15) > 1e-9:
+        raise SystemExit("相对 P60 ≤−5 自检失败")
+    if abs(_premium_relative(10, 10) - 1.0) > 1e-9:
+        raise SystemExit("相对 P60 =0 自检失败")
+    if abs(_premium_relative(15, 10) - 0.85) > 1e-9:
+        raise SystemExit("相对 P60 ≥+5 自检失败")
+    if abs(_premium_relative(18, 15) - 0.91) > 1e-9:
+        raise SystemExit(f"相对 P60 线性自检失败 {_premium_relative(18, 15)}")
+    # 基准 4000，peakDd=10，dayChg=0，P=18，P60=15，peerMin=12。
+    # 相对 ~0.91 → 绝对软顶 0.90 → 同类 0.90 → 回撤下限 0.90。
+    # 金额 = 4000 × 1.5 × 0.90 = 5400。旧规则这里大约是 0.50 → 3000。
+    coef, label, expensive = premium_coef(18, 15, 12, 10)
+    sample_dd, _sample_label = drawdown_coef(10, 0)
+    sample_amount = 4000 * sample_dd * coef
+    if (
+        abs(coef - 0.90) > 1e-9
+        or abs(sample_dd - 1.5) > 1e-9
+        or abs(sample_amount - 5400) > 1e-6
+        or label != "偏贵"
+        or not expensive
+    ):
+        raise SystemExit(
+            f"溢价新政策样例自检失败 coef={coef} dd={sample_dd} amount={sample_amount} {label}"
+        )
+    coef, label, expensive = premium_coef(22, 17, 16, 15)
+    if abs(coef - 0.95) > 1e-9 or label != "偏贵" or not expensive:
+        raise SystemExit(f"回撤 15% 下限自检失败 {coef} {label}")
+    coef, label, _expensive = premium_coef(22, 17, 16, 10)
+    if abs(coef - 0.90) > 1e-9 or label != "偏贵":
+        raise SystemExit(f"回撤 10% 下限自检失败 {coef} {label}")
+    coef, label, _expensive = premium_coef(22, 17, 16, 9)
+    if abs(coef - 0.85) > 1e-9 or label != "明显贵":
+        raise SystemExit(f"未触发回撤下限时应明显贵 {coef} {label}")
+    coef, label, _expensive = premium_coef(5, 10, 4, 20)
+    if abs(coef - 1.15) > 1e-9 or label != "相对便宜":
+        raise SystemExit(f"回撤下限不应压低便宜溢价 {coef} {label}")
     nasdaq_today = choose_today(
         [
             {"code": "159513", "ref_premium_pct": 12.92, "fee_total_pct": 1.0, "aum_cny": 82e8, "turnover_cny": 2.7e8},
@@ -1215,7 +1282,7 @@ def build_payload(
     nav_dates[PRIMARY] = latest_nav_date
     picks = align_pick_nav_dates(picks, nav_dates)
     dc, dlabel = drawdown_coef(peak_dd, day_chg)
-    pc, plabel, is_expensive = premium_coef(p_for_calc, p60, peer_min)
+    pc, plabel, is_expensive = premium_coef(p_for_calc, p60, peer_min, peak_dd)
     base = 4000.0
     amount = base * dc * pc
     suggest_sell = bool(is_nav_60_high and is_expensive)

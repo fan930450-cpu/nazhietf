@@ -174,7 +174,7 @@
         <div>
           <label for="etfSelect">选择 ETF</label>
           <select id="etfSelect"></select>
-          <div class="field-hint" style="font-size:.75rem;color:var(--muted);margin-top:.35rem;line-height:1.45">回撤系数看的是距近一年最高净值的回撤，不是较上月净值。溢价系数按各只自己的今日溢价相对自己的 P60 连续计算，P≥15% 仍按偏贵处理，所以金额差别主要在溢价，也在回撤深浅。</div>
+          <div class="field-hint" style="font-size:.75rem;color:var(--muted);margin-top:.35rem;line-height:1.45">回撤系数看的是距近一年最高净值的回撤，不是较上月净值。买多少主要由回撤决定。溢价系数只按各只自己的今日溢价相对自己的 P60 做轻度修正（约 0.85–1.15），高溢价再轻轻封顶，深回撤时溢价系数还有下限。</div>
         </div>
       </div>
       <div class="form-row">
@@ -226,7 +226,7 @@
         <p style="font-size:.85rem;line-height:1.55;margin:.6rem 0 0">
           <strong>回撤口径</strong>：回撤系数看「距近一年最高净值的回撤」（最新净值 ÷ 近 365 天内最高净值 − 1，取正数）。<strong>较上月净值</strong>（约一个月前同一天）只显示作参照，不进入系数。<br/>
           回撤系数，档内线性、不再卡在 2：&lt;5%→1.0；5–10% 从 1.0 到 1.5；10–20% 从 1.5 到 2.5；20–30% 从 2.5 到 3.5；30–40% 从 3.5 到 5.0；&gt;40%→5.0。最新净值日相对前一净值日下跌 ≥3%，当天再 +0.5。<br/>
-          溢价系数相对自己的 P60 连续变化：比 P60 低 5 个点及以上为 1.30，持平为 1.00，高出 5 个点及以上为 0.50，中间线性。另外设绝对下限：P≥15% 时系数不超过 0.75，P≥18% 或比最便宜同类贵 5 个点及以上时不超过 0.50。这样长期高溢价不会被抬高的 P60 洗成中性。<br/>
+          溢价系数只轻度修正金额，买多少仍主要由回撤系数决定。相对自己的 P60 连续变化：比 P60 低 5 个点及以上为 1.15，持平为 1.00，高出 5 个点及以上为 0.85，中间线性。绝对软顶：P≥22% 时不超过 0.85，P≥18% 时不超过 0.90，P≥15% 时不超过 0.95。比最便宜同类贵 5 个点及以上时不超过 0.90。回撤够深时设下限，避免溢价把金额砍得太狠：距高点回撤 ≥15% 时系数不低于 0.95，≥10% 时不低于 0.90。这样长期高溢价不会被抬高的 P60 洗成中性，但也不再把系数一刀砍到 0.50。<br/>
           建议金额 = 基准 × 回撤系数 × 溢价系数，<strong>没有 2 倍上限</strong>。159501 明显贵时，买入代码仍指向纳指短名单里更合适的一只。标普500不参与这个金额。<br/>
           盘中「今日溢价 P」在页面打开且处于 A 股交易时段时，大约每 20 秒从公开行情重取，并重算溢价系数、建议金额和短名单排序。P60、高点回撤、单日净值涨跌不跟着这 20 秒变。
         </p>
@@ -324,22 +324,31 @@
 
   function premiumRelative(p, p60) {
     const d = p - p60;
-    if (d <= -5) return 1.3;
-    if (d <= 0) return 1.3 + ((d + 5) / 5) * (1 - 1.3);
-    if (d <= 5) return 1 + (d / 5) * (0.5 - 1);
-    return 0.5;
+    if (d <= -5) return 1.15;
+    if (d <= 0) return 1.15 + ((d + 5) / 5) * (1 - 1.15);
+    if (d <= 5) return 1 + (d / 5) * (0.85 - 1);
+    return 0.85;
   }
 
-  function premiumCoef(p, p60, peerMin) {
+  function premiumCoef(p, p60, peerMin, peakDd) {
     let c = premiumRelative(p, p60);
-    if (peerMin != null && !Number.isNaN(peerMin) && p - peerMin >= 5) c = Math.min(c, 0.5);
-    if (p >= 18) c = Math.min(c, 0.5);
-    else if (p >= 15) c = Math.min(c, 0.75);
+    if (p >= 22) c = Math.min(c, 0.85);
+    else if (p >= 18) c = Math.min(c, 0.90);
+    else if (p >= 15) c = Math.min(c, 0.95);
+    if (peerMin != null && !Number.isNaN(peerMin) && p - peerMin >= 5) c = Math.min(c, 0.90);
+    if (peakDd != null && !Number.isNaN(peakDd)) {
+      if (peakDd >= 15) c = Math.max(c, 0.95);
+      else if (peakDd >= 10) c = Math.max(c, 0.90);
+    }
     const expensive = p >= 15 || (peerMin != null && !Number.isNaN(peerMin) && p - peerMin >= 5) || (p - p60 >= 5);
+    // 新区间 0.85–1.15（旧为 0.50–1.30）。标签按同一形状换算。
+    // 相对便宜 c≥1.075：比 P60 低约 2.5 个点（旧阈值 c≥1.15 的同一位置）。
+    // 偏贵 c≤0.97：比 P60 高约 1 个点（旧阈值 c≤0.90 的同一位置），或 P≥15。
+    // 明显贵只在系数贴上新的贵端锚点 0.85 时出现，不再因为旧的 0.50 地板。
     let label = '中性';
-    if (expensive && c <= 0.5 + 1e-9) label = '明显贵';
-    else if (p >= 15 || c <= 0.9) label = '偏贵';
-    else if (c >= 1.15) label = '相对便宜';
+    if (expensive && c <= 0.85 + 1e-9) label = '明显贵';
+    else if (p >= 15 || c <= 0.97) label = '偏贵';
+    else if (c >= 1.075) label = '相对便宜';
     return { c, label, expensive };
   }
 
@@ -358,7 +367,7 @@
 
   function paintHero(peak, dayChg, mom, p, p60, peerMin, navHigh, baseline, etf) {
     const dd = drawdownCoef(peak, dayChg);
-    const pr = premiumCoef(p, p60, peerMin);
+    const pr = premiumCoef(p, p60, peerMin, peak);
     const amount = baseline * dd.c * pr.c;
     const sell = navHigh && pr.expensive;
     const cheap = cheapestPeer();
@@ -419,7 +428,7 @@
     const peerMin = Number(document.getElementById('peerMin').value);
     const navHigh = Number(document.getElementById('navHigh').value) === 1;
     const dd = drawdownCoef(peak, dayChg);
-    const pr = premiumCoef(p, p60, peerMin);
+    const pr = premiumCoef(p, p60, peerMin, peak);
     const amount = baseline * dd.c * pr.c;
     const invested = Number(document.getElementById('monthInvested').value) || 0;
     const reserve = Number(document.getElementById('reserve').value) || 0;
