@@ -92,10 +92,12 @@
   .form-row { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
   @media (max-width: 640px) { .form-row { grid-template-columns: 1fr; } }
   label { display: block; color: var(--muted); font-size: .8rem; margin-bottom: 4px; }
-  input[type=number], input[type=text], select {
+  input[type=number], input[type=text], input[type=date], select, textarea {
     width: 100%; background: var(--bg2); border: 1px solid var(--line); color: var(--text);
     border-radius: 10px; padding: 10px 12px; font-size: 1rem; font-variant-numeric: tabular-nums;
+    color-scheme: dark;
   }
+  textarea { font-family: inherit; min-height: 68px; }
   select { appearance: none; background-image: linear-gradient(45deg, transparent 50%, var(--muted) 50%), linear-gradient(135deg, var(--muted) 50%, transparent 50%); background-position: calc(100% - 18px) 50%, calc(100% - 12px) 50%; background-size: 6px 6px, 6px 6px; background-repeat: no-repeat; padding-right: 32px; }
   input:focus { outline: 2px solid rgba(91,140,255,.45); border-color: var(--blue); }
   .calc-out {
@@ -134,6 +136,32 @@
   .live-bar button { background: var(--card); color: var(--text); border: 1px solid var(--line); border-radius: 999px; padding: 6px 12px; cursor: pointer; font: inherit; }
   .live-bar button:hover { border-color: var(--blue); }
   .live-note { color: var(--muted); font-size: .75rem; line-height: 1.5; margin: 0 0 14px; }
+  .ledger-h { font-size: .95rem; margin: 18px 0 8px; }
+  .form-grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+  @media (max-width: 800px) { .form-grid-3 { grid-template-columns: 1fr 1fr; } }
+  @media (max-width: 520px) { .form-grid-3 { grid-template-columns: 1fr; } }
+  .span-2 { grid-column: span 2; }
+  @media (max-width: 520px) { .span-2 { grid-column: auto; } }
+  .note-banner { background: rgba(255,176,32,.1); border: 1px solid rgba(255,176,32,.35); border-radius: 12px; padding: 10px 12px; font-size: .84rem; line-height: 1.5; margin: 0 0 12px; }
+  .sell-box { border: 1px solid rgba(167,139,250,.45); background: rgba(167,139,250,.08); border-radius: 14px; padding: 12px 14px; }
+  .sell-box h3 { margin: 0 0 6px; font-size: 1rem; }
+  .sell-amt { font-size: 1.8rem; font-weight: 800; font-variant-numeric: tabular-nums; letter-spacing: -.02em; margin: 2px 0 6px; }
+  .btn { background: var(--bg2); color: var(--text); border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px; cursor: pointer; font: inherit; }
+  .btn:hover { border-color: var(--blue); }
+  .btn.primary { background: rgba(91,140,255,.22); border-color: var(--blue); }
+  .btn.danger { color: var(--red); }
+  .btn.tiny { padding: 4px 8px; font-size: .75rem; border-radius: 8px; }
+  .btn:disabled { opacity: .55; cursor: default; }
+  .form-actions, .ledger-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+  .chk { display: flex; gap: 8px; align-items: flex-start; color: var(--text); font-size: .86rem; line-height: 1.45; margin-top: 10px; }
+  .chk input { width: auto; margin-top: 3px; }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  #ledgerSection table td, #ledgerSection table th { vertical-align: top; }
+  #holdingBody td:nth-child(-n+3), #holdingBody td:last-child,
+  #tradeBody td:nth-child(-n+5), #tradeBody td:last-child { white-space: nowrap; }
+  tfoot td { font-weight: 700; border-bottom: none; }
+  .table-scroll { overflow-x: auto; }
+  [hidden] { display: none !important; }
 </style>
 </head>
 <body>
@@ -227,12 +255,177 @@
           <strong>回撤口径</strong>：回撤系数看「距近一年最高净值的回撤」（最新净值 ÷ 近 365 天内最高净值 − 1，取正数）。<strong>较上月净值</strong>（约一个月前同一天）只显示作参照，不进入系数。<br/>
           回撤系数，相邻锚点之间线性：&lt;5%→1.0；5%→1.67；10%→3.33；15%→6.67；20%→8.33；25%→10.0；30%→11.67；40%→13.33；&gt;40% 仍为 13.33。例如 7.5% 约为 2.5，12.5% 约为 5.0。最新净值日相对前一净值日下跌 ≥3%，在这个系数上再 +0.5。<br/>
           溢价系数只轻度修正金额，买多少仍主要由回撤系数决定。相对自己的 P60 连续变化：比 P60 低 5 个点及以上为 1.15，持平为 1.00，高出 5 个点及以上为 0.85，中间线性。绝对软顶：P≥22% 时不超过 0.85，P≥18% 时不超过 0.90，P≥15% 时不超过 0.95。比最便宜同类贵 5 个点及以上时不超过 0.90。回撤够深时设下限，避免溢价把金额砍得太狠：距高点回撤 ≥15% 时系数不低于 0.95，≥10% 时不低于 0.90。这样长期高溢价不会被抬高的 P60 洗成中性，但也不再把系数一刀砍到 0.50。<br/>
-          建议金额 = 基准 × 回撤系数 × 溢价系数，<strong>没有 2 倍上限</strong>。159501 明显贵时，买入代码仍指向纳指短名单里更合适的一只。标普500不参与这个金额。<br/>
+          建议金额 = 基准 × 回撤系数 × 溢价系数，<strong>没有 2 倍上限</strong>。159501 明显贵时，买入代码仍指向纳指短名单里更合适的一只。标普500不参与这个金额。卖出不进这个买入金额：触发时记录本按持仓市值给出人民币，单次约 6%，且不超过本年剩余的 20%，卖后仍留至少 75% 的本年峰值市值。<br/>
           盘中「今日溢价 P」在页面打开且处于 A 股交易时段时，大约每 20 秒从公开行情重取，并重算溢价系数、建议金额和短名单排序。P60、高点回撤、单日净值涨跌不跟着这 20 秒变。
         </p>
       </details>
       <div class="calc-out" id="calcOut"></div>
       <p class="field-hint" id="reserveOut" style="font-size:.8rem;color:var(--muted);line-height:1.5;margin:10px 0 0"></p>
+    </div>
+  </section>
+
+  <section id="ledgerSection">
+    <h2>买卖记录本 <span class="hint">只存在这台浏览器 · 可导出 JSON 备份</span></h2>
+    <div class="card">
+      <p class="pick-intro">持仓快照按账户和代码记数量、成本价。卖出建议和浮盈亏以它为准：现价优先用本页公开行情，没有则用日报快照或你填的快照价。买卖记录是流水，不会自动把同一笔再加进数量。新记一笔时可以勾选顺手改持仓：买入按金额加权更新成本，卖出只扣数量。改掉旧流水不会回头改持仓。下面的种子来自 2026-11-02 的截图，三笔买入笔记已经含在持仓数量里，所以没有再加一次。</p>
+      <div id="ledgerSeedNote" class="note-banner" hidden></div>
+      <div id="sellPanel" class="sell-box" aria-live="polite">卖出额度计算中…</div>
+
+      <h3 class="ledger-h">持仓汇总 <span class="hint">按代码 × 账户</span></h3>
+      <div class="grid" id="holdingCards"></div>
+      <div class="table-scroll" style="margin-top:12px">
+        <table>
+          <thead>
+            <tr>
+              <th>账户</th><th>类型</th><th>代码</th><th>名称</th>
+              <th class="num">持仓数量</th><th class="num">成本价</th><th class="num">成本金额</th>
+              <th class="num">现价</th><th class="num">溢价</th><th class="num">市值</th><th class="num">浮盈亏</th><th></th>
+            </tr>
+          </thead>
+          <tbody id="holdingBody"></tbody>
+          <tfoot id="holdingFoot"></tfoot>
+        </table>
+      </div>
+      <details class="advanced" id="holdEditor">
+        <summary>新增或修改持仓快照</summary>
+        <form id="holdForm" style="margin-top:12px">
+          <div class="form-grid-3">
+            <div>
+              <label for="holdAccount">账户</label>
+              <select id="holdAccount">
+                <option value="">未填</option>
+                <option value="平安证券">平安证券</option>
+                <option value="银河证券">银河证券</option>
+              </select>
+            </div>
+            <div>
+              <label for="holdFamily">品种类型</label>
+              <select id="holdFamily">
+                <option value="nasdaq">纳指100</option>
+                <option value="sp500">标普500</option>
+              </select>
+            </div>
+            <div>
+              <label for="holdCode">代码</label>
+              <select id="holdCode"></select>
+              <input id="holdCodeCustom" type="text" maxlength="12" placeholder="手填代码，可留空" hidden style="margin-top:8px" />
+            </div>
+            <div>
+              <label for="holdName">名称</label>
+              <input id="holdName" type="text" maxlength="40" />
+            </div>
+            <div>
+              <label for="holdShares">持仓数量</label>
+              <input id="holdShares" type="number" min="0" step="1" />
+            </div>
+            <div>
+              <label for="holdCost">成本价</label>
+              <input id="holdCost" type="number" min="0" step="0.0001" />
+            </div>
+            <div>
+              <label for="holdSnap">快照价（没有行情时当作现价）</label>
+              <input id="holdSnap" type="number" min="0" step="0.0001" />
+            </div>
+            <div class="span-2">
+              <label for="holdNote">备注</label>
+              <input id="holdNote" type="text" maxlength="200" />
+            </div>
+          </div>
+          <div class="form-actions">
+            <button class="btn primary" type="submit" id="holdSubmit">保存持仓</button>
+            <button class="btn" type="button" id="holdCancel" hidden>取消修改</button>
+          </div>
+        </form>
+        <p id="holdMsg" class="pick-intro"></p>
+      </details>
+
+      <h3 class="ledger-h">记一笔</h3>
+      <form id="tradeForm">
+        <div class="form-grid-3">
+          <div>
+            <label for="tradeDate">日期</label>
+            <input id="tradeDate" type="date" />
+          </div>
+          <div>
+            <label for="tradeSide">方向</label>
+            <select id="tradeSide">
+              <option value="buy">买入</option>
+              <option value="sell">卖出</option>
+            </select>
+          </div>
+          <div>
+            <label for="tradeAccount">账户</label>
+            <select id="tradeAccount">
+              <option value="">未填</option>
+              <option value="平安证券">平安证券</option>
+              <option value="银河证券">银河证券</option>
+            </select>
+          </div>
+          <div>
+            <label for="tradeFamily">品种类型</label>
+            <select id="tradeFamily">
+              <option value="nasdaq">纳指100</option>
+              <option value="sp500">标普500</option>
+            </select>
+          </div>
+          <div>
+            <label for="tradeCode">代码</label>
+            <select id="tradeCode"></select>
+            <input id="tradeCodeCustom" type="text" maxlength="12" placeholder="手填代码" hidden style="margin-top:8px" />
+          </div>
+          <div>
+            <label for="tradeName">名称</label>
+            <input id="tradeName" type="text" maxlength="40" />
+          </div>
+          <div>
+            <label for="tradeAmount">金额（元）</label>
+            <input id="tradeAmount" type="number" min="0" step="0.01" />
+          </div>
+          <div>
+            <label for="tradePrice">价格</label>
+            <input id="tradePrice" type="number" min="0" step="0.0001" />
+          </div>
+          <div>
+            <label for="tradePremium">溢价 %</label>
+            <input id="tradePremium" type="number" step="0.01" />
+          </div>
+          <div>
+            <label for="tradeShares">数量（可选，可与金额、价格互推）</label>
+            <input id="tradeShares" type="number" min="0" step="0.0001" />
+          </div>
+          <div class="span-2">
+            <label for="tradeNote">备注</label>
+            <input id="tradeNote" type="text" maxlength="200" />
+          </div>
+        </div>
+        <label class="chk"><input id="tradeUpdate" type="checkbox" checked /> <span id="tradeUpdateLabel">买入后更新持仓（数量相加，成本按金额加权）</span></label>
+        <div class="form-actions">
+          <button class="btn primary" type="submit" id="tradeSubmit">记入流水</button>
+          <button class="btn" type="button" id="tradePrefill">从建议金额记一笔买入</button>
+          <button class="btn" type="button" id="tradeCancel" hidden>取消修改</button>
+        </div>
+      </form>
+      <p id="tradeMsg" class="pick-intro"></p>
+
+      <h3 class="ledger-h">流水 <span class="hint">新的在前 · 种子笔记不会重复加仓</span></h3>
+      <div class="table-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>日期</th><th>方向</th><th>账户</th><th>类型</th><th>代码</th><th>名称</th>
+              <th class="num">金额</th><th class="num">价格</th><th class="num">溢价</th><th class="num">数量</th><th>备注</th><th></th>
+            </tr>
+          </thead>
+          <tbody id="tradeBody"></tbody>
+        </table>
+      </div>
+      <div class="ledger-actions">
+        <button type="button" class="btn" id="ledgerExport">导出 JSON</button>
+        <button type="button" class="btn" id="ledgerImportBtn">导入 JSON</button>
+        <input id="ledgerFile" type="file" accept="application/json,.json" hidden />
+        <button type="button" class="btn" id="ledgerClear">清空本机记录</button>
+      </div>
+      <p class="pick-src">存在键名 nazhietf.trades 和 nazhietf.holdings。清空或导入之后，不会再次自动写入种子。不要把导出的 JSON 提交进仓库。</p>
     </div>
   </section>
 
@@ -278,7 +471,7 @@
         <li><span class="n">1</span><div>看本页顶部<strong>今日建议定投金额</strong>与建议标的。交易日大约从 10:30（北京时间）起，页面会按小时更新到 14:20。</div></li>
         <li><span class="n">2</span><div>核对<strong>今日溢价 P</strong>与<strong>P60</strong>。159501 明显贵时，到「今日同类怎么选」里看纳指短名单的今日优先；标普500是另一条可选，不替换顶部金额。</div></li>
         <li><span class="n">3</span><div>看<strong>距近一年最高净值的回撤</strong>：这是回撤系数的输入。较上月净值只作参照。回撤越深，建议金额越高，深回撤可以到基准的 13.33 倍，先核对备用金。</div></li>
-        <li><span class="n">4</span><div>若提示「建议卖战术仓」：只卖总市值 5–8%，底仓≥75%不动；一年累计减仓建议≤20%。</div></li>
+        <li><span class="n">4</span><div>若顶部给出卖出金额：按记录本里的那一笔（大约合计市值的 6%，且不超过本年剩余的 20% 额度，卖完还要留下至少 75% 的本年峰值市值）。还没记持仓时，仍只提示 5–8%。</div></li>
         <li><span class="n">5</span><div>数据在交易日大约每小时刷新一次（北京时间 <strong>10:20–14:20</strong>），不是实时行情；下单仍以券商 IOPV 为准。也可在仓库 Actions 里手动运行「刷新并部署日报」。不需要 Grok Bot。</div></li>
       </ul>
     </div>
@@ -292,6 +485,7 @@
 
 <script src="data.js"></script>
 <script src="vendor/chart.umd.min.js"></script>
+<script src="ledger.js"></script>
 <script>
 (function () {
   const D = window.DASHBOARD_DATA;
@@ -377,11 +571,7 @@
     return peers[0] || null;
   }
 
-  function paintHero(peak, dayChg, mom, p, p60, peerMin, navHigh, baseline, etf) {
-    const dd = drawdownCoef(peak, dayChg);
-    const pr = premiumCoef(p, p60, peerMin, peak);
-    const amount = baseline * dd.c * pr.c;
-    const sell = navHigh && pr.expensive;
+  function suggestBuyTarget(p, pr) {
     const cheap = cheapestPeer();
     const ndxToday = nasdaqToday();
     let targetCode = '159501', targetName = '嘉实纳斯达克100', targetPrem = p, targetNote = '主标的';
@@ -396,6 +586,90 @@
       targetPrem = cheap.ref_premium_pct;
       targetNote = '159501明显贵，优先同类更便宜';
     }
+    return { targetCode, targetName, targetPrem, targetNote, cheap };
+  }
+
+  function spFamilyTriggered() {
+    const group = ((D.picks && D.picks.groups) || []).find(g => g.id === 'sp-500');
+    const codes = group ? (group.items || []).map(it => it.code) : [];
+    return codes.some(code => {
+      const etf = calculatorEtfs().find(e => e.code === code);
+      if (!etf || !etf.is_nav_60_high) return false;
+      const q = liveMap[code];
+      const p = q ? q.premium : Number(etf.p);
+      const peerMin = etf.peer_min_premium == null ? null : Number(etf.peer_min_premium);
+      return premiumCoef(p, Number(etf.p60), peerMin, Number(etf.peak_dd_pct)).expensive;
+    });
+  }
+
+  function buySuggestionFromCalculator() {
+    const baseline = Number(document.getElementById('baseline').value) || 0;
+    const peak = Number(document.getElementById('peakDd').value);
+    const dayChg = Number(document.getElementById('dayChg').value);
+    const p = Number(document.getElementById('pToday').value);
+    const p60 = Number(document.getElementById('p60').value);
+    const peerMin = Number(document.getElementById('peerMin').value);
+    const dd = drawdownCoef(peak, dayChg);
+    const pr = premiumCoef(p, p60, peerMin, peak);
+    const amount = baseline * dd.c * pr.c;
+    const selected = (document.getElementById('etfSelect') || {}).value || '159501';
+    if (selected === '159501') {
+      const t = suggestBuyTarget(p, pr);
+      return { amount, code: t.targetCode, name: t.targetName, premium: t.targetPrem };
+    }
+    const etf = calculatorEtfs().find(e => e.code === selected);
+    return { amount, code: selected, name: etf ? etf.name : '', premium: p };
+  }
+
+  function paintHero(peak, dayChg, mom, p, p60, peerMin, navHigh, baseline, etf) {
+    const dd = drawdownCoef(peak, dayChg);
+    const pr = premiumCoef(p, p60, peerMin, peak);
+    const amount = baseline * dd.c * pr.c;
+    const sell = navHigh && pr.expensive;
+    const target = suggestBuyTarget(p, pr);
+    const cheap = target.cheap;
+    const targetCode = target.targetCode, targetName = target.targetName, targetPrem = target.targetPrem, targetNote = target.targetNote;
+    const spOn = spFamilyTriggered();
+    const families = [];
+    if (sell) families.push('nasdaq');
+    if (spOn) families.push('sp500');
+    const triggered = families.length > 0;
+    let advice = null;
+    if (window.NazhiLedger && typeof NazhiLedger.render === 'function') {
+      try {
+        const reason = sell && spOn
+          ? '纳指和标普都满足近60日净值新高且溢价明显贵，按持仓里溢价更高的一只。'
+          : (sell
+            ? '纳指100（159501）净值近60日新高，且溢价明显贵。优先卖持有的纳指里溢价更高的代码。'
+            : (spOn ? '标普500净值近60日新高，且溢价明显贵。优先卖持有的标普里溢价更高的代码。' : ''));
+        advice = NazhiLedger.render({ families, triggered, reason });
+      } catch (err) { advice = null; }
+    }
+    const ledgerSell = triggered && advice && advice.hasHoldings;
+    let sellText = '不卖战术仓';
+    let sellClass = 'nosell';
+    let sellPhrase = '暂不触发卖战术仓';
+    let sellKpi = '否';
+    let sellSub = '未同时满足新高+明显贵';
+    if (triggered && !ledgerSell) {
+      sellText = '建议卖战术仓 5–8%';
+      sellClass = 'sell';
+      sellPhrase = '净值近60日新高且明显贵 → 可卖战术仓 5–8%';
+      sellKpi = '是';
+      sellSub = '还没有持仓时只提示 5–8%。仅供个人记录辅助，非投资建议';
+    } else if (ledgerSell && advice.amount > 0) {
+      sellText = '建议卖出约 ¥' + fmtYen(advice.amount) + (advice.code ? ' · ' + advice.code : '');
+      sellClass = 'sell';
+      sellPhrase = '建议卖出约 ¥' + fmtYen(advice.amount) + (advice.code ? '（优先 ' + advice.code + '）' : '');
+      sellKpi = '¥' + fmtYen(advice.amount);
+      sellSub = (advice.code ? '优先 ' + advice.code + ' · ' : '') + '约总市值 6%，受本年 20% 与底仓 75% 约束。仅供个人记录辅助，非投资建议';
+    } else if (ledgerSell) {
+      sellText = '已触发，额度或底仓不够';
+      sellClass = 'sell';
+      sellPhrase = '已触发卖出条件，但本年额度或底仓不够';
+      sellKpi = '不卖';
+      sellSub = '再卖会低于峰值市值的 75%，或本年 20% 已用完';
+    }
     const peakDate = (etf && etf.peak_date) || (D.primary && D.primary.peak_date) || '';
     const navDate = (etf && etf.nav_date) || (D.primary && D.primary.nav_date) || '';
     const momFrom = (etf && etf.mom_from_date) || (D.primary && D.primary.mom_from_date) || '';
@@ -407,7 +681,7 @@
     ];
     if (targetCode !== '159501') reasonParts.push(`建议买 ${targetCode}（同类溢价约 ${fmt(targetPrem)}%）`);
     else reasonParts.push('建议买 159501');
-    reasonParts.push(sell ? '净值近60日新高且明显贵 → 可卖战术仓 5–8%' : '暂不触发卖战术仓');
+    reasonParts.push(sellPhrase);
     document.getElementById('heroAmount').textContent = fmtYen(amount);
     const ht = document.getElementById('heroTarget');
     ht.className = 'hero-target' + (targetCode !== '159501' ? ' alt' : '');
@@ -417,7 +691,7 @@
     document.getElementById('heroReason').innerHTML = '<strong>一句话理由：</strong>' + reasonParts.join('；');
     document.getElementById('heroPills').innerHTML = `
       <span class="badge ${pr.expensive ? 'exp' : (pr.label === '相对便宜' ? 'ok' : 'mid')}">溢价状态：${pr.label}</span>
-      <span class="badge ${sell ? 'sell' : 'nosell'}">${sell ? '建议卖战术仓 5–8%' : '不卖战术仓'}</span>
+      <span class="badge ${sellClass}">${sellText}</span>
       <span class="badge mid">回撤系数 ${fmt(dd.c)} · 溢价系数 ${fmt(pr.c)}</span>
     `;
     document.getElementById('kpiGrid').innerHTML = `
@@ -426,7 +700,7 @@
       <div class="kpi"><div class="k">近60日溢价中位数 P60</div><div class="v">${fmt(p60)}%</div><div class="s">净值折溢价滚动中位数</div></div>
       <div class="kpi"><div class="k">较上月净值（参照）</div><div class="v ${signCls(mom)}">${mom >= 0 ? '+' : ''}${fmt(mom)}%</div><div class="s">${momFrom} → ${momTo} · 不进回撤系数</div></div>
       <div class="kpi"><div class="k">溢价状态</div><div class="v">${pr.label}</div><div class="s">系数 ${fmt(pr.c)}</div></div>
-      <div class="kpi"><div class="k">是否建议卖战术仓</div><div class="v">${sell ? '是' : '否'}</div><div class="s">${sell ? '建议卖总市值 5–8%' : '未同时满足新高+明显贵'}</div></div>
+      <div class="kpi"><div class="k">是否建议卖战术仓</div><div class="v">${sellKpi}</div><div class="s">${sellSub}</div></div>
       <div class="kpi"><div class="k">最便宜同类</div><div class="v">${cheap ? cheap.code : '—'}</div><div class="s">${cheap ? (cheap.name + ' · ' + fmt(cheap.ref_premium_pct) + '%') : ''}</div></div>
     `;
   }
@@ -538,6 +812,19 @@
     `<option value="${e.code}">${e.code} ${e.name || ''}${e.nav_stale ? ' · 净值未齐' : ''}</option>`
   ).join('');
   etfSelect.value = calculatorEtfs().some(e => e.code === '159501') ? '159501' : (calculatorEtfs()[0] || {}).code;
+  try {
+    if (window.NazhiLedger) {
+      NazhiLedger.mount({
+        data: D,
+        liveMap,
+        requestRefresh() {
+          recompute();
+          paint159501HeroFromLive();
+        },
+        buySuggestion: buySuggestionFromCalculator,
+      });
+    }
+  } catch (err) { /* 记录本失败时仍显示定投金额 */ }
   applyEtf(etfSelect.value);
 
   let meta = `构建 ${D.asof.built_at} · 行情/收盘 ${P.close_date} · 净值日 ${P.nav_date} · 参考溢价快照 ${P.premium_ref_date || ''}`;
@@ -712,6 +999,7 @@
     (D.peers || []).forEach(p => p.code && set.add(p.code));
     ((D.picks && D.picks.groups) || []).forEach(g => (g.items || []).forEach(it => it.code && set.add(it.code)));
     calculatorEtfs().forEach(e => e.code && set.add(e.code));
+    if (window.NazhiLedger && NazhiLedger.codes) NazhiLedger.codes().forEach(c => c && set.add(c));
     return Array.from(set);
   }
   function tencentSymbol(code) {

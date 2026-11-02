@@ -60,7 +60,7 @@ jobs:
         run: |
           rm -rf _site
           mkdir -p _site/vendor _site/data
-          cp index.html data.js .nojekyll _site/
+          cp index.html data.js ledger.js .nojekyll _site/
           cp vendor/chart.umd.min.js _site/vendor/
           cp data/premium_159501.csv data/peers_latest.csv data/dashboard_payload.json _site/data/
 
