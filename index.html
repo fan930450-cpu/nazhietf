@@ -147,6 +147,7 @@
         <div>
           <label for="mom">较上月净值涨跌 %（可改）</label>
           <input id="mom" type="number" step="0.01" />
+          <div class="field-hint" id="momHint" style="font-size:.75rem;color:var(--muted);margin-top:.35rem;line-height:1.45">口径：最新净值相对约一个月前同一天的涨跌（不是从近期高点回撤）。</div>
         </div>
         <div>
           <label for="pToday">今日溢价 P %（可改）</label>
@@ -168,7 +169,8 @@
       <details class="advanced">
         <summary>系数规则说明</summary>
         <p style="font-size:.85rem;line-height:1.55;margin:.6rem 0 0">
-          回撤系数：涨≥5%→0.4；涨&gt;2%→0.7；±2%→1.0；回撤2–5%→1.2；回撤5–10%线性1.5→2.0；≥10%→2.0。<br/>
+          <strong>回撤口径</strong>：回撤系数的输入是「较上月净值涨跌」，也就是最新净值相对约一个月前同一天的涨跌（页面标出起止日期）。<strong>不是</strong>相对近期高点的回撤，也不是「从高点跌了约 9%」那种算法。<br/>
+          回撤系数（只按较上月涨跌）：较上月上涨≥5%→0.4；较上月上涨&gt;2%→0.7；较上月持平±2%→1.0；较上月回撤2–5%→1.2；较上月回撤5–10%线性1.5→2.0；较上月回撤≥10%→2.0。<br/>
           溢价系数：明显贵（P−P60≥5 或 P−同类最低≥5 或 P≥18）→0.5；略贵→0.75；中性→1.0；相对便宜（P60−P≥3）→1.3。<br/>
           建议金额 = min(基准×回撤×溢价, 基准×2)。159501 明显贵时，标的优先指向同类更便宜的一只。
         </p>
@@ -218,7 +220,7 @@
       <ul class="checklist">
         <li><span class="n">1</span><div>看本页顶部<strong>今日建议定投金额</strong>与建议标的（约 09:00 开盘前/后打开即可）。</div></li>
         <li><span class="n">2</span><div>核对<strong>今日溢价 P</strong>与<strong>P60</strong>：明显贵时优先买表格里溢价更低的同类，不必死磕 159501。</div></li>
-        <li><span class="n">3</span><div>看<strong>较上月净值涨跌</strong>：回撤越大建议金额越高（已自动计入系数）。</div></li>
+        <li><span class="n">3</span><div>看<strong>较上月净值涨跌</strong>：最新净值相对约一个月前同一天（页面写了起止日期），<strong>不是</strong>从近期高点回撤。这个数越低，建议金额越高（已自动计入系数）。</div></li>
         <li><span class="n">4</span><div>若提示「建议卖战术仓」：只卖总市值 5–8%，底仓≥75%不动；一年累计减仓建议≤20%。</div></li>
         <li><span class="n">5</span><div>数据在每个交易日约 <strong>09:00（北京时间）</strong>由 GitHub Actions 自动更新，也可在仓库 Actions 里手动运行「刷新并部署日报」。不需要 Grok Bot。</div></li>
       </ul>
@@ -250,15 +252,15 @@
 
   function drawdownCoef(chg) {
     if (chg == null || Number.isNaN(chg)) return { c: 1, label: '数据不足' };
-    if (chg >= 5) return { c: 0.4, label: '上涨≥5%' };
-    if (chg > 2) return { c: 0.7, label: '上涨0–5%' };
-    if (chg >= -2) return { c: 1.0, label: '持平±2%' };
-    if (chg > -5) return { c: 1.2, label: '回撤2–5%' };
+    if (chg >= 5) return { c: 0.4, label: '较上月上涨≥5%' };
+    if (chg > 2) return { c: 0.7, label: '较上月上涨>2%' };
+    if (chg >= -2) return { c: 1.0, label: '较上月持平±2%' };
+    if (chg > -5) return { c: 1.2, label: '较上月回撤2–5%' };
     if (chg > -10) {
       const t = (-chg - 5) / 5;
-      return { c: 1.5 + 0.5 * t, label: '回撤5–10%' };
+      return { c: 1.5 + 0.5 * t, label: '较上月回撤5–10%' };
     }
-    return { c: 2.0, label: '回撤≥10%' };
+    return { c: 2.0, label: '较上月回撤≥10%' };
   }
 
   function premiumCoef(p, p60, peerMin) {
@@ -299,8 +301,11 @@
       targetNote = '159501明显贵，优先同类更便宜';
     }
 
+    const from = (D.primary && D.primary.mom_from_date) || '';
+    const to = (D.primary && D.primary.mom_to_date) || '';
+    const windowText = from && to ? `（${from}→${to}，非高点回撤）` : '（非高点回撤）';
     const reasonParts = [
-      `较上月净值${mom >= 0 ? '+' : ''}${fmt(mom)}% → 回撤系数 ${fmt(dd.c)}（${dd.label}）`,
+      `较上月净值${mom >= 0 ? '+' : ''}${fmt(mom)}%${windowText} → 回撤系数 ${fmt(dd.c)}（${dd.label}）`,
       `溢价 ${fmt(p)}%（${pr.label}）→ 溢价系数 ${fmt(pr.c)}`,
     ];
     if (targetCode !== '159501') {
@@ -330,7 +335,7 @@
     document.getElementById('kpiGrid').innerHTML = `
       <div class="kpi"><div class="k">今日溢价 P</div><div class="v">${fmt(p)}%</div><div class="s">相对 P60 ${fmt(p - p60)} 个百分点</div></div>
       <div class="kpi"><div class="k">近60日溢价中位数 P60</div><div class="v">${fmt(p60)}%</div><div class="s">净值折溢价滚动中位数</div></div>
-      <div class="kpi"><div class="k">较上月净值涨跌</div><div class="v ${signCls(mom)}">${mom >= 0 ? '+' : ''}${fmt(mom)}%</div><div class="s">${D.primary.mom_from_date || ''} → ${D.primary.mom_to_date || ''}</div></div>
+      <div class="kpi"><div class="k">较上月净值涨跌</div><div class="v ${signCls(mom)}">${mom >= 0 ? '+' : ''}${fmt(mom)}%</div><div class="s">最新净值相对约一个月前同一天 · 非高点回撤 · ${from} → ${to}</div></div>
       <div class="kpi"><div class="k">溢价状态</div><div class="v">${pr.label}</div><div class="s">系数 ${fmt(pr.c)}</div></div>
       <div class="kpi"><div class="k">是否建议卖战术仓</div><div class="v">${sell ? '是' : '否'}</div><div class="s">${sell ? '建议卖总市值 5–8%' : '未同时满足新高+明显贵'}</div></div>
       <div class="kpi"><div class="k">最便宜同类</div><div class="v">${cheap ? cheap.code : '—'}</div><div class="s">${cheap ? (cheap.name + ' · ' + fmt(cheap.ref_premium_pct) + '%') : ''}</div></div>
@@ -348,6 +353,14 @@
   const P = D.primary;
   document.getElementById('baseline').value = B.baseline || 4000;
   document.getElementById('mom').value = fmt(B.mom_pct);
+  const momHint = document.getElementById('momHint');
+  if (momHint) {
+    const hintFrom = P.mom_from_date || '';
+    const hintTo = P.mom_to_date || '';
+    momHint.textContent = hintFrom && hintTo
+      ? `口径：最新净值相对约一个月前同一天的涨跌（${hintFrom} → ${hintTo}）。不是从近期高点回撤。`
+      : '口径：最新净值相对约一个月前同一天的涨跌。不是从近期高点回撤。';
+  }
   document.getElementById('pToday').value = fmt(B.P);
   document.getElementById('p60').value = fmt(B.P60);
   document.getElementById('peerMin').value = fmt(B.peer_min_premium);

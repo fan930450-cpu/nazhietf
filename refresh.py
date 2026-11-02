@@ -99,21 +99,21 @@ def short_name(name: str) -> str:
 
 
 def drawdown_coef(chg: float | None) -> tuple[float, str]:
-    """与 index.html drawdownCoef 一致。"""
+    """与 index.html drawdownCoef 一致。输入是较上月净值涨跌，不是高点回撤。"""
     if chg is None:
         return 1.0, "数据不足"
     if chg >= 5:
-        return 0.4, "上涨≥5%"
+        return 0.4, "较上月上涨≥5%"
     if chg > 2:
-        return 0.7, "上涨0–5%"
+        return 0.7, "较上月上涨>2%"
     if chg >= -2:
-        return 1.0, "持平±2%"
+        return 1.0, "较上月持平±2%"
     if chg > -5:
-        return 1.2, "回撤2–5%"
+        return 1.2, "较上月回撤2–5%"
     if chg > -10:
         t = (-chg - 5) / 5.0
-        return 1.5 + 0.5 * t, "回撤5–10%"
-    return 2.0, "回撤≥10%"
+        return 1.5 + 0.5 * t, "较上月回撤5–10%"
+    return 2.0, "较上月回撤≥10%"
 
 
 def premium_coef(p: float, p60: float, peer_min_p: float | None) -> tuple[float, str, bool]:
@@ -145,6 +145,9 @@ def _self_check() -> None:
         got, _ = drawdown_coef(chg)
         if abs(got - coef) > 1e-9:
             raise SystemExit(f"回撤系数自检失败 chg={chg} got={got} expect={coef}")
+    got, label = drawdown_coef(-3.5255)
+    if abs(got - 1.2) > 1e-9 or label != "较上月回撤2–5%":
+        raise SystemExit(f"较上月回撤文案自检失败 got={got} {label}")
     pc, _label, expensive = premium_coef(16.83, 12.64, 8.72)
     if pc != 0.5 or not expensive:
         raise SystemExit("溢价系数自检失败：明显贵")
@@ -505,6 +508,7 @@ def fetch_spot(codes: list[str]) -> dict[str, dict]:
 
 
 def mom_nav_change(nav_sorted: list[dict], latest_date: str, latest_nav: float):
+    """较上月净值：最新净值相对约一个月前同一天。不是相对近期高点回撤。"""
     ld = datetime.strptime(latest_date, "%Y-%m-%d")
     y, m = ld.year, ld.month - 1
     if m == 0:
@@ -655,7 +659,11 @@ def build_payload(
             "reason": "主仓代码或溢价未到换仓阈值",
         }
     parts = [
-        f"较上月净值{mom_pct:+.2f}%→回撤系数{dc:.2f}" if mom_pct is not None else "较上月净值缺失",
+        (
+            f"较上月净值{mom_pct:+.2f}%（{prev_date}→{latest_nav_date}，非高点回撤）→回撤系数{dc:.2f}（{dlabel}）"
+            if mom_pct is not None
+            else "较上月净值缺失"
+        ),
         f"溢价{p_for_calc:.2f}%（{plabel}）→溢价系数{pc:.2f}",
     ]
     if buy_target["code"] != PRIMARY:
