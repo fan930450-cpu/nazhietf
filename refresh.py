@@ -116,68 +116,112 @@ def short_name(name: str) -> str:
     return name or "纳指100"
 
 
-def drawdown_coef(chg: float | None) -> tuple[float, str]:
-    """与 index.html drawdownCoef 一致。输入是较上月净值涨跌，不是高点回撤。"""
-    if chg is None:
-        return 1.0, "数据不足"
-    if chg >= 5:
-        return 0.4, "较上月上涨≥5%"
-    if chg > 2:
-        return 0.7, "较上月上涨>2%"
-    if chg >= -2:
-        return 1.0, "较上月持平±2%"
-    if chg > -5:
-        return 1.2, "较上月回撤2–5%"
-    if chg > -10:
-        t = (-chg - 5) / 5.0
-        return 1.5 + 0.5 * t, "较上月回撤5–10%"
-    return 2.0, "较上月回撤≥10%"
+def drawdown_coef(dd: float | None, day_chg: float | None = None) -> tuple[float, str]:
+    """距近一年最高净值的回撤（正数，单位百分点）。与 index.html 一致。
+
+    <5% → 1.0；5–10% 线性 1.0→1.5；10–20% 线性 1.5→2.5；
+    20–30% 线性 2.5→3.5；30–40% 线性 3.5→5.0；>40% → 5.0。
+    最新净值日相对前一净值日下跌达到 3%，当天再 +0.5。没有 2 倍上限。
+    """
+    if dd is None:
+        base, label = 1.0, "数据不足"
+    elif dd < 5:
+        base, label = 1.0, "距高点<5%"
+    elif dd <= 10:
+        base = 1.0 + 0.5 * ((dd - 5) / 5.0)
+        label = "距高点5–10%"
+    elif dd <= 20:
+        base = 1.5 + (dd - 10) / 10.0
+        label = "距高点10–20%"
+    elif dd <= 30:
+        base = 2.5 + (dd - 20) / 10.0
+        label = "距高点20–30%"
+    elif dd <= 40:
+        base = 3.5 + 1.5 * ((dd - 30) / 10.0)
+        label = "距高点30–40%"
+    else:
+        base, label = 5.0, "距高点>40%"
+    if day_chg is not None and day_chg <= -3:
+        return base + 0.5, label + " · 单日跌≥3% +0.5"
+    return base, label
+
+
+def _premium_relative(p: float, p60: float) -> float:
+    """相对自己的 P60 连续变化。d = P−P60。"""
+    d = p - p60
+    if d <= -5:
+        return 1.3
+    if d <= 0:
+        t = (d + 5) / 5.0
+        return 1.3 + t * (1.0 - 1.3)
+    if d <= 5:
+        t = d / 5.0
+        return 1.0 + t * (0.5 - 1.0)
+    return 0.5
 
 
 def premium_coef(p: float, p60: float, peer_min_p: float | None) -> tuple[float, str, bool]:
-    """与 index.html premiumCoef 一致。"""
-    if (p - p60 >= 5) or (peer_min_p is not None and p - peer_min_p >= 5) or (p >= 18):
-        return 0.5, "明显贵", True
-    if p60 - p >= 3:
-        return 1.3, "相对便宜", False
-    if abs(p - p60) <= 2:
-        return 1.0, "中性", False
-    if p > p60:
-        return 0.75, "略贵", False
-    return 1.0, "中性", False
+    """相对 P60 连续计算，再用绝对溢价和同类价差封顶。"""
+    coef = _premium_relative(p, p60)
+    if peer_min_p is not None and p - peer_min_p >= 5:
+        coef = min(coef, 0.5)
+    if p >= 18:
+        coef = min(coef, 0.5)
+    elif p >= 15:
+        coef = min(coef, 0.75)
+    expensive = (p >= 15) or (peer_min_p is not None and p - peer_min_p >= 5) or (p - p60 >= 5)
+    if expensive and coef <= 0.5 + 1e-9:
+        label = "明显贵"
+    elif p >= 15 or coef <= 0.9:
+        label = "偏贵"
+    elif coef >= 1.15:
+        label = "相对便宜"
+    else:
+        label = "中性"
+    return coef, label, expensive
 
 
 def _self_check() -> None:
     expect = [
-        (5, 0.4),
-        (2.01, 0.7),
-        (2, 1.0),
         (0, 1.0),
-        (-2, 1.0),
-        (-3.5255, 1.2),
-        (-5, 1.5),
-        (-7.5, 1.75),
-        (-10, 2.0),
+        (4.9, 1.0),
+        (5, 1.0),
+        (7.5, 1.25),
+        (10, 1.5),
+        (15, 2.0),
+        (20, 2.5),
+        (25, 3.0),
+        (30, 3.5),
+        (35, 4.25),
+        (40, 5.0),
+        (50, 5.0),
     ]
-    for chg, coef in expect:
-        got, _ = drawdown_coef(chg)
+    for dd, coef in expect:
+        got, _ = drawdown_coef(dd)
         if abs(got - coef) > 1e-9:
-            raise SystemExit(f"回撤系数自检失败 chg={chg} got={got} expect={coef}")
-    got, label = drawdown_coef(-3.5255)
-    if abs(got - 1.2) > 1e-9 or label != "较上月回撤2–5%":
-        raise SystemExit(f"较上月回撤文案自检失败 got={got} {label}")
-    pc, _label, expensive = premium_coef(16.83, 12.64, 8.72)
-    if pc != 0.5 or not expensive:
-        raise SystemExit("溢价系数自检失败：明显贵")
-    pc, label, expensive = premium_coef(10, 14, 9)
-    if pc != 1.3 or label != "相对便宜" or expensive:
-        raise SystemExit("溢价系数自检失败：相对便宜")
-    pc, label, expensive = premium_coef(16, 12, 15)
-    if pc != 0.75 or label != "略贵" or expensive:
-        raise SystemExit("溢价系数自检失败：略贵")
-    amount = min(4000 * 1.2 * 0.5, 8000)
-    if amount != 2400:
-        raise SystemExit("建议金额自检失败")
+            raise SystemExit(f"回撤系数自检失败 dd={dd} got={got} expect={coef}")
+    got, label = drawdown_coef(20, -3)
+    if abs(got - 3.0) > 1e-9 or "单日跌" not in label:
+        raise SystemExit(f"单日急跌加分自检失败 got={got} {label}")
+    if abs(drawdown_coef(20, -2.99)[0] - 2.5) > 1e-9:
+        raise SystemExit("未满 3% 的单日跌不应加分")
+    amount20 = 4000 * drawdown_coef(20)[0] * 1
+    amount30 = 4000 * drawdown_coef(30)[0] * 1
+    if amount20 != 10000 or amount30 != 14000 or amount30 <= 8000:
+        raise SystemExit(f"取消 2 倍上限自检失败 {amount20} {amount30}")
+    if abs(premium_coef(10, 10, 9)[0] - 1.0) > 1e-9:
+        raise SystemExit("溢价中性自检失败")
+    if abs(premium_coef(5, 10, 4)[0] - 1.3) > 1e-9:
+        raise SystemExit("溢价偏便宜自检失败")
+    coef, _label, expensive = premium_coef(16, 16, 15.5)
+    if abs(coef - 0.75) > 1e-9 or not expensive:
+        raise SystemExit(f"绝对溢价 15% 地板自检失败 {coef}")
+    coef, label, expensive = premium_coef(20.24, 20.24, 12.92)
+    if abs(coef - 0.5) > 1e-9 or label != "明显贵" or not expensive:
+        raise SystemExit(f"绝对溢价 18% 地板自检失败 {coef} {label}")
+    coef, label, expensive = premium_coef(12, 12, 6)
+    if abs(coef - 0.5) > 1e-9 or not expensive:
+        raise SystemExit(f"同类价差封顶自检失败 {coef}")
     nasdaq_today = choose_today(
         [
             {"code": "159513", "ref_premium_pct": 12.92, "fee_total_pct": 1.0, "aum_cny": 82e8, "turnover_cny": 2.7e8},
@@ -848,24 +892,15 @@ def fetch_pingzhong_nav(code: str) -> list[dict]:
 
 
 def etf_calc_stats(code: str) -> dict:
-    """一只 ETF 自己的较上月净值、P60、是否近 60 日净值新高。"""
+    """一只 ETF 自己的近一年高点回撤、单日涨跌、较上月净值、P60。"""
     nav_rows = fetch_pingzhong_nav(code)
     closes = _official_bars(fetch_tencent_kline(code))
     premium_rows = align_premium(nav_rows, closes)
     if len(premium_rows) < 30:
         raise RuntimeError(f"溢价样本不足 {len(premium_rows)}")
-    p60 = statistics.median([r["premium_pct"] for r in premium_rows[-60:]])
-    latest = nav_rows[-1]
-    mom_pct, prev_date = mom_nav_change(nav_rows, latest["date"], latest["nav"])
-    window = nav_rows[-60:]
-    nav_high = max(r["nav"] for r in window)
-    return {
-        "mom_pct": round(mom_pct, 4) if mom_pct is not None else None,
-        "mom_from_date": prev_date,
-        "mom_to_date": latest["date"],
-        "p60": round(p60, 4),
-        "is_nav_60_high": latest["nav"] >= nav_high - 1e-12,
-    }
+    stats = nav_metrics(nav_rows)
+    stats["p60"] = round(statistics.median([r["premium_pct"] for r in premium_rows[-60:]]), 4)
+    return stats
 
 
 def fetch_peer_calc_stats(codes: list[str]) -> dict[str, dict]:
@@ -873,8 +908,8 @@ def fetch_peer_calc_stats(codes: list[str]) -> dict[str, dict]:
         try:
             stats = etf_calc_stats(code)
             print(
-                f"计算器 {code}: 较上月 {stats['mom_pct']} ({stats['mom_from_date']}→{stats['mom_to_date']}) "
-                f"P60 {stats['p60']}"
+                f"计算器 {code}: 距高点 {stats['peak_dd_pct']}%（{stats['peak_date']}） "
+                f"单日 {stats['day_chg_pct']}% 较上月 {stats['mom_pct']} P60 {stats['p60']} 净值日 {stats['nav_date']}"
             )
             return code, stats
         except Exception as e:  # noqa: BLE001
@@ -886,7 +921,7 @@ def fetch_peer_calc_stats(codes: list[str]) -> dict[str, dict]:
         return out
     with ThreadPoolExecutor(max_workers=6) as pool:
         for code, stats in pool.map(one, codes):
-            if stats and stats.get("mom_pct") is not None and stats.get("p60") is not None:
+            if stats and stats.get("peak_dd_pct") is not None and stats.get("p60") is not None:
                 out[code] = stats
     return out
 
@@ -907,6 +942,41 @@ def mom_nav_change(nav_sorted: list[dict], latest_date: str, latest_nav: float):
     if prev_nav is None:
         return None, None
     return (latest_nav / prev_nav - 1.0) * 100.0, prev_date
+
+
+def nav_metrics(nav_rows: list[dict]) -> dict:
+    """近一年高点回撤、前一净值日涨跌、较上月净值。较上月只作参照。"""
+    latest = nav_rows[-1]
+    latest_date = latest["date"]
+    latest_nav = float(latest["nav"])
+    end = datetime.strptime(latest_date, "%Y-%m-%d")
+    start = (end - timedelta(days=365)).strftime("%Y-%m-%d")
+    window = [r for r in nav_rows if start <= r["date"] <= latest_date] or nav_rows[-252:]
+    peak = max(window, key=lambda r: float(r["nav"]))
+    peak_nav = float(peak["nav"])
+    peak_dd = 0.0 if peak_nav <= 0 else max(0.0, (peak_nav - latest_nav) / peak_nav * 100.0)
+    mom_pct, mom_from = mom_nav_change(nav_rows, latest_date, latest_nav)
+    day_chg = None
+    day_from = None
+    if len(nav_rows) >= 2 and float(nav_rows[-2]["nav"]) > 0:
+        day_from = nav_rows[-2]["date"]
+        day_chg = (latest_nav / float(nav_rows[-2]["nav"]) - 1.0) * 100.0
+    last60 = nav_rows[-60:]
+    nav_60_high = max(float(r["nav"]) for r in last60)
+    return {
+        "nav": round(latest_nav, 4),
+        "nav_date": latest_date,
+        "peak_dd_pct": round(peak_dd, 4),
+        "peak_nav": round(peak_nav, 4),
+        "peak_date": peak["date"],
+        "peak_window_start": window[0]["date"],
+        "day_chg_pct": round(day_chg, 4) if day_chg is not None else None,
+        "day_from_date": day_from,
+        "mom_pct": round(mom_pct, 4) if mom_pct is not None else None,
+        "mom_from_date": mom_from,
+        "mom_to_date": latest_date,
+        "is_nav_60_high": latest_nav >= nav_60_high - 1e-12,
+    }
 
 
 def align_premium(nav_rows: list[dict], closes: list[dict]) -> list[dict]:
@@ -958,9 +1028,15 @@ def _calculator_etfs(peers_sorted: list[dict], stats: dict[str, dict], primary_c
                 "name": p.get("name") or "嘉实纳斯达克100",
                 "p": primary_calc.get("p"),
                 "p60": primary_calc.get("p60"),
+                "peak_dd_pct": primary_calc.get("peak_dd_pct"),
+                "peak_nav": primary_calc.get("peak_nav"),
+                "peak_date": primary_calc.get("peak_date"),
+                "day_chg_pct": primary_calc.get("day_chg_pct"),
+                "day_from_date": primary_calc.get("day_from_date"),
                 "mom_pct": primary_calc.get("mom_pct"),
                 "mom_from_date": primary_calc.get("mom_from_date"),
                 "mom_to_date": primary_calc.get("mom_to_date"),
+                "nav_date": primary_calc.get("nav_date"),
                 "is_nav_60_high": bool(primary_calc.get("is_nav_60_high")),
                 "peer_min_premium": primary_calc.get("peer_min_premium"),
             }
@@ -974,16 +1050,65 @@ def _calculator_etfs(peers_sorted: list[dict], stats: dict[str, dict], primary_c
                 "name": p.get("name") or code,
                 "p": round(float(p["ref_premium_pct"]), 4),
                 "p60": st["p60"],
-                "mom_pct": st["mom_pct"],
+                "peak_dd_pct": st.get("peak_dd_pct"),
+                "peak_nav": st.get("peak_nav"),
+                "peak_date": st.get("peak_date"),
+                "day_chg_pct": st.get("day_chg_pct"),
+                "day_from_date": st.get("day_from_date"),
+                "mom_pct": st.get("mom_pct"),
                 "mom_from_date": st.get("mom_from_date"),
                 "mom_to_date": st.get("mom_to_date"),
+                "nav_date": st.get("nav_date"),
                 "is_nav_60_high": bool(st.get("is_nav_60_high")),
                 "peer_min_premium": round(min(others), 4) if others else None,
             }
-        if row["p"] is None or row["p60"] is None or row["mom_pct"] is None or row["peer_min_premium"] is None:
+        if row["p"] is None or row["p60"] is None or row.get("peak_dd_pct") is None or row["peer_min_premium"] is None:
             continue
         etfs.append(row)
+    freshest = max((e.get("nav_date") or "" for e in etfs), default="")
+    for row in etfs:
+        row["nav_stale"] = bool(row.get("nav_date") and freshest and row["nav_date"] < freshest)
+        row["nav_freshest"] = freshest or None
     return etfs
+
+
+def align_pick_nav_dates(picks: dict | None, nav_dates: dict[str, str]) -> dict | None:
+    """净值日落后的基金不参与「今日优先」，避免拿错开的回撤窗口互相比较。"""
+    if not picks or not nav_dates:
+        return picks
+    freshest = max(nav_dates.values())
+    picks["nav_freshest"] = freshest
+    anchors = {spec["id"]: spec["conditional"][0] for spec in PICK_GROUPS}
+    for group in picks.get("groups") or []:
+        items = group.get("items") or []
+        for item in items:
+            nav_date = nav_dates.get(item["code"])
+            item["nav_date"] = nav_date
+            item["nav_stale"] = bool(nav_date and nav_date < freshest)
+        fresh = [it for it in items if not it.get("nav_stale")]
+        today = choose_today(fresh) or choose_today(items)
+        premiums = [it["ref_premium_pct"] for it in items if it.get("ref_premium_pct") is not None]
+        floor = min(premiums) if premiums else None
+        anchor = anchors.get(group.get("id"), "")
+        median = group.get("median_premium_pct")
+        for item in items:
+            item["is_today"] = bool(today and item["code"] == today["code"])
+            if floor is None:
+                continue
+            item["why"] = _why(item, today or item, floor, median, anchor)
+            if item.get("nav_stale"):
+                item["why"] += f" 净值日 {item['nav_date']}，落后于同类最新净值日 {freshest}，不拿它的回撤和其他基金比。"
+                item["is_today"] = False
+        if today and today.get("nav_stale"):
+            today = choose_today(fresh)
+        group["today_code"] = today["code"] if today else None
+        group["today_line"] = (
+            f"今日优先 {today['code']} {today.get('name') or ''} · 参考溢价 {today['ref_premium_pct']:.2f}%"
+            if today
+            else ""
+        )
+        items.sort(key=lambda it: (not it.get("is_today"), it.get("ref_premium_pct") if it.get("ref_premium_pct") is not None else 999))
+    return picks
 
 
 def _nasdaq_today(picks: dict | None) -> dict | None:
@@ -1036,6 +1161,9 @@ def build_payload(
     nav_60_high = max(r["nav"] for r in last60_nav)
     is_nav_60_high = latest_nav >= nav_60_high - 1e-12
     mom_pct, prev_date = mom_nav_change(nav_sorted, latest_nav_date, latest_nav)
+    metrics = nav_metrics(nav_sorted)
+    peak_dd = metrics["peak_dd_pct"]
+    day_chg = metrics["day_chg_pct"]
 
     peers = []
     for s in peers_static:
@@ -1083,11 +1211,13 @@ def build_payload(
     primary = next(p for p in peers_sorted if p["code"] == PRIMARY)
     ref_iopv_premium = primary["ref_premium_pct"] if primary["ref_premium_pct"] is not None else latest_p
     p_for_calc = float(ref_iopv_premium)
-    dc, dlabel = drawdown_coef(mom_pct)
+    nav_dates = {code: st["nav_date"] for code, st in (peer_stats or {}).items() if st.get("nav_date")}
+    nav_dates[PRIMARY] = latest_nav_date
+    picks = align_pick_nav_dates(picks, nav_dates)
+    dc, dlabel = drawdown_coef(peak_dd, day_chg)
     pc, plabel, is_expensive = premium_coef(p_for_calc, p60, peer_min)
     base = 4000.0
-    raw = base * dc * pc
-    amount = min(raw, base * 2)
+    amount = base * dc * pc
     suggest_sell = bool(is_nav_60_high and is_expensive)
     today = _nasdaq_today(picks) if is_expensive else None
     if is_expensive and today:
@@ -1113,11 +1243,17 @@ def build_payload(
         }
     parts = [
         (
-            f"较上月净值{mom_pct:+.2f}%（{prev_date}→{latest_nav_date}，非高点回撤）→回撤系数{dc:.2f}（{dlabel}）"
+            f"距近一年高点回撤{peak_dd:.2f}%（高点{metrics['peak_date']}→净值日{latest_nav_date}）"
+            f"→回撤系数{dc:.2f}（{dlabel}）"
+            if peak_dd is not None
+            else "近一年高点回撤缺失"
+        ),
+        f"溢价{p_for_calc:.2f}%（{plabel}）→溢价系数{pc:.2f}",
+        (
+            f"较上月净值{mom_pct:+.2f}%（{prev_date}→{latest_nav_date}，只作参照）"
             if mom_pct is not None
             else "较上月净值缺失"
         ),
-        f"溢价{p_for_calc:.2f}%（{plabel}）→溢价系数{pc:.2f}",
     ]
     if buy_target["code"] != PRIMARY:
         parts.append(f"建议买{buy_target['code']}（同类更低溢价{buy_target['premium']:.2f}%）")
@@ -1154,19 +1290,28 @@ def build_payload(
             "mom_nav_pct": round(mom_pct, 4) if mom_pct is not None else None,
             "mom_from_date": prev_date,
             "mom_to_date": latest_nav_date,
+            "peak_dd_pct": peak_dd,
+            "peak_nav": metrics["peak_nav"],
+            "peak_date": metrics["peak_date"],
+            "peak_window_start": metrics["peak_window_start"],
+            "day_chg_pct": day_chg,
+            "day_from_date": metrics["day_from_date"],
         },
         "briefing": {
             "baseline": base,
             "P": round(p_for_calc, 4),
             "P60": round(p60, 4),
             "mom_pct": round(mom_pct, 4) if mom_pct is not None else None,
+            "peak_dd_pct": peak_dd,
+            "peak_date": metrics["peak_date"],
+            "day_chg_pct": day_chg,
             "drawdown_coef": round(dc, 4),
             "drawdown_label": dlabel,
-            "premium_coef": pc,
+            "premium_coef": round(pc, 4),
             "premium_label": plabel,
             "is_obviously_expensive": is_expensive,
             "suggested_amount": round(amount, 2),
-            "suggested_raw": round(raw, 2),
+            "suggested_raw": round(amount, 2),
             "buy_target": buy_target,
             "suggest_sell_tactical": suggest_sell,
             "sell_range_pct": [5, 8],
@@ -1183,9 +1328,15 @@ def build_payload(
                 {
                     "p": round(p_for_calc, 4),
                     "p60": round(p60, 4),
+                    "peak_dd_pct": peak_dd,
+                    "peak_nav": metrics["peak_nav"],
+                    "peak_date": metrics["peak_date"],
+                    "day_chg_pct": day_chg,
+                    "day_from_date": metrics["day_from_date"],
                     "mom_pct": round(mom_pct, 4) if mom_pct is not None else None,
                     "mom_from_date": prev_date,
                     "mom_to_date": latest_nav_date,
+                    "nav_date": latest_nav_date,
                     "is_nav_60_high": is_nav_60_high,
                     "peer_min_premium": round(peer_min, 4) if peer_min is not None else None,
                 },
@@ -1266,11 +1417,11 @@ def main() -> None:
             seen.add(code)
             codes.append(code)
     spot = fetch_spot(codes)
-    peer_codes = [c for c in codes if c != PRIMARY]
+    peer_codes = [c for c in dict.fromkeys([*codes, *PICK_CODES]) if c != PRIMARY]
     peer_stats = fetch_peer_calc_stats(peer_codes)
-    missing = [c for c in peer_codes if c not in peer_stats]
+    missing = [c for c in peer_codes if c not in peer_stats and c in {p["code"] for p in peers}]
     if missing:
-        warnings.append("部分同类缺少较上月净值或 P60：" + "、".join(missing))
+        warnings.append("部分同类缺少近一年高点回撤或 P60：" + "、".join(missing))
 
     payload = build_payload(
         premium_rows, nav_rows, closes, peers, spot, ref_date, warnings, picks, peer_stats

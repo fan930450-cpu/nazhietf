@@ -1,6 +1,6 @@
 {
   "asof": {
-    "built_at": "2026-11-02 20:11:07 北京时间",
+    "built_at": "2026-11-02 20:33:09 北京时间",
     "price_date": "2026-11-02",
     "nav_date": "2026-10-30",
     "premium_method": "历史：收盘价/单位净值-1；今日展示溢价优先用 QDII Lens 收盘参考溢价（价/IOPV-1）",
@@ -28,20 +28,29 @@
     "is_nav_60_high": false,
     "mom_nav_pct": -6.9897,
     "mom_from_date": "2026-09-30",
-    "mom_to_date": "2026-10-30"
+    "mom_to_date": "2026-10-30",
+    "peak_dd_pct": 8.9837,
+    "peak_nav": 1.9591,
+    "peak_date": "2026-06-02",
+    "peak_window_start": "2025-10-30",
+    "day_chg_pct": -3.4649,
+    "day_from_date": "2026-10-29"
   },
   "briefing": {
     "baseline": 4000.0,
     "P": 20.24,
     "P60": 12.7027,
     "mom_pct": -6.9897,
-    "drawdown_coef": 1.699,
-    "drawdown_label": "较上月回撤5–10%",
+    "peak_dd_pct": 8.9837,
+    "peak_date": "2026-06-02",
+    "day_chg_pct": -3.4649,
+    "drawdown_coef": 1.8984,
+    "drawdown_label": "距高点5–10% · 单日跌≥3% +0.5",
     "premium_coef": 0.5,
     "premium_label": "明显贵",
     "is_obviously_expensive": true,
-    "suggested_amount": 3397.94,
-    "suggested_raw": 3397.94,
+    "suggested_amount": 3796.74,
+    "suggested_raw": 3796.74,
     "buy_target": {
       "code": "159632",
       "name": "华安纳斯达克100",
@@ -53,7 +62,7 @@
       5,
       8
     ],
-    "reason": "较上月净值-6.99%（2026-09-30→2026-10-30，非高点回撤）→回撤系数1.70（较上月回撤5–10%）；溢价20.24%（明显贵）→溢价系数0.50；建议买159632（同类更低溢价13.24%）；暂不触发卖出",
+    "reason": "距近一年高点回撤8.98%（高点2026-06-02→净值日2026-10-30）→回撤系数1.90（距高点5–10% · 单日跌≥3% +0.5）；溢价20.24%（明显贵）→溢价系数0.50；较上月净值-6.99%（2026-09-30→2026-10-30，只作参照）；建议买159632（同类更低溢价13.24%）；暂不触发卖出",
     "peer_min_premium": 12.9247
   },
   "history": [
@@ -5129,7 +5138,9 @@
             "tracking_error_pct": 1.04,
             "tracking_asof": "2026-10-30",
             "is_today": true,
-            "why": "今日优先：与最低溢价只差 0.31 个点，成交约 4.0 亿，管理+托管费 0.80%。"
+            "why": "今日优先：与最低溢价只差 0.31 个点，成交约 4.0 亿，管理+托管费 0.80%。",
+            "nav_date": "2026-10-30",
+            "nav_stale": false
           },
           {
             "code": "159513",
@@ -5146,7 +5157,9 @@
             "tracking_error_pct": 1.02,
             "tracking_asof": "2026-10-30",
             "is_today": false,
-            "why": "溢价和短名单最低一档几乎一样（差 0.00 个点），成交够用。价差在约 2 个点内，今天让给了费率更低或规模更大的一只。"
+            "why": "溢价和短名单最低一档几乎一样（差 0.00 个点），成交够用。价差在约 2 个点内，今天让给了费率更低或规模更大的一只。",
+            "nav_date": "2026-10-30",
+            "nav_stale": false
           },
           {
             "code": "513110",
@@ -5163,7 +5176,9 @@
             "tracking_error_pct": 1.03,
             "tracking_asof": "2026-10-30",
             "is_today": false,
-            "why": "溢价和短名单最低一档几乎一样（差 0.00 个点），成交够用。价差在约 2 个点内，今天让给了费率更低或规模更大的一只。"
+            "why": "溢价和短名单最低一档几乎一样（差 0.00 个点），成交够用。价差在约 2 个点内，今天让给了费率更低或规模更大的一只。",
+            "nav_date": "2026-10-30",
+            "nav_stale": false
           },
           {
             "code": "159501",
@@ -5180,7 +5195,9 @@
             "tracking_error_pct": 1.01,
             "tracking_asof": "2026-10-30",
             "is_today": false,
-            "why": "溢价 20.24%，高于同类中枢约 14.41%。等溢价回到中枢附近再当主买点；今天先看更便宜的同类。"
+            "why": "溢价 20.24%，高于同类中枢约 14.41%。等溢价回到中枢附近再当主买点；今天先看更便宜的同类。",
+            "nav_date": "2026-10-30",
+            "nav_stale": false
           }
         ]
       },
@@ -5206,7 +5223,9 @@
             "tracking_error_pct": 1.04,
             "tracking_asof": "2026-10-30",
             "is_today": true,
-            "why": "今日优先：与最低溢价只差 0.25 个点，成交约 5.1 亿，管理+托管费 0.75%。"
+            "why": "今日优先：与最低溢价只差 0.25 个点，成交约 5.1 亿，管理+托管费 0.75%。",
+            "nav_date": "2026-10-30",
+            "nav_stale": false
           },
           {
             "code": "159655",
@@ -5223,7 +5242,9 @@
             "tracking_error_pct": 2.14,
             "tracking_asof": "2026-10-29",
             "is_today": false,
-            "why": "溢价和短名单最低一档几乎一样（差 0.00 个点），成交够用。价差在约 2 个点内，今天让给了费率更低或规模更大的一只。"
+            "why": "溢价和短名单最低一档几乎一样（差 0.00 个点），成交够用。价差在约 2 个点内，今天让给了费率更低或规模更大的一只。 净值日 2026-10-29，落后于同类最新净值日 2026-10-30，不拿它的回撤和其他基金比。",
+            "nav_date": "2026-10-29",
+            "nav_stale": true
           },
           {
             "code": "513500",
@@ -5240,11 +5261,14 @@
             "tracking_error_pct": 1.08,
             "tracking_asof": "2026-10-30",
             "is_today": false,
-            "why": "溢价 10.28%，高于同类中枢约 8.28%。等溢价回到中枢附近再当主买点；今天先看更便宜的同类。"
+            "why": "溢价 10.28%，高于同类中枢约 8.28%。等溢价回到中枢附近再当主买点；今天先看更便宜的同类。",
+            "nav_date": "2026-10-30",
+            "nav_stale": false
           }
         ]
       }
-    ]
+    ],
+    "nav_freshest": "2026-10-30"
   },
   "calculator": {
     "etfs": [
@@ -5253,132 +5277,228 @@
         "name": "嘉实纳斯达克100",
         "p": 20.24,
         "p60": 12.7027,
+        "peak_dd_pct": 8.9837,
+        "peak_nav": 1.9591,
+        "peak_date": "2026-06-02",
+        "day_chg_pct": -3.4649,
+        "day_from_date": "2026-10-29",
         "mom_pct": -6.9897,
         "mom_from_date": "2026-09-30",
         "mom_to_date": "2026-10-30",
+        "nav_date": "2026-10-30",
         "is_nav_60_high": false,
-        "peer_min_premium": 12.9247
+        "peer_min_premium": 12.9247,
+        "nav_stale": false,
+        "nav_freshest": "2026-10-30"
       },
       {
         "code": "159513",
         "name": "大成纳斯达克100",
         "p": 12.9247,
         "p60": 8.9688,
+        "peak_dd_pct": 9.3198,
+        "peak_nav": 1.7436,
+        "peak_date": "2026-06-02",
+        "day_chg_pct": -3.462,
+        "day_from_date": "2026-10-29",
         "mom_pct": -7.0816,
         "mom_from_date": "2026-09-30",
         "mom_to_date": "2026-10-30",
+        "nav_date": "2026-10-30",
         "is_nav_60_high": false,
-        "peer_min_premium": 12.9262
+        "peer_min_premium": 12.9262,
+        "nav_stale": false,
+        "nav_freshest": "2026-10-30"
       },
       {
         "code": "513110",
         "name": "华泰柏瑞纳斯达克100",
         "p": 12.9262,
         "p60": 9.1815,
+        "peak_dd_pct": 9.0465,
+        "peak_nav": 2.3965,
+        "peak_date": "2026-06-02",
+        "day_chg_pct": -3.4463,
+        "day_from_date": "2026-10-29",
         "mom_pct": -6.9975,
         "mom_from_date": "2026-09-30",
         "mom_to_date": "2026-10-30",
+        "nav_date": "2026-10-30",
         "is_nav_60_high": false,
-        "peer_min_premium": 12.9247
+        "peer_min_premium": 12.9247,
+        "nav_stale": false,
+        "nav_freshest": "2026-10-30"
       },
       {
         "code": "159632",
         "name": "华安纳斯达克100",
         "p": 13.239,
         "p60": 9.3372,
+        "peak_dd_pct": 8.927,
+        "peak_nav": 2.3681,
+        "peak_date": "2026-06-02",
+        "day_chg_pct": -3.4645,
+        "day_from_date": "2026-10-29",
         "mom_pct": -7.0188,
         "mom_from_date": "2026-09-30",
         "mom_to_date": "2026-10-30",
+        "nav_date": "2026-10-30",
         "is_nav_60_high": false,
-        "peer_min_premium": 12.9247
+        "peer_min_premium": 12.9247,
+        "nav_stale": false,
+        "nav_freshest": "2026-10-30"
       },
       {
         "code": "513390",
         "name": "博时纳斯达克100",
         "p": 13.8444,
         "p60": 9.3206,
+        "peak_dd_pct": 8.9891,
+        "peak_nav": 2.3406,
+        "peak_date": "2026-06-02",
+        "day_chg_pct": -3.4623,
+        "day_from_date": "2026-10-29",
         "mom_pct": -7.0228,
         "mom_from_date": "2026-09-30",
         "mom_to_date": "2026-10-30",
+        "nav_date": "2026-10-30",
         "is_nav_60_high": false,
-        "peer_min_premium": 12.9247
+        "peer_min_premium": 12.9247,
+        "nav_stale": false,
+        "nav_freshest": "2026-10-30"
       },
       {
         "code": "513300",
         "name": "华夏纳斯达克100",
         "p": 14.0705,
         "p60": 9.721,
+        "peak_dd_pct": 5.69,
+        "peak_nav": 2.5835,
+        "peak_date": "2026-06-02",
+        "day_chg_pct": -1.464,
+        "day_from_date": "2026-10-28",
         "mom_pct": -3.7489,
         "mom_from_date": "2026-09-29",
         "mom_to_date": "2026-10-29",
+        "nav_date": "2026-10-29",
         "is_nav_60_high": false,
-        "peer_min_premium": 12.9247
+        "peer_min_premium": 12.9247,
+        "nav_stale": true,
+        "nav_freshest": "2026-10-30"
       },
       {
         "code": "159660",
         "name": "汇添富纳斯达克100",
         "p": 14.1218,
         "p60": 9.4301,
+        "peak_dd_pct": 8.978,
+        "peak_nav": 2.2789,
+        "peak_date": "2026-06-02",
+        "day_chg_pct": -3.4671,
+        "day_from_date": "2026-10-29",
         "mom_pct": -6.9904,
         "mom_from_date": "2026-09-30",
         "mom_to_date": "2026-10-30",
+        "nav_date": "2026-10-30",
         "is_nav_60_high": false,
-        "peer_min_premium": 12.9247
+        "peer_min_premium": 12.9247,
+        "nav_stale": false,
+        "nav_freshest": "2026-10-30"
       },
       {
         "code": "513870",
         "name": "富国纳斯达克100",
         "p": 14.6951,
         "p60": 9.6043,
+        "peak_dd_pct": 9.0086,
+        "peak_nav": 1.987,
+        "peak_date": "2026-06-02",
+        "day_chg_pct": -3.4704,
+        "day_from_date": "2026-10-29",
         "mom_pct": -6.9959,
         "mom_from_date": "2026-09-30",
         "mom_to_date": "2026-10-30",
+        "nav_date": "2026-10-30",
         "is_nav_60_high": false,
-        "peer_min_premium": 12.9247
+        "peer_min_premium": 12.9247,
+        "nav_stale": false,
+        "nav_freshest": "2026-10-30"
       },
       {
         "code": "159659",
         "name": "招商纳斯达克100",
         "p": 15.124,
         "p60": 9.7495,
+        "peak_dd_pct": 8.662,
+        "peak_nav": 2.2466,
+        "peak_date": "2026-06-02",
+        "day_chg_pct": -3.4535,
+        "day_from_date": "2026-10-29",
         "mom_pct": -6.9725,
         "mom_from_date": "2026-09-30",
         "mom_to_date": "2026-10-30",
+        "nav_date": "2026-10-30",
         "is_nav_60_high": false,
-        "peer_min_premium": 12.9247
+        "peer_min_premium": 12.9247,
+        "nav_stale": false,
+        "nav_freshest": "2026-10-30"
       },
       {
         "code": "159941",
         "name": "广发纳指100",
         "p": 16.4248,
         "p60": 11.619,
+        "peak_dd_pct": 9.3377,
+        "peak_nav": 1.5657,
+        "peak_date": "2026-06-02",
+        "day_chg_pct": -3.4748,
+        "day_from_date": "2026-10-29",
         "mom_pct": -7.1069,
         "mom_from_date": "2026-09-30",
         "mom_to_date": "2026-10-30",
+        "nav_date": "2026-10-30",
         "is_nav_60_high": false,
-        "peer_min_premium": 12.9247
+        "peer_min_premium": 12.9247,
+        "nav_stale": false,
+        "nav_freshest": "2026-10-30"
       },
       {
         "code": "159696",
         "name": "易方达纳斯达克100",
         "p": 17.321,
         "p60": 10.269,
+        "peak_dd_pct": 8.9467,
+        "peak_nav": 1.9415,
+        "peak_date": "2026-06-02",
+        "day_chg_pct": -3.4675,
+        "day_from_date": "2026-10-29",
         "mom_pct": -6.9726,
         "mom_from_date": "2026-09-30",
         "mom_to_date": "2026-10-30",
+        "nav_date": "2026-10-30",
         "is_nav_60_high": false,
-        "peer_min_premium": 12.9247
+        "peer_min_premium": 12.9247,
+        "nav_stale": false,
+        "nav_freshest": "2026-10-30"
       },
       {
         "code": "513100",
         "name": "国泰纳斯达克100",
         "p": 18.2609,
         "p60": 12.4569,
+        "peak_dd_pct": 5.7834,
+        "peak_nav": 2.087,
+        "peak_date": "2026-06-02",
+        "day_chg_pct": -1.404,
+        "day_from_date": "2026-10-28",
         "mom_pct": -3.5134,
         "mom_from_date": "2026-09-29",
         "mom_to_date": "2026-10-29",
+        "nav_date": "2026-10-29",
         "is_nav_60_high": false,
-        "peer_min_premium": 12.9247
+        "peer_min_premium": 12.9247,
+        "nav_stale": true,
+        "nav_freshest": "2026-10-30"
       }
     ]
   }
