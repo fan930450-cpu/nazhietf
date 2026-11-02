@@ -1,6 +1,6 @@
 {
   "asof": {
-    "built_at": "2026-11-02 23:22:36 北京时间",
+    "built_at": "2026-11-03 00:21:13 北京时间",
     "price_date": "2026-11-02",
     "nav_date": "2026-10-30",
     "premium_method": "历史：收盘价/单位净值-1；今日展示溢价优先用 QDII Lens 收盘参考溢价（价/IOPV-1）",
@@ -5004,7 +5004,7 @@
       "close": 2.442,
       "iopv": 2.1565,
       "ref_premium_pct": 13.239,
-      "nav_premium_pct": 11.9914,
+      "nav_premium_pct": 12.8576,
       "live_price": 2.442,
       "live_asof": "2026-11-02 15:35:15",
       "is_primary": false
@@ -5048,7 +5048,7 @@
       "close": 2.073,
       "iopv": 1.8074,
       "ref_premium_pct": 14.6951,
-      "nav_premium_pct": 13.2408,
+      "nav_premium_pct": 14.3252,
       "live_price": 2.073,
       "live_asof": "2026-11-02 15:34:59",
       "is_primary": false
@@ -5070,7 +5070,7 @@
       "close": 1.653,
       "iopv": 1.4198,
       "ref_premium_pct": 16.4248,
-      "nav_premium_pct": 14.9191,
+      "nav_premium_pct": 16.1677,
       "live_price": 1.653,
       "live_asof": "2026-11-02 15:35:15",
       "is_primary": false
@@ -5081,7 +5081,7 @@
       "close": 2.074,
       "iopv": 1.7678,
       "ref_premium_pct": 17.321,
-      "nav_premium_pct": 15.6555,
+      "nav_premium_pct": 17.2078,
       "live_price": 2.074,
       "live_asof": "2026-11-02 15:35:15",
       "is_primary": false
