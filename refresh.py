@@ -25,6 +25,9 @@ CST = timezone(timedelta(hours=8))
 PRIMARY = "159501"
 # 计算器与顶部金额的默认基准。页面预填、自检和写入 briefing 都用这个数。
 DEFAULT_BASELINE = 3000.0
+# 标普500是另一条定投，基准 2000，回撤阶梯和纳指不同。主标的用短名单里的 513500。
+SPX_BASELINE = 2000.0
+SPX_PRIMARY = "513500"
 # 距高点回撤（正数百分点）→ 回撤系数。不足 5% 为 1.0；超过最后一档封顶。
 # 相邻锚点之间线性。例如 7.5%→2.5，12.5%→5.0。
 _DD_ANCHORS: tuple[tuple[float, float], ...] = (
@@ -151,6 +154,30 @@ def drawdown_coef(dd: float | None, day_chg: float | None = None) -> tuple[float
                 base = lo_c + t * (hi_c - lo_c)
                 label = f"距高点{lo:g}–{hi:g}%"
                 break
+    if day_chg is not None and day_chg <= -3:
+        return base + 0.5, label + " · 单日跌≥3% +0.5"
+    return base, label
+
+
+def spx_drawdown_coef(dd: float | None, day_chg: float | None = None) -> tuple[float, str]:
+    """标普500回撤系数。与 index.html 的 spxDrawdownCoef 一致。
+
+    <5% → 1（金额=基准 2000）。从 5% 起系数为回撤百分点÷2：
+    5%→2.5（¥5000），10%→5（¥10000），15%→7.5，20%→10，25%→12.5，
+    30%→15，35%→17.5，40%→20。中间线性。比 40% 更深仍按同一斜率，不封顶。
+    前一净值日跌幅 ≥3%，再 +0.5。
+    """
+    if dd is None:
+        base, label = 1.0, "数据不足"
+    elif dd < 5:
+        base, label = 1.0, "距高点<5%"
+    else:
+        base = dd / 2.0
+        lo = int(dd // 5) * 5
+        if abs(dd - lo) < 1e-9:
+            label = f"距高点{lo:g}%"
+        else:
+            label = f"距高点{lo:g}–{lo + 5:g}%"
     if day_chg is not None and day_chg <= -3:
         return base + 0.5, label + " · 单日跌≥3% +0.5"
     return base, label
@@ -332,6 +359,35 @@ def _self_check() -> None:
     )
     if not sp_today or sp_today["code"] != "513650":
         raise SystemExit(f"标普短名单自检失败: {sp_today}")
+    spx_expect = [
+        (0, 1.0),
+        (4.9, 1.0),
+        (5, 2.5),
+        (7.5, 3.75),
+        (10, 5.0),
+        (15, 7.5),
+        (20, 10.0),
+        (25, 12.5),
+        (30, 15.0),
+        (35, 17.5),
+        (40, 20.0),
+        (45, 22.5),
+        (50, 25.0),
+    ]
+    for dd, coef in spx_expect:
+        got, _label = spx_drawdown_coef(dd)
+        if abs(got - coef) > 1e-9:
+            raise SystemExit(f"标普回撤系数自检失败 dd={dd} got={got} expect={coef}")
+    spx_amounts = {5: 5000.0, 10: 10000.0, 15: 15000.0, 20: 20000.0, 40: 40000.0, 45: 45000.0}
+    for dd, want in spx_amounts.items():
+        amount = SPX_BASELINE * spx_drawdown_coef(dd)[0]
+        if abs(amount - want) > 1e-6:
+            raise SystemExit(f"标普阶梯金额自检失败 dd={dd} amount={amount} expect={want}")
+    got, label = spx_drawdown_coef(10, -3)
+    if abs(got - 5.5) > 1e-9 or "单日跌" not in label:
+        raise SystemExit(f"标普单日急跌加分自检失败 got={got} {label}")
+    if abs(spx_drawdown_coef(10, -2.99)[0] - 5.0) > 1e-9:
+        raise SystemExit("标普未满 3% 的单日跌不应加分")
 
 
 def _official_bars(bars: list[dict]) -> list[dict]:
@@ -1214,6 +1270,109 @@ def _nasdaq_today(picks: dict | None) -> dict | None:
     return None
 
 
+def build_spx_block(picks: dict | None, peer_stats: dict[str, dict] | None) -> dict:
+    """标普短名单各自的回撤、P60 和溢价。金额按 513500，不用纳指的 P60。"""
+    group = None
+    for item in (picks or {}).get("groups") or []:
+        if item.get("id") == "sp-500":
+            group = item
+            break
+    items = (group or {}).get("items") or []
+    premiums = {
+        it["code"]: it["ref_premium_pct"]
+        for it in items
+        if it.get("code") and it.get("ref_premium_pct") is not None
+    }
+    etfs: list[dict] = []
+    for it in items:
+        code = it.get("code")
+        if not code:
+            continue
+        st = (peer_stats or {}).get(code) or {}
+        others = [v for c, v in premiums.items() if c != code]
+        p = it.get("ref_premium_pct")
+        etfs.append(
+            {
+                "code": code,
+                "name": it.get("name") or code,
+                "p": None if p is None else round(float(p), 4),
+                "p60": st.get("p60"),
+                "peak_dd_pct": st.get("peak_dd_pct"),
+                "peak_nav": st.get("peak_nav"),
+                "peak_date": st.get("peak_date"),
+                "day_chg_pct": st.get("day_chg_pct"),
+                "day_from_date": st.get("day_from_date"),
+                "mom_pct": st.get("mom_pct"),
+                "mom_from_date": st.get("mom_from_date"),
+                "mom_to_date": st.get("mom_to_date"),
+                "nav_date": st.get("nav_date") or it.get("nav_date"),
+                "is_nav_60_high": bool(st.get("is_nav_60_high")),
+                "peer_min_premium": round(min(others), 4) if others else None,
+                "nav_stale": bool(it.get("nav_stale")),
+            }
+        )
+    primary = next((e for e in etfs if e["code"] == SPX_PRIMARY), None)
+    briefing = None
+    if (
+        primary
+        and primary.get("p") is not None
+        and primary.get("p60") is not None
+        and primary.get("peak_dd_pct") is not None
+    ):
+        dc, dlabel = spx_drawdown_coef(primary["peak_dd_pct"], primary.get("day_chg_pct"))
+        pc, plabel, expensive = premium_coef(
+            float(primary["p"]),
+            float(primary["p60"]),
+            primary.get("peer_min_premium"),
+            primary.get("peak_dd_pct"),
+        )
+        today = None
+        today_code = (group or {}).get("today_code")
+        if today_code:
+            today = next((it for it in items if it.get("code") == today_code), None)
+        if expensive and today and today.get("code") != SPX_PRIMARY and today.get("ref_premium_pct") is not None:
+            buy_target = {
+                "code": today["code"],
+                "name": today.get("name") or today["code"],
+                "premium": today["ref_premium_pct"],
+                "reason": "513500明显贵；标普短名单在约 2 个点价差内优先更低费率或更大规模",
+            }
+        else:
+            buy_target = {
+                "code": SPX_PRIMARY,
+                "name": primary.get("name") or "博时标普500",
+                "premium": primary["p"],
+                "reason": "标普主标的",
+            }
+        briefing = {
+            "baseline": SPX_BASELINE,
+            "code": SPX_PRIMARY,
+            "name": primary.get("name") or "博时标普500",
+            "P": primary["p"],
+            "P60": primary["p60"],
+            "peak_dd_pct": primary["peak_dd_pct"],
+            "peak_date": primary.get("peak_date"),
+            "day_chg_pct": primary.get("day_chg_pct"),
+            "mom_pct": primary.get("mom_pct"),
+            "drawdown_coef": round(dc, 4),
+            "drawdown_label": dlabel,
+            "premium_coef": round(pc, 4),
+            "premium_label": plabel,
+            "is_obviously_expensive": expensive,
+            "is_nav_60_high": bool(primary.get("is_nav_60_high")),
+            "suggested_amount": round(SPX_BASELINE * dc * pc, 2),
+            "buy_target": buy_target,
+            "suggest_sell_tactical": bool(primary.get("is_nav_60_high") and expensive),
+            "peer_min_premium": primary.get("peer_min_premium"),
+        }
+    return {
+        "baseline": SPX_BASELINE,
+        "primary": SPX_PRIMARY,
+        "etfs": etfs,
+        "briefing": briefing,
+    }
+
+
 def build_payload(
     premium_rows: list[dict],
     nav_rows: list[dict],
@@ -1412,6 +1571,7 @@ def build_payload(
         "history": premium_rows,
         "peers": peers_sorted,
         "picks": picks,
+        "spx": build_spx_block(picks, peer_stats or {}),
         "calculator": {
             "etfs": _calculator_etfs(
                 peers_sorted,

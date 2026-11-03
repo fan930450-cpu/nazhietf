@@ -38,6 +38,9 @@
     border: 1px solid var(--line); border-radius: 22px; padding: 22px 22px 18px;
     box-shadow: var(--shadow); position: relative; overflow: hidden;
   }
+  .hero.spx {
+    background: linear-gradient(145deg, #143028 0%, #122033 52%, #182744 100%);
+  }
   .hero::before {
     content: ""; position: absolute; inset: -40% auto auto -20%; width: 280px; height: 280px;
     background: radial-gradient(circle, rgba(91,140,255,.25), transparent 70%); pointer-events: none;
@@ -187,10 +190,23 @@
     <div class="grid" id="kpiGrid"></div>
   </div>
 
+  <section id="spxSection">
+    <h2>标普500 ETF <span class="hint">另一条定投 · 基准 2000 元 · 不改上面的纳指金额</span></h2>
+    <div class="hero spx" id="spxHero">
+      <div class="hero-label">今日建议定投金额（标普500）</div>
+      <div class="hero-amount"><span class="yen">¥</span><span id="spxAmount">—</span></div>
+      <div id="spxTarget" class="hero-target">标普标的加载中…</div>
+      <div class="pill-row" id="spxPills"></div>
+      <div class="hero-reason" id="spxReason"></div>
+      <div class="grid" id="spxKpi"></div>
+      <p class="pick-intro" id="spxDisclaimer" style="margin:12px 0 0">仅供个人记录辅助，非投资建议。卖出只按账上的标普持仓，不拿纳指市值来算这笔。</p>
+    </div>
+  </section>
+
   <section id="picksSection">
     <h2>今日同类怎么选 <span class="hint">先纳指100，再标普500 · 不改顶部的定投金额</span></h2>
     <div class="card">
-      <p class="pick-intro">顶部金额按 159501 距近一年最高净值的回撤和它自己的溢价计算。这里只回答今天买哪只：成交够用时先看更低溢价；价差在约 1–2 个点内，再偏向更低的管理+托管费和更大规模。净值日落后的基金会标明，不拿它的回撤和已更新的基金比。159501 等溢价回到纳指同类中枢，再当主买点。</p>
+      <p class="pick-intro">纳指顶部金额按 159501 距近一年最高净值的回撤和它自己的溢价计算。标普金额在上面的标普卡片，按 513500 和标普自己的 P60 计算，两笔互不替换。这里只回答今天买哪只：成交够用时先看更低溢价；价差在约 1–2 个点内，再偏向更低的管理+托管费和更大规模。净值日落后的基金会标明，不拿它的回撤和已更新的基金比。</p>
       <div id="picksRoot">短名单加载中…</div>
     </div>
   </section>
@@ -255,12 +271,67 @@
           <strong>回撤口径</strong>：回撤系数看「距近一年最高净值的回撤」（最新净值 ÷ 近 365 天内最高净值 − 1，取正数）。<strong>较上月净值</strong>（约一个月前同一天）只显示作参照，不进入系数。<br/>
           回撤系数，相邻锚点之间线性：&lt;5%→1.0；5%→1.67；10%→3.33；15%→6.67；20%→8.33；25%→10.0；30%→11.67；40%→13.33；&gt;40% 仍为 13.33。例如 7.5% 约为 2.5，12.5% 约为 5.0。最新净值日相对前一净值日下跌 ≥3%，在这个系数上再 +0.5。<br/>
           溢价系数只轻度修正金额，买多少仍主要由回撤系数决定。相对自己的 P60 连续变化：比 P60 低 5 个点及以上为 1.15，持平为 1.00，高出 5 个点及以上为 0.85，中间线性。绝对软顶：P≥22% 时不超过 0.85，P≥18% 时不超过 0.90，P≥15% 时不超过 0.95。比最便宜同类贵 5 个点及以上时不超过 0.90。回撤够深时设下限，避免溢价把金额砍得太狠：距高点回撤 ≥15% 时系数不低于 0.95，≥10% 时不低于 0.90。这样长期高溢价不会被抬高的 P60 洗成中性，但也不再把系数一刀砍到 0.50。<br/>
-          建议金额 = 基准 × 回撤系数 × 溢价系数，<strong>没有 2 倍上限</strong>。159501 明显贵时，买入代码仍指向纳指短名单里更合适的一只。标普500不参与这个金额。卖出不进这个买入金额：触发时记录本按持仓市值给出人民币，单次约 6%，且不超过本年剩余的 20%，卖后仍留至少 75% 的本年峰值市值。<br/>
+          建议金额 = 基准 × 回撤系数 × 溢价系数，<strong>没有 2 倍上限</strong>。159501 明显贵时，买入代码仍指向纳指短名单里更合适的一只。标普500不参与这个金额，用下面那张标普计算器（基准 2000，另一套回撤阶梯）。卖出不进这个买入金额：触发时记录本按持仓市值给出人民币，单次约 6%，且不超过本年剩余的 20%，卖后仍留至少 75% 的本年峰值市值。<br/>
           盘中「今日溢价 P」在页面打开且处于 A 股交易时段时，大约每 20 秒从公开行情重取，并重算溢价系数、建议金额和短名单排序。P60、高点回撤、单日净值涨跌不跟着这 20 秒变。
         </p>
       </details>
       <div class="calc-out" id="calcOut"></div>
       <p class="field-hint" id="reserveOut" style="font-size:.8rem;color:var(--muted);line-height:1.5;margin:10px 0 0"></p>
+    </div>
+  </section>
+
+  <section id="spxCalcSection">
+    <h2>标普500定投计算器 <span class="hint">基准 2000 · 回撤阶梯和纳指不同 · P60 只用标普</span></h2>
+    <div class="card">
+      <div class="form-row" style="grid-template-columns:1fr;margin-bottom:12px">
+        <div>
+          <label for="spxSelect">选择标普500 ETF</label>
+          <select id="spxSelect"></select>
+          <div class="field-hint" style="font-size:.75rem;color:var(--muted);margin-top:.35rem;line-height:1.45">买多少主要由距近一年最高净值的回撤决定。溢价系数只用这只自己的今日溢价、自己的 P60，以及标普短名单里更便宜的一只，不用纳指的 P60。</div>
+        </div>
+      </div>
+      <div class="form-row">
+        <div>
+          <label for="spxBaseline">基准金额（元）</label>
+          <input id="spxBaseline" type="number" min="0" step="100" value="2000" />
+        </div>
+        <div>
+          <label for="spxPeakDd">距近一年最高净值回撤 %</label>
+          <input id="spxPeakDd" type="number" min="0" step="0.01" />
+          <div class="field-hint" id="spxPeakHint" style="font-size:.75rem;color:var(--muted);margin-top:.35rem;line-height:1.45">口径：这只标普 ETF 的最新净值相对近一年内最高净值。</div>
+        </div>
+        <div>
+          <label for="spxDayChg">前一净值日涨跌 %</label>
+          <input id="spxDayChg" type="number" step="0.01" />
+          <div class="field-hint" id="spxDayHint" style="font-size:.75rem;color:var(--muted);margin-top:.35rem;line-height:1.45">跌幅达到 3%，回撤系数当天 +0.5。</div>
+        </div>
+        <div>
+          <label for="spxPToday">今日溢价 P %（可改）</label>
+          <input id="spxPToday" type="number" step="0.01" />
+        </div>
+        <div>
+          <label for="spxP60">近60日溢价中位数 P60 %（可改）</label>
+          <input id="spxP60" type="number" step="0.01" />
+        </div>
+        <div>
+          <label for="spxPeerMin">最便宜标普同类溢价 %（可改）</label>
+          <input id="spxPeerMin" type="number" step="0.01" />
+        </div>
+        <div>
+          <label for="spxNavHigh">净值是否近60日新高（1=是 0=否）</label>
+          <input id="spxNavHigh" type="number" min="0" max="1" step="1" />
+        </div>
+      </div>
+      <p class="field-hint" id="spxMom" style="font-size:.8rem;color:var(--muted);line-height:1.5;margin:10px 0 0">较上月净值（参照，不进系数）：—</p>
+      <details class="advanced">
+        <summary>标普系数规则</summary>
+        <p style="font-size:.85rem;line-height:1.55;margin:.6rem 0 0">
+          基准默认 <strong>2000</strong> 元。回撤不足 5% 时系数为 1，金额就是基准。从 5% 起，系数为回撤百分点 ÷ 2，金额大约是回撤百分点 × 1000：5%→2.5（¥5000），10%→5（¥10000），15%→7.5（¥15000），20%→10（¥20000），25%→12.5（¥25000），30%→15（¥30000），35%→17.5（¥35000），40%→20（¥40000）。中间线性，例如 7.5%→3.75（¥7500）。比 40% 更深仍按同一斜率，<strong>不封顶</strong>。前一净值日跌幅 ≥3%，系数再 +0.5。<br/>
+          溢价系数和纳指同一套轻度修正（大约 0.85–1.15，高溢价软顶，深回撤有下限），但 P、P60、最便宜同类都只取标普500短名单。513500 明显贵时，买入代码改到标普短名单里更合适的一只。建议金额 = 基准 × 回撤系数 × 溢价系数。<br/>
+          卖出只在这只净值处于近 60 日新高且溢价明显贵时触发，金额只按标普持仓：大约标普市值的 6%，且不超过标普本年剩余的 20% 额度，卖后仍留下至少 75% 的标普峰值市值。仅供个人记录辅助，非投资建议。
+        </p>
+      </details>
+      <div class="calc-out" id="spxCalcOut"></div>
     </div>
   </section>
 
@@ -468,7 +539,7 @@
     <h2>每日 / 定投日操作清单</h2>
     <div class="card">
       <ul class="checklist">
-        <li><span class="n">1</span><div>看本页顶部<strong>今日建议定投金额</strong>与建议标的。交易日大约从 10:30（北京时间）起，页面会按小时更新到 14:20。</div></li>
+        <li><span class="n">1</span><div>看本页顶部<strong>今日建议定投金额</strong>与建议标的。标普500在下面单独一张卡片，基准 2000，不替换纳指金额。交易日大约从 10:30（北京时间）起，页面会按小时更新到 14:20。</div></li>
         <li><span class="n">2</span><div>核对<strong>今日溢价 P</strong>与<strong>P60</strong>。159501 明显贵时，到「今日同类怎么选」里看纳指短名单的今日优先；标普500是另一条可选，不替换顶部金额。</div></li>
         <li><span class="n">3</span><div>看<strong>距近一年最高净值的回撤</strong>：这是回撤系数的输入。较上月净值只作参照。回撤越深，建议金额越高，深回撤可以到基准的 13.33 倍，先核对备用金。</div></li>
         <li><span class="n">4</span><div>若顶部给出卖出金额：按记录本里的那一笔（大约合计市值的 6%，且不超过本年剩余的 20% 额度，卖完还要留下至少 75% 的本年峰值市值）。还没记持仓时，仍只提示 5–8%。</div></li>
@@ -705,6 +776,260 @@
     `;
   }
 
+  const SPX_CODE = '513500';
+  let spxPLocked = false;
+  let spxPeerLocked = false;
+
+  function spxDrawdownCoef(dd, dayChg) {
+    let c, label;
+    if (dd == null || Number.isNaN(dd)) { c = 1; label = '数据不足'; }
+    else if (dd < 5) { c = 1; label = '距高点<5%'; }
+    else {
+      c = dd / 2;
+      const lo = Math.floor(dd / 5) * 5;
+      label = Math.abs(dd - lo) < 1e-9 ? ('距高点' + lo + '%') : ('距高点' + lo + '–' + (lo + 5) + '%');
+    }
+    if (dayChg != null && !Number.isNaN(dayChg) && dayChg <= -3) {
+      return { c: c + 0.5, label: label + ' · 单日跌≥3% +0.5', crash: true };
+    }
+    return { c, label, crash: false };
+  }
+
+  function spxEtfs() {
+    const rows = ((D.spx && D.spx.etfs) || []).filter(e => e && e.code);
+    if (rows.length) return rows;
+    const group = ((D.picks && D.picks.groups) || []).find(g => g.id === 'sp-500');
+    return ((group && group.items) || []).map(it => ({
+      code: it.code,
+      name: it.name,
+      p: it.ref_premium_pct,
+      p60: null,
+      peak_dd_pct: null,
+      day_chg_pct: null,
+      mom_pct: null,
+      is_nav_60_high: false,
+      peer_min_premium: null,
+      nav_stale: it.nav_stale,
+      nav_date: it.nav_date,
+    }));
+  }
+
+  function spxCheapestOther(code) {
+    let best = null;
+    spxEtfs().forEach(e => {
+      if (!e || e.code === code) return;
+      const q = liveMap[e.code];
+      const v = q ? q.premium : (e.p == null ? null : Number(e.p));
+      if (v == null || Number.isNaN(v)) return;
+      if (best == null || v < best) best = v;
+    });
+    return best;
+  }
+
+  function spxToday() {
+    const groups = groupsForView();
+    const group = groups.find(g => g.id === 'sp-500');
+    if (!group || !group.today_code) return null;
+    return (group.items || []).find(it => it.code === group.today_code) || null;
+  }
+
+  function spxSuggestTarget(p, pr) {
+    const today = spxToday();
+    if (pr.expensive && today && today.code !== SPX_CODE) {
+      return {
+        code: today.code,
+        name: today.name || today.code,
+        prem: today.ref_premium_pct,
+        note: '513500明显贵；价差约 2 个点内优先更低费率或更大规模',
+      };
+    }
+    const etf = spxEtfs().find(e => e.code === SPX_CODE);
+    return { code: SPX_CODE, name: (etf && etf.name) || '博时标普500', prem: p, note: '标普主标的' };
+  }
+
+  function paintSpxHero(peak, dayChg, mom, p, p60, peerMin, navHigh, baseline, etf) {
+    const dd = spxDrawdownCoef(peak, dayChg);
+    const pr = (p == null || p60 == null || Number.isNaN(p) || Number.isNaN(p60))
+      ? { c: 1, label: '数据不足', expensive: false }
+      : premiumCoef(p, p60, peerMin, peak);
+    const amount = (baseline || 0) * dd.c * pr.c;
+    const sell = !!navHigh && pr.expensive;
+    const target = spxSuggestTarget(p, pr);
+    let advice = null;
+    if (window.NazhiLedger && typeof NazhiLedger.scopedSell === 'function') {
+      try { advice = NazhiLedger.scopedSell('sp500', sell); } catch (err) { advice = null; }
+    }
+    const ledgerSell = sell && advice && advice.hasHoldings;
+    let sellText = '不卖战术仓';
+    let sellClass = 'nosell';
+    let sellPhrase = '暂不触发卖标普战术仓';
+    let sellKpi = '否';
+    let sellSub = '未同时满足标普净值近60日新高和溢价明显贵';
+    if (sell && !ledgerSell) {
+      sellText = '建议卖战术仓 5–8%';
+      sellClass = 'sell';
+      sellPhrase = '标普净值近60日新高且明显贵 → 可卖标普持仓的 5–8%';
+      sellKpi = '是';
+      sellSub = '还没有标普持仓时只提示 5–8%。仅供个人记录辅助，非投资建议';
+    } else if (ledgerSell && advice.amount > 0) {
+      sellText = '建议卖出约 ¥' + fmtYen(advice.amount) + (advice.code ? ' · ' + advice.code : '');
+      sellClass = 'sell';
+      sellPhrase = '建议卖出约 ¥' + fmtYen(advice.amount) + (advice.code ? '（优先 ' + advice.code + (advice.account ? ' · ' + advice.account : '') + '）' : '');
+      sellKpi = '¥' + fmtYen(advice.amount);
+      sellSub = '只按标普持仓市值的约 6%，受本年 20% 与底仓 75% 约束。仅供个人记录辅助，非投资建议';
+    } else if (ledgerSell) {
+      sellText = '已触发，额度或底仓不够';
+      sellClass = 'sell';
+      sellPhrase = '已触发卖出条件，但标普本年额度或底仓不够';
+      sellKpi = '不卖';
+      sellSub = '再卖会低于标普峰值市值的 75%，或本年 20% 已用完';
+    }
+    const peakDate = (etf && etf.peak_date) || '';
+    const navDate = (etf && etf.nav_date) || '';
+    const momFrom = (etf && etf.mom_from_date) || '';
+    const momTo = (etf && etf.mom_to_date) || '';
+    const reasonParts = [
+      `距近一年高点回撤${fmt(peak)}%（${peakDate || '—'}→${navDate || '—'}）→ 回撤系数 ${fmt(dd.c)}（${dd.label}）`,
+      `溢价 ${fmt(p)}%（${pr.label}）→ 溢价系数 ${fmt(pr.c)}`,
+      `较上月净值${mom == null || Number.isNaN(mom) ? '—' : ((mom >= 0 ? '+' : '') + fmt(mom) + '%')}（${momFrom || '—'}→${momTo || '—'}，只作参照）`,
+    ];
+    if (target.code !== SPX_CODE) reasonParts.push(`建议买 ${target.code}（标普溢价约 ${fmt(target.prem)}%）`);
+    else reasonParts.push('建议买 513500');
+    reasonParts.push(sellPhrase);
+    const amountEl = document.getElementById('spxAmount');
+    if (amountEl) amountEl.textContent = fmtYen(amount);
+    const ht = document.getElementById('spxTarget');
+    if (ht) {
+      ht.className = 'hero-target' + (target.code !== SPX_CODE ? ' alt' : '');
+      ht.innerHTML = target.code !== SPX_CODE
+        ? `建议买入 <strong>${target.code}</strong> ${target.name} · 其参考溢价约 ${fmt(target.prem)}%（${target.note}）`
+        : `建议买入 <strong>513500</strong> ${target.name} · 当前溢价约 ${fmt(p)}%`;
+    }
+    const reasonEl = document.getElementById('spxReason');
+    if (reasonEl) reasonEl.innerHTML = '<strong>一句话理由：</strong>' + reasonParts.join('；');
+    const pills = document.getElementById('spxPills');
+    if (pills) {
+      pills.innerHTML = `
+        <span class="badge ${pr.expensive ? 'exp' : (pr.label === '相对便宜' ? 'ok' : 'mid')}">溢价状态：${pr.label}</span>
+        <span class="badge ${sellClass}">${sellText}</span>
+        <span class="badge mid">回撤系数 ${fmt(dd.c)} · 溢价系数 ${fmt(pr.c)}</span>
+      `;
+    }
+    const kpi = document.getElementById('spxKpi');
+    if (kpi) {
+      kpi.innerHTML = `
+        <div class="kpi"><div class="k">距近一年高点回撤</div><div class="v">${fmt(peak)}%</div><div class="s">高点 ${peakDate || '—'} → 净值日 ${navDate || '—'} · 回撤系数的输入</div></div>
+        <div class="kpi"><div class="k">今日溢价 P</div><div class="v">${fmt(p)}%</div><div class="s">相对自己的 P60 ${p60 == null || Number.isNaN(p - p60) ? '—' : fmt(p - p60)} 个百分点</div></div>
+        <div class="kpi"><div class="k">标普 P60</div><div class="v">${fmt(p60)}%</div><div class="s">这只标普近60日净值溢价中位数</div></div>
+        <div class="kpi"><div class="k">较上月净值（参照）</div><div class="v ${mom == null || Number.isNaN(mom) ? '' : signCls(mom)}">${mom == null || Number.isNaN(mom) ? '—' : ((mom >= 0 ? '+' : '') + fmt(mom) + '%')}</div><div class="s">${momFrom || '—'} → ${momTo || '—'} · 不进回撤系数</div></div>
+        <div class="kpi"><div class="k">溢价状态</div><div class="v">${pr.label}</div><div class="s">系数 ${fmt(pr.c)} · 只和标普同类比</div></div>
+        <div class="kpi"><div class="k">是否建议卖标普战术仓</div><div class="v">${sellKpi}</div><div class="s">${sellSub}</div></div>
+      `;
+    }
+  }
+
+  function spxSetHints(etf) {
+    const hint = document.getElementById('spxPeakHint');
+    const dayHint = document.getElementById('spxDayHint');
+    const momRef = document.getElementById('spxMom');
+    const peakDate = (etf && etf.peak_date) || '';
+    const navDate = (etf && etf.nav_date) || '';
+    if (hint) {
+      hint.textContent = peakDate && navDate
+        ? `口径：最新净值相对近一年内最高净值（高点 ${peakDate} → 净值日 ${navDate}）。`
+        : '口径：这只标普 ETF 的最新净值相对近一年内最高净值。';
+    }
+    if (dayHint) {
+      const from = (etf && etf.day_from_date) || '';
+      dayHint.textContent = from && navDate
+        ? `前一净值日 ${from} → ${navDate}。跌幅达到 3%，回撤系数当天 +0.5。`
+        : '相对前一个净值日。跌幅达到 3%，回撤系数当天 +0.5。';
+    }
+    if (momRef && etf) {
+      const mom = etf.mom_pct;
+      momRef.textContent = `较上月净值（参照，不进系数）：${mom == null ? '—' : (mom >= 0 ? '+' : '') + fmt(mom) + '%'}（${etf.mom_from_date || '—'} → ${etf.mom_to_date || '—'}）`;
+    }
+  }
+
+  function spxNum(id) {
+    const raw = document.getElementById(id).value;
+    if (raw === '' || raw == null) return null;
+    const n = Number(raw);
+    return Number.isNaN(n) ? null : n;
+  }
+
+  function recomputeSpx() {
+    const baseline = Number(document.getElementById('spxBaseline').value) || 0;
+    const peak = spxNum('spxPeakDd');
+    const dayChg = spxNum('spxDayChg');
+    const p = spxNum('spxPToday');
+    const p60 = spxNum('spxP60');
+    const peerMin = spxNum('spxPeerMin');
+    const navHigh = Number(document.getElementById('spxNavHigh').value) === 1;
+    const dd = spxDrawdownCoef(peak, dayChg);
+    const pr = (p == null || p60 == null)
+      ? { c: 1, label: '数据不足', expensive: false }
+      : premiumCoef(p, p60, peerMin, peak);
+    const amount = baseline * dd.c * pr.c;
+    const out = document.getElementById('spxCalcOut');
+    if (out) {
+      out.innerHTML = `
+        <div class="kpi"><div class="k">回撤系数</div><div class="v">${fmt(dd.c)}</div><div class="s">${dd.label}</div></div>
+        <div class="kpi"><div class="k">溢价系数</div><div class="v">${fmt(pr.c)}</div><div class="s">${pr.label}</div></div>
+        <div class="kpi"><div class="k">建议买入金额</div><div class="v">¥${fmtYen(amount)}</div><div class="s">基准 × 回撤 × 溢价，40% 以后仍按斜率</div></div>
+      `;
+    }
+    const selected = (document.getElementById('spxSelect') || {}).value || SPX_CODE;
+    if (selected === SPX_CODE) {
+      const etf = spxEtfs().find(e => e.code === SPX_CODE);
+      const mom = etf && etf.mom_pct != null ? Number(etf.mom_pct) : NaN;
+      paintSpxHero(peak, dayChg, mom, p, p60, peerMin, navHigh, baseline, etf);
+    }
+  }
+
+  function paintSpxHeroFromPrimary() {
+    if ((document.getElementById('spxSelect').value || SPX_CODE) === SPX_CODE) return;
+    const etf = spxEtfs().find(e => e.code === SPX_CODE);
+    if (!etf) return;
+    const q = liveMap[SPX_CODE];
+    const peerMin = spxCheapestOther(SPX_CODE);
+    paintSpxHero(
+      Number(etf.peak_dd_pct),
+      Number(etf.day_chg_pct),
+      etf.mom_pct == null ? NaN : Number(etf.mom_pct),
+      q ? q.premium : Number(etf.p),
+      etf.p60 == null ? NaN : Number(etf.p60),
+      peerMin == null ? NaN : Number(peerMin),
+      !!etf.is_nav_60_high,
+      Number(document.getElementById('spxBaseline').value) || SPX_BASE_DEFAULT,
+      etf
+    );
+  }
+
+  function applySpxEtf(code) {
+    const etf = spxEtfs().find(e => e.code === code) || spxEtfs()[0];
+    if (!etf) {
+      const amountEl = document.getElementById('spxAmount');
+      if (amountEl) amountEl.textContent = '—';
+      return;
+    }
+    spxPLocked = false;
+    spxPeerLocked = false;
+    const q = liveMap[etf.code];
+    document.getElementById('spxPeakDd').value = etf.peak_dd_pct == null ? '' : fmt(etf.peak_dd_pct);
+    document.getElementById('spxDayChg').value = etf.day_chg_pct == null ? '' : fmt(etf.day_chg_pct);
+    document.getElementById('spxPToday').value = fmt(q ? q.premium : etf.p);
+    document.getElementById('spxP60').value = etf.p60 == null ? '' : fmt(etf.p60);
+    const peer = spxCheapestOther(etf.code);
+    document.getElementById('spxPeerMin').value = peer == null ? (etf.peer_min_premium == null ? '' : fmt(etf.peer_min_premium)) : fmt(peer);
+    document.getElementById('spxNavHigh').value = etf.is_nav_60_high ? 1 : 0;
+    spxSetHints(etf);
+    recomputeSpx();
+    paintSpxHeroFromPrimary();
+  }
+
+  const SPX_BASE_DEFAULT = (D.spx && D.spx.baseline) || 2000;
+
   function recompute() {
     const baseline = Number(document.getElementById('baseline').value) || 0;
     const peak = Number(document.getElementById('peakDd').value);
@@ -826,6 +1151,15 @@
     }
   } catch (err) { /* 记录本失败时仍显示定投金额 */ }
   applyEtf(etfSelect.value);
+  const spxSelect = document.getElementById('spxSelect');
+  if (spxSelect) {
+    document.getElementById('spxBaseline').value = SPX_BASE_DEFAULT;
+    spxSelect.innerHTML = spxEtfs().map(e =>
+      `<option value="${e.code}">${e.code} ${e.name || ''}${e.nav_stale ? ' · 净值未齐' : ''}</option>`
+    ).join('');
+    spxSelect.value = spxEtfs().some(e => e.code === SPX_CODE) ? SPX_CODE : ((spxEtfs()[0] || {}).code || '');
+    if (spxSelect.value) applySpxEtf(spxSelect.value);
+  }
 
   let meta = `构建 ${D.asof.built_at} · 行情/收盘 ${P.close_date} · 净值日 ${P.nav_date} · 参考溢价快照 ${P.premium_ref_date || ''}`;
   if (D.asof.warnings && D.asof.warnings.length) {
@@ -901,6 +1235,16 @@
     });
   });
   etfSelect.addEventListener('change', () => applyEtf(etfSelect.value));
+  if (spxSelect) {
+    ['spxBaseline','spxPeakDd','spxDayChg','spxPToday','spxP60','spxPeerMin','spxNavHigh'].forEach(id => {
+      document.getElementById(id).addEventListener('input', () => {
+        if (id === 'spxPToday') spxPLocked = true;
+        if (id === 'spxPeerMin') spxPeerLocked = true;
+        recomputeSpx();
+      });
+    });
+    spxSelect.addEventListener('change', () => applySpxEtf(spxSelect.value));
+  }
 
   function feeCell(it) {
     if (it.fee_total_pct == null) return '—';
@@ -1127,6 +1471,18 @@
     });
     recompute();
     paint159501HeroFromLive();
+    if (document.getElementById('spxSelect')) {
+      const spxCode = document.getElementById('spxSelect').value;
+      if (!spxPLocked && liveMap[spxCode]) {
+        document.getElementById('spxPToday').value = fmt(liveMap[spxCode].premium);
+      }
+      if (!spxPeerLocked) {
+        const peer = spxCheapestOther(spxCode);
+        if (peer != null) document.getElementById('spxPeerMin').value = fmt(peer);
+      }
+      recomputeSpx();
+      paintSpxHeroFromPrimary();
+    }
     renderPicks();
   }
   let liveTimer = null;

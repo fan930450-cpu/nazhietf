@@ -347,19 +347,23 @@
     const tradesIn = Array.isArray(raw.trades) ? raw.trades : [];
     let rowsIn = [];
     let peaks = {};
+    let peaksByFamily = {};
     let seeded = true;
     if (Array.isArray(raw.holdings)) rowsIn = raw.holdings;
     else if (raw.holdings && typeof raw.holdings === 'object') {
       rowsIn = Array.isArray(raw.holdings.rows) ? raw.holdings.rows : [];
       if (raw.holdings.peaks && typeof raw.holdings.peaks === 'object') peaks = raw.holdings.peaks;
+      if (raw.holdings.peaksByFamily && typeof raw.holdings.peaksByFamily === 'object') peaksByFamily = raw.holdings.peaksByFamily;
       if (raw.holdings.seeded != null) seeded = !!raw.holdings.seeded;
     }
     if (raw.peaks && typeof raw.peaks === 'object') peaks = raw.peaks;
+    if (raw.peaksByFamily && typeof raw.peaksByFamily === 'object') peaksByFamily = raw.peaksByFamily;
     if (raw.seeded != null) seeded = !!raw.seeded;
     return {
       trades: tradesIn.map(normalizeTrade).filter(Boolean),
       rows: rowsIn.map(normalizeHolding).filter(Boolean),
       peaks,
+      peaksByFamily,
       seeded,
     };
   }
@@ -410,6 +414,7 @@
     storageSet(HOLDINGS_KEY, JSON.stringify({
       rows: state.rows || [],
       peaks: state.peaks || {},
+      peaksByFamily: state.peaksByFamily || {},
       seeded: state.seeded !== false,
     }));
   }
@@ -428,10 +433,11 @@
         trades: Array.isArray(trades) ? trades : [],
         holdings: Array.isArray(hold) ? hold : hold,
         peaks: hold && hold.peaks,
+        peaksByFamily: hold && hold.peaksByFamily,
         seeded: hold && hold.seeded != null ? hold.seeded : true,
       });
     } catch (e) {
-      state = { trades: [], rows: [], peaks: {}, seeded: true, loadError: true };
+      state = { trades: [], rows: [], peaks: {}, peaksByFamily: {}, seeded: true, loadError: true };
     }
   }
   function catalog() {
@@ -975,6 +981,7 @@
       trades: state.trades || [],
       holdings: state.rows || [],
       peaks: state.peaks || {},
+      peaksByFamily: state.peaksByFamily || {},
       seeded: true,
     };
     const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
@@ -1091,6 +1098,39 @@
     });
     syncSide();
   }
+  function scopedSell(family, triggered) {
+    if (!state || !family) return null;
+    const year = shanghaiToday().slice(0, 4);
+    const rows = (state.rows || []).filter((r) => r.family === family);
+    const trades = (state.trades || []).filter((t) => (t.family || '') === family);
+    const quote = (row) => quoteOf(row.code, row.snapshotPrice);
+    const run = (peaks) => computePlan({
+      rows,
+      trades,
+      peaks: peaks || {},
+      year,
+      families: [family],
+      triggered: !!triggered,
+      quote,
+    });
+    let plan = run((state.peaksByFamily && state.peaksByFamily[family]) || {});
+    plan.triggered = !!triggered;
+    if (plan.missingPrices === 0 && plan.totalMV > 0) {
+      const prev = plan.storedPeak || 0;
+      if (prev > 0 && plan.totalMV > prev * PEAK_JUMP) {
+        plan.peakRejected = true;
+      } else if (plan.totalMV > prev + 0.01) {
+        state.peaksByFamily = state.peaksByFamily || {};
+        state.peaksByFamily[family] = state.peaksByFamily[family] || {};
+        state.peaksByFamily[family][year] = { mv: round2(plan.totalMV), asOf: shanghaiToday() };
+        persist();
+        plan = run(state.peaksByFamily[family]);
+        plan.triggered = !!triggered;
+        plan.peakRaised = true;
+      }
+    }
+    return plan;
+  }
   function mount(nextCtx) {
     ctx = nextCtx || {};
     loadState();
@@ -1126,6 +1166,7 @@
     valueRows,
     mount,
     render,
+    scopedSell,
     codes,
     quoteForTest: quoteOf,
   };
