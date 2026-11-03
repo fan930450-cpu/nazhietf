@@ -184,7 +184,7 @@
     <div id="liveStatus"><strong>行情更新时间</strong> 等待公开行情…</div>
     <button type="button" id="liveRefresh">刷新行情</button>
   </div>
-  <p class="live-note">盘中溢价来自公开网页行情转载（腾讯财经，非券商授权源），可能与券商 App 有零点几偏差；下单以券商 IOPV/溢价为准。距高点回撤、单日净值涨跌、P60 和较上月净值仍用定时快照，不是实时数。</p>
+  <p class="live-note">盘中溢价来自公开网页行情转载（腾讯财经，非券商授权源），可能与券商 App 有零点几偏差；下单以券商 IOPV/溢价为准。打不开时可点「刷新行情」。距高点回撤、单日净值涨跌、P60 和较上月净值仍用定时快照。净值日经常比行情日晚 1–2 天，这是 QDII 披露时滞，不是页面卡住。</p>
 
   <!-- HERO: daily briefing -->
   <div class="hero" id="hero">
@@ -1177,7 +1177,8 @@
     if (spxSelect.value) applySpxEtf(spxSelect.value);
   }
 
-  let meta = `构建 ${D.asof.built_at} · 行情/收盘 ${P.close_date} · 净值日 ${P.nav_date} · 参考溢价快照 ${P.premium_ref_date || ''}`;
+  const quoteDay = (D.asof && D.asof.price_date) || P.close_date;
+  let meta = `构建 ${D.asof.built_at} · 行情 ${quoteDay} · 收盘 ${P.close_date} · 净值日 ${P.nav_date} · 参考溢价快照 ${P.premium_ref_date || ''}`;
   if (D.asof.warnings && D.asof.warnings.length) {
     meta += ' · 注意：' + D.asof.warnings.join('；');
   }
@@ -1185,7 +1186,7 @@
 
   document.getElementById('overviewCard').innerHTML = `
     <div class="grid" style="margin-top:0">
-      <div class="kpi"><div class="k">最新收盘价</div><div class="v">${fmt(P.close, 3)}</div><div class="s">${P.close_date}</div></div>
+      <div class="kpi"><div class="k">${P.quote_price ? '盘中价' : '最新收盘价'}</div><div class="v">${fmt(P.quote_price || P.close, 3)}</div><div class="s">${P.quote_price ? (P.quote_date || '') + ' · 昨收 ' + fmt(P.close, 3) + '（' + P.close_date + '）' : P.close_date}</div></div>
       <div class="kpi"><div class="k">单位净值</div><div class="v">${fmt(P.nav, 4)}</div><div class="s">估值日 ${P.nav_date}</div></div>
       <div class="kpi"><div class="k">净值折溢价</div><div class="v">${fmt(P.premium_nav_pct)}%</div><div class="s">收盘价÷净值−1</div></div>
       <div class="kpi"><div class="k">收盘参考溢价(IOPV)</div><div class="v">${fmt(P.premium_ref_iopv_pct)}%</div><div class="s">${P.premium_ref_date}</div></div>
@@ -1418,28 +1419,99 @@
   }
   function parseTencent(text) {
     const out = {};
-    text.split(/\n/).forEach(line => {
+    String(text || '').split(/\n/).forEach(line => {
       const m = line.match(/v_(?:sz|sh)(\d+)="(.*)"/);
       if (!m) return;
       const f = m[2].split('~');
       const price = parseFloat(f[3]);
-      const iopv = parseFloat(f[78]);
-      if (!price || !iopv) return;
-      out[m[1]] = {
-        price,
-        iopv,
-        premium: (price / iopv - 1) * 100,
-        stamp: f[30] || ''
-      };
+      let iopv = parseFloat(f[78]);
+      const premField = parseFloat(f[77]);
+      if (!price) return;
+      const iopvOdd = !(iopv > 0) || iopv > price * 1.5 || iopv < price * 0.4;
+      let premium = null;
+      if (!iopvOdd) premium = (price / iopv - 1) * 100;
+      else if (!Number.isNaN(premField)) {
+        premium = premField;
+        iopv = price / (1 + premField / 100);
+      }
+      if (premium == null || Number.isNaN(premium)) return;
+      out[m[1]] = { price, iopv, premium, stamp: f[30] || '' };
     });
     return out;
+  }
+  function decodeQuoteBytes(buf) {
+    const bytes = buf instanceof ArrayBuffer ? new Uint8Array(buf) : new Uint8Array(buf || []);
+    const encodings = ['gbk', 'gb18030', 'gb2312', 'utf-8'];
+    for (let i = 0; i < encodings.length; i++) {
+      try {
+        const text = new TextDecoder(encodings[i]).decode(bytes);
+        if (text && text.indexOf('v_') >= 0) return text;
+      } catch (e) { /* 这个编码不可用，试下一个 */ }
+    }
+    let raw = '';
+    for (let i = 0; i < bytes.length; i++) raw += String.fromCharCode(bytes[i]);
+    return raw;
+  }
+  function loadQuoteScript(url) {
+    return new Promise((resolve, reject) => {
+      const s = document.createElement('script');
+      const timer = setTimeout(() => { s.remove(); reject(new Error('行情脚本超时')); }, 8000);
+      s.onload = () => {
+        clearTimeout(timer);
+        const lines = [];
+        Object.keys(window).forEach(k => {
+          if (/^v_(?:sz|sh)\d+$/.test(k) && typeof window[k] === 'string') lines.push(k + '="' + window[k] + '"');
+        });
+        s.remove();
+        if (!lines.length) reject(new Error('行情脚本没有解析出代码'));
+        else resolve(lines.join('\n'));
+      };
+      s.onerror = () => { clearTimeout(timer); s.remove(); reject(new Error('行情脚本被拦截或加载失败')); };
+      s.referrerPolicy = 'no-referrer';
+      s.src = url + (url.indexOf('?') >= 0 ? '&' : '?') + '_=' + Date.now();
+      document.head.appendChild(s);
+    });
+  }
+  async function loadQuoteText(url) {
+    let fetchErr = null;
+    try {
+      const ctrl = typeof AbortController === 'function' ? new AbortController() : null;
+      const timer = ctrl ? setTimeout(() => ctrl.abort(), 8000) : null;
+      try {
+        const res = await fetch(url, {
+          cache: 'no-store',
+          referrerPolicy: 'no-referrer',
+          signal: ctrl ? ctrl.signal : undefined
+        });
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const text = decodeQuoteBytes(await res.arrayBuffer());
+        if (Object.keys(parseTencent(text)).length) return text;
+        fetchErr = new Error('空行情');
+      } finally {
+        if (timer) clearTimeout(timer);
+      }
+    } catch (err) {
+      fetchErr = err;
+    }
+    try {
+      return await loadQuoteScript(url);
+    } catch (scriptErr) {
+      const a = (fetchErr && (fetchErr.name === 'AbortError' ? '行情请求超时' : fetchErr.message)) || '行情请求失败';
+      const b = (scriptErr && scriptErr.message) || scriptErr;
+      throw new Error(a + '；' + b);
+    }
   }
   function paintLiveStatus(mode) {
     const el = document.getElementById('liveStatus');
     if (!el) return;
     const when = liveMeta.stampText ? `行情更新时间 ${liveMeta.stampText}` : '行情更新时间 —';
+    const err = String(liveMeta.error || '').replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
     if (mode === 'error') {
-      el.innerHTML = `<strong>${when}</strong> · 行情刷新失败，仍显示上一笔。可再点「刷新行情」。`;
+      el.innerHTML = `<strong>${when}</strong> · 行情刷新失败：${err || '未知错误'}。仍显示上一笔。可再点「刷新行情」。`;
+      return;
+    }
+    if (mode === 'loading') {
+      el.innerHTML = `<strong>${when}</strong> · 正在获取公开行情…`;
       return;
     }
     if (mode === 'closed') {
@@ -1507,12 +1579,10 @@
     if (liveBusy) return;
     liveBusy = true;
     const codes = quoteCodes();
+    paintLiveStatus('loading');
     try {
       const url = 'https://qt.gtimg.cn/q=' + codes.map(tencentSymbol).join(',');
-      const res = await fetch(url, { cache: 'no-store', referrerPolicy: 'no-referrer' });
-      if (!res.ok) throw new Error('HTTP ' + res.status);
-      const buf = await res.arrayBuffer();
-      const text = new TextDecoder('gbk').decode(buf);
+      const text = await loadQuoteText(url);
       const parsed = parseTencent(text);
       if (!Object.keys(parsed).length) throw new Error('空行情');
       Object.keys(parsed).forEach(code => { liveMap[code] = parsed[code]; });
