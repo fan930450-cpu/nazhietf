@@ -400,6 +400,23 @@ def _self_check() -> None:
         raise SystemExit(f"滚动高点当日应为 0: {sample}")
     if abs(sample["2026-01-01"] - (-25.0)) > 1e-9:
         raise SystemExit(f"365 天滚动回撤自检失败: {sample}")
+    sample_fields = [""] * 83
+    sample_fields[1] = "纳指ETF嘉实"
+    sample_fields[3] = "2.119"
+    sample_fields[4] = "2.144"
+    sample_fields[30] = "20261103111133"
+    sample_fields[77] = "20.49"
+    sample_fields[78] = "1.7586"
+    sample_fields[81] = "1.7831"
+    parsed = parse_tencent_fields(sample_fields)
+    if not parsed or abs(parsed["price"] - 2.119) > 1e-9 or abs(parsed["premium"] - (2.119 / 1.7586 - 1) * 100) > 0.02:
+        raise SystemExit(f"腾讯行情解析自检失败: {parsed}")
+    if parsed["date"] != "20261103" or abs((parsed["iopv"] or 0) - 1.7586) > 1e-9:
+        raise SystemExit(f"腾讯行情时间或 IOPV 自检失败: {parsed}")
+    sample_fields[78] = "0"
+    odd = parse_tencent_fields(sample_fields)
+    if not odd or abs(odd["premium"] - 20.49) > 1e-6:
+        raise SystemExit(f"IOPV 异常时应改用溢价字段: {odd}")
 
 
 def _official_bars(bars: list[dict]) -> list[dict]:
@@ -988,6 +1005,52 @@ def fetch_sina_spot(codes: list[str]) -> dict[str, dict]:
     return spot
 
 
+def _field_float(fields: list[str], idx: int) -> float | None:
+    if idx >= len(fields):
+        return None
+    raw = (fields[idx] or "").strip()
+    if not raw:
+        return None
+    try:
+        return float(raw)
+    except ValueError:
+        return None
+
+
+def parse_tencent_fields(fields: list[str]) -> dict | None:
+    """腾讯行情：3=现价，4=昨收，30=时间戳，77=溢价%，78=IOPV，81=净值。
+
+    IOPV 缺失或和现价明显不成比例时，用第 77 字段的溢价。
+    """
+    price = _field_float(fields, 3)
+    if price is None or price <= 0:
+        return None
+    stamp = fields[30] if len(fields) > 30 else ""
+    iopv = _field_float(fields, 78)
+    prem_field = _field_float(fields, 77)
+    nav = _field_float(fields, 81)
+    iopv_odd = iopv is None or iopv <= 0 or iopv > price * 1.5 or iopv < price * 0.4
+    premium = None
+    if not iopv_odd and iopv:
+        premium = (price / iopv - 1.0) * 100.0
+    elif prem_field is not None:
+        premium = prem_field
+        if iopv_odd:
+            iopv = price / (1.0 + prem_field / 100.0) if prem_field > -90 else None
+    if premium is None:
+        return None
+    return {
+        "name": fields[1] if len(fields) > 1 else "",
+        "price": price,
+        "prev_close": _field_float(fields, 4),
+        "date": stamp[:8],
+        "time": stamp[8:14],
+        "iopv": None if iopv is None else round(iopv, 4),
+        "premium": round(premium, 4),
+        "nav": None if nav is None else round(nav, 4),
+    }
+
+
 def fetch_tencent_spot(codes: list[str]) -> dict[str, dict]:
     url = "https://qt.gtimg.cn/q=" + ",".join(symbol_of(c) for c in codes)
     text = get(url).decode("gbk", "replace")
@@ -996,17 +1059,10 @@ def fetch_tencent_spot(codes: list[str]) -> dict[str, dict]:
         m = re.match(r'v_(sz|sh)(\d+)="(.*)"', line.strip().rstrip(";"))
         if not m:
             continue
-        fields = m.group(3).split("~")
-        if len(fields) < 4 or not fields[3]:
+        parsed = parse_tencent_fields(m.group(3).split("~"))
+        if not parsed:
             continue
-        code = m.group(2)
-        stamp = fields[30] if len(fields) > 30 else ""
-        spot[code] = {
-            "name": fields[1],
-            "price": float(fields[3]),
-            "date": stamp[:8],
-            "time": stamp[8:14],
-        }
+        spot[m.group(2)] = parsed
     if len(spot) < 3:
         raise RuntimeError("腾讯行情不足")
     print("Tencent spot:", ",".join(sorted(spot)))
@@ -1014,12 +1070,25 @@ def fetch_tencent_spot(codes: list[str]) -> dict[str, dict]:
 
 
 def fetch_spot(codes: list[str]) -> dict[str, dict]:
-    for fn in (fetch_sina_spot, fetch_tencent_spot):
+    """先腾讯，盘中能拿到现价、IOPV 和溢价；失败再退回新浪现价。"""
+    for fn in (fetch_tencent_spot, fetch_sina_spot):
         try:
             return fn(codes)
         except Exception as e:  # noqa: BLE001
             print("现价失败:", fn.__name__, e)
     return {}
+
+
+def intraday_quote_active(spot: dict[str, dict], now: datetime | None = None) -> bool:
+    """工作日 9:30–15:05，且至少一只行情时间戳是今天，才把盘中价写进快照。"""
+    now = now or now_cst()
+    if now.weekday() >= 5:
+        return False
+    mins = now.hour * 60 + now.minute
+    if mins < 9 * 60 + 30 or mins > 15 * 60 + 5:
+        return False
+    today = now.strftime("%Y%m%d")
+    return any((row.get("date") or "") == today and row.get("premium") is not None for row in spot.values())
 
 
 def fetch_pingzhong_nav(code: str) -> list[dict]:
@@ -1585,16 +1654,22 @@ def build_payload(
     peak_dd = metrics["peak_dd_pct"]
     day_chg = metrics["day_chg_pct"]
 
+    use_live = intraday_quote_active(spot)
     peers = []
     for s in peers_static:
         live = spot.get(s["code"], {})
         ref = s.get("ref_premium_pct")
+        iopv = s.get("iopv")
+        if use_live and live.get("premium") is not None:
+            ref = live["premium"]
+        if use_live and live.get("iopv"):
+            iopv = live["iopv"]
         peers.append(
             {
                 "code": s["code"],
                 "name": s.get("name") or s["code"],
                 "close": s.get("close") if s.get("close") is not None else live.get("price"),
-                "iopv": s.get("iopv"),
+                "iopv": iopv,
                 "ref_premium_pct": None if ref is None else round(float(ref), 4),
                 "nav_premium_pct": s.get("nav_premium_pct"),
                 "live_price": live.get("price"),
@@ -1631,6 +1706,15 @@ def build_payload(
     primary = next(p for p in peers_sorted if p["code"] == PRIMARY)
     ref_iopv_premium = primary["ref_premium_pct"] if primary["ref_premium_pct"] is not None else latest_p
     p_for_calc = float(ref_iopv_premium)
+    live_primary = spot.get(PRIMARY) or {}
+    if use_live and live_primary.get("premium") is not None:
+        p_for_calc = float(live_primary["premium"])
+    if use_live and picks:
+        for group in picks.get("groups") or []:
+            for item in group.get("items") or []:
+                quote = spot.get(item.get("code") or "") or {}
+                if quote.get("premium") is not None:
+                    item["ref_premium_pct"] = round(float(quote["premium"]), 4)
     nav_dates = {code: st["nav_date"] for code, st in (peer_stats or {}).items() if st.get("nav_date")}
     nav_dates[PRIMARY] = latest_nav_date
     picks = align_pick_nav_dates(picks, nav_dates)
@@ -1682,7 +1766,8 @@ def build_payload(
     payload = {
         "asof": {
             "built_at": now_cst().strftime("%Y-%m-%d %H:%M:%S 北京时间"),
-            "price_date": latest_close_date,
+            "price_date": now_cst().strftime("%Y-%m-%d") if use_live else latest_close_date,
+            "price_session": "intraday" if use_live else "close",
             "nav_date": latest_nav_date,
             "premium_method": "历史：收盘价/单位净值-1；今日展示溢价优先用 QDII Lens 收盘参考溢价（价/IOPV-1）",
             "sources": [
@@ -1698,6 +1783,10 @@ def build_payload(
             "name": "嘉实纳斯达克100ETF",
             "close": round(latest_close, 4),
             "close_date": latest_close_date,
+            "quote_price": round(float(live_primary["price"]), 4) if use_live and live_primary.get("price") else None,
+            "quote_date": now_cst().strftime("%Y-%m-%d") if use_live and live_primary.get("price") else None,
+            "quote_iopv": live_primary.get("iopv") if use_live else None,
+            "quote_premium_pct": round(float(live_primary["premium"]), 4) if use_live and live_primary.get("premium") is not None else None,
             "nav": round(latest_nav, 4),
             "nav_date": latest_nav_date,
             "premium_nav_pct": round(latest_p, 4),
