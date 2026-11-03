@@ -5501,5 +5501,91 @@
         "nav_freshest": "2026-10-30"
       }
     ]
+  },
+  "spx": {
+    "baseline": 2000.0,
+    "primary": "513500",
+    "etfs": [
+      {
+        "code": "513650",
+        "name": "南方标普500",
+        "p": 8.1597,
+        "p60": 7.4555,
+        "peak_dd_pct": 3.8546,
+        "peak_nav": 1.9068,
+        "peak_date": "2026-08-13",
+        "day_chg_pct": -1.8313,
+        "day_from_date": "2026-10-29",
+        "mom_pct": -1.2603,
+        "mom_from_date": "2026-09-30",
+        "mom_to_date": "2026-10-30",
+        "nav_date": "2026-10-30",
+        "is_nav_60_high": false,
+        "peer_min_premium": 7.9109,
+        "nav_stale": false
+      },
+      {
+        "code": "159655",
+        "name": "华夏标普500",
+        "p": 7.9109,
+        "p60": 7.2782,
+        "peak_dd_pct": 4.0389,
+        "peak_nav": 1.9139,
+        "peak_date": "2026-08-13",
+        "day_chg_pct": -1.891,
+        "day_from_date": "2026-10-29",
+        "mom_pct": -1.723,
+        "mom_from_date": "2026-09-30",
+        "mom_to_date": "2026-10-30",
+        "nav_date": "2026-10-30",
+        "is_nav_60_high": false,
+        "peer_min_premium": 8.1597,
+        "nav_stale": false
+      },
+      {
+        "code": "513500",
+        "name": "博时标普500",
+        "p": 10.2755,
+        "p60": 9.0402,
+        "peak_dd_pct": 3.8445,
+        "peak_nav": 2.5023,
+        "peak_date": "2026-08-13",
+        "day_chg_pct": -1.8319,
+        "day_from_date": "2026-10-29",
+        "mom_pct": -1.3449,
+        "mom_from_date": "2026-09-30",
+        "mom_to_date": "2026-10-30",
+        "nav_date": "2026-10-30",
+        "is_nav_60_high": false,
+        "peer_min_premium": 7.9109,
+        "nav_stale": false
+      }
+    ],
+    "briefing": {
+      "baseline": 2000.0,
+      "code": "513500",
+      "name": "博时标普500",
+      "P": 10.2755,
+      "P60": 9.0402,
+      "peak_dd_pct": 3.8445,
+      "peak_date": "2026-08-13",
+      "day_chg_pct": -1.8319,
+      "mom_pct": -1.3449,
+      "drawdown_coef": 1.0,
+      "drawdown_label": "距高点<5%",
+      "premium_coef": 0.9629,
+      "premium_label": "偏贵",
+      "is_obviously_expensive": false,
+      "is_nav_60_high": false,
+      "suggested_amount": 1925.88,
+      "buy_target": {
+        "code": "513500",
+        "name": "博时标普500",
+        "premium": 10.2755,
+        "reason": "标普主标的"
+      },
+      "suggest_sell_tactical": false,
+      "peer_min_premium": 7.9109
+    }
   }
 }
