@@ -1,6 +1,6 @@
 {
   "asof": {
-    "built_at": "2026-11-03 10:10:44 北京时间",
+    "built_at": "2026-11-03 10:25:21 北京时间",
     "price_date": "2026-11-02",
     "nav_date": "2026-10-30",
     "premium_method": "历史：收盘价/单位净值-1；今日展示溢价优先用 QDII Lens 收盘参考溢价（价/IOPV-1）",
@@ -4984,7 +4984,7 @@
       "ref_premium_pct": 12.9247,
       "nav_premium_pct": 12.6431,
       "live_price": 0.0,
-      "live_asof": "2026-11-03 10:10:09",
+      "live_asof": "2026-11-03 10:25:09",
       "is_primary": false
     },
     {
@@ -4995,7 +4995,7 @@
       "ref_premium_pct": 12.9262,
       "nav_premium_pct": 12.6302,
       "live_price": 2.461,
-      "live_asof": "2026-11-03 10:10:23",
+      "live_asof": "2026-11-03 10:24:53",
       "is_primary": false
     },
     {
@@ -5006,7 +5006,7 @@
       "ref_premium_pct": 13.239,
       "nav_premium_pct": 12.8576,
       "live_price": 0.0,
-      "live_asof": "2026-11-03 10:10:18",
+      "live_asof": "2026-11-03 10:24:18",
       "is_primary": false
     },
     {
@@ -5017,7 +5017,7 @@
       "ref_premium_pct": 13.8444,
       "nav_premium_pct": 13.6044,
       "live_price": 2.425,
-      "live_asof": "2026-11-03 10:10:32",
+      "live_asof": "2026-11-03 10:25:14",
       "is_primary": false
     },
     {
@@ -5028,7 +5028,7 @@
       "ref_premium_pct": 14.0705,
       "nav_premium_pct": 13.763,
       "live_price": 2.681,
-      "live_asof": "2026-11-03 10:10:37",
+      "live_asof": "2026-11-03 10:25:13",
       "is_primary": false
     },
     {
@@ -5039,7 +5039,7 @@
       "ref_premium_pct": 14.1218,
       "nav_premium_pct": 13.6769,
       "live_price": 0.0,
-      "live_asof": "2026-11-03 10:10:30",
+      "live_asof": "2026-11-03 10:24:30",
       "is_primary": false
     },
     {
@@ -5050,7 +5050,7 @@
       "ref_premium_pct": 14.6951,
       "nav_premium_pct": 14.3252,
       "live_price": 2.073,
-      "live_asof": "2026-11-03 10:10:30",
+      "live_asof": "2026-11-03 10:25:15",
       "is_primary": false
     },
     {
@@ -5061,7 +5061,7 @@
       "ref_premium_pct": 15.124,
       "nav_premium_pct": 14.8148,
       "live_price": 0.0,
-      "live_asof": "2026-11-03 10:10:30",
+      "live_asof": "2026-11-03 10:24:30",
       "is_primary": false
     },
     {
@@ -5072,7 +5072,7 @@
       "ref_premium_pct": 16.4248,
       "nav_premium_pct": 16.1677,
       "live_price": 0.0,
-      "live_asof": "2026-11-03 10:10:03",
+      "live_asof": "2026-11-03 10:25:03",
       "is_primary": false
     },
     {
@@ -5083,7 +5083,7 @@
       "ref_premium_pct": 17.321,
       "nav_premium_pct": 17.2078,
       "live_price": 0.0,
-      "live_asof": "2026-11-03 10:10:36",
+      "live_asof": "2026-11-03 10:24:36",
       "is_primary": false
     },
     {
@@ -5094,7 +5094,7 @@
       "ref_premium_pct": 18.2609,
       "nav_premium_pct": 17.9476,
       "live_price": 2.244,
-      "live_asof": "2026-11-03 10:10:35",
+      "live_asof": "2026-11-03 10:25:14",
       "is_primary": false
     },
     {
@@ -5105,7 +5105,7 @@
       "ref_premium_pct": 20.24,
       "nav_premium_pct": 21.0252,
       "live_price": 0.0,
-      "live_asof": "2026-11-03 10:10:21",
+      "live_asof": "2026-11-03 10:24:21",
       "is_primary": true
     }
   ],
