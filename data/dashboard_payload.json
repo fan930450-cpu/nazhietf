@@ -1,6 +1,6 @@
 {
   "asof": {
-    "built_at": "2026-11-03 00:21:13 北京时间",
+    "built_at": "2026-11-03 09:48:10 北京时间",
     "price_date": "2026-11-02",
     "nav_date": "2026-10-30",
     "premium_method": "历史：收盘价/单位净值-1；今日展示溢价优先用 QDII Lens 收盘参考溢价（价/IOPV-1）",
@@ -4983,8 +4983,8 @@
       "iopv": 1.5807,
       "ref_premium_pct": 12.9247,
       "nav_premium_pct": 12.6431,
-      "live_price": 1.785,
-      "live_asof": "2026-11-02 15:35:15",
+      "live_price": 0.0,
+      "live_asof": "2026-11-03 09:47:09",
       "is_primary": false
     },
     {
@@ -4995,7 +4995,7 @@
       "ref_premium_pct": 12.9262,
       "nav_premium_pct": 12.6302,
       "live_price": 2.461,
-      "live_asof": "2026-11-02 15:34:59",
+      "live_asof": "2026-11-03 09:47:53",
       "is_primary": false
     },
     {
@@ -5005,8 +5005,8 @@
       "iopv": 2.1565,
       "ref_premium_pct": 13.239,
       "nav_premium_pct": 12.8576,
-      "live_price": 2.442,
-      "live_asof": "2026-11-02 15:35:15",
+      "live_price": 0.0,
+      "live_asof": "2026-11-03 09:47:18",
       "is_primary": false
     },
     {
@@ -5017,7 +5017,7 @@
       "ref_premium_pct": 13.8444,
       "nav_premium_pct": 13.6044,
       "live_price": 2.425,
-      "live_asof": "2026-11-02 15:34:59",
+      "live_asof": "2026-11-03 09:48:02",
       "is_primary": false
     },
     {
@@ -5028,7 +5028,7 @@
       "ref_premium_pct": 14.0705,
       "nav_premium_pct": 13.763,
       "live_price": 2.681,
-      "live_asof": "2026-11-02 15:34:59",
+      "live_asof": "2026-11-03 09:47:55",
       "is_primary": false
     },
     {
@@ -5038,8 +5038,8 @@
       "iopv": 2.0741,
       "ref_premium_pct": 14.1218,
       "nav_premium_pct": 13.6769,
-      "live_price": 2.367,
-      "live_asof": "2026-11-02 15:35:00",
+      "live_price": 0.0,
+      "live_asof": "2026-11-03 09:47:30",
       "is_primary": false
     },
     {
@@ -5050,7 +5050,7 @@
       "ref_premium_pct": 14.6951,
       "nav_premium_pct": 14.3252,
       "live_price": 2.073,
-      "live_asof": "2026-11-02 15:34:59",
+      "live_asof": "2026-11-03 09:47:42",
       "is_primary": false
     },
     {
@@ -5059,9 +5059,9 @@
       "close": 2.362,
       "iopv": 2.0517,
       "ref_premium_pct": 15.124,
-      "nav_premium_pct": 13.2963,
-      "live_price": 2.362,
-      "live_asof": "2026-11-02 15:35:45",
+      "nav_premium_pct": 14.8148,
+      "live_price": 0.0,
+      "live_asof": "2026-11-03 09:47:30",
       "is_primary": false
     },
     {
@@ -5071,8 +5071,8 @@
       "iopv": 1.4198,
       "ref_premium_pct": 16.4248,
       "nav_premium_pct": 16.1677,
-      "live_price": 1.653,
-      "live_asof": "2026-11-02 15:35:15",
+      "live_price": 0.0,
+      "live_asof": "2026-11-03 09:47:03",
       "is_primary": false
     },
     {
@@ -5082,8 +5082,8 @@
       "iopv": 1.7678,
       "ref_premium_pct": 17.321,
       "nav_premium_pct": 17.2078,
-      "live_price": 2.074,
-      "live_asof": "2026-11-02 15:35:15",
+      "live_price": 0.0,
+      "live_asof": "2026-11-03 09:47:36",
       "is_primary": false
     },
     {
@@ -5094,7 +5094,7 @@
       "ref_premium_pct": 18.2609,
       "nav_premium_pct": 17.9476,
       "live_price": 2.244,
-      "live_asof": "2026-11-02 15:34:59",
+      "live_asof": "2026-11-03 09:47:53",
       "is_primary": false
     },
     {
@@ -5104,8 +5104,8 @@
       "iopv": 1.7831,
       "ref_premium_pct": 20.24,
       "nav_premium_pct": 21.0252,
-      "live_price": 2.144,
-      "live_asof": "2026-11-02 15:35:45",
+      "live_price": 0.0,
+      "live_asof": "2026-11-03 09:47:21",
       "is_primary": true
     }
   ],
@@ -5220,8 +5220,8 @@
             "aum_as_of": "2026-09-30",
             "turnover_cny": 511165171.0,
             "trading_date": "2026-11-02",
-            "tracking_error_pct": 1.04,
-            "tracking_asof": "2026-10-30",
+            "tracking_error_pct": null,
+            "tracking_asof": null,
             "is_today": true,
             "why": "今日优先：与最低溢价只差 0.25 个点，成交约 5.1 亿，管理+托管费 0.75%。",
             "nav_date": "2026-10-30",
@@ -5239,8 +5239,8 @@
             "aum_as_of": "2026-09-30",
             "turnover_cny": 203746892.0,
             "trading_date": "2026-11-02",
-            "tracking_error_pct": 2.14,
-            "tracking_asof": "2026-10-30",
+            "tracking_error_pct": null,
+            "tracking_asof": null,
             "is_today": false,
             "why": "溢价和短名单最低一档几乎一样（差 0.00 个点），成交够用。价差在约 2 个点内，今天让给了费率更低或规模更大的一只。",
             "nav_date": "2026-10-30",
