@@ -1154,7 +1154,8 @@
     return digits.length >= 8 && digits.slice(0, 8) === shanghaiClock(new Date()).ymd;
   }
   function freshIopv(code) {
-    if (!code || !inTradingSession(shanghaiClock(new Date()))) return null;
+    // 午休和收盘后，腾讯仍会给出今天的 IOPV。只要时间戳是今天就用来算回撤，不要退回滞后的公布净值。
+    if (!code) return null;
     const q = liveMap[code];
     if (q && q.iopv > 0 && stampIsToday(q.stamp)) return { iopv: q.iopv, stamp: q.stamp, source: '行情' };
     if (code === '159501' && D.primary && Number(D.primary.quote_iopv) > 0 && stampIsToday(D.primary.quote_date)) {
@@ -1486,6 +1487,10 @@
     const afternoon = clock.mins >= 13 * 60 && clock.mins <= 15 * 60;
     return morning || afternoon;
   }
+  function inQuoteWindow(clock) {
+    if (!clock || clock.weekday === 0 || clock.weekday === 6) return false;
+    return clock.mins >= 9 * 60 + 30 && clock.mins <= 15 * 60 + 5;
+  }
   function formatStamp(stamp) {
     if (!/^\d{14}$/.test(stamp || '')) return '';
     return `${stamp.slice(0, 4)}-${stamp.slice(4, 6)}-${stamp.slice(6, 8)} ${stamp.slice(8, 10)}:${stamp.slice(10, 12)}:${stamp.slice(12, 14)}`;
@@ -1591,7 +1596,7 @@
       el.innerHTML = `<strong>${when}</strong> · 非交易时段，显示最近一笔公开行情，已停止自动刷新。`;
       return;
     }
-    el.innerHTML = `<strong>${when}</strong> · 交易时段约每 ${LIVE_POLL_MS / 1000} 秒刷新现价 / IOPV / 溢价。`;
+    el.innerHTML = `<strong>${when}</strong> · 今日行情约每 ${LIVE_POLL_MS / 1000} 秒刷新现价 / IOPV / 溢价。`;
   }
   function paint159501HeroFromLive() {
     if ((document.getElementById('etfSelect').value || '159501') === '159501') return;
@@ -1677,13 +1682,13 @@
       liveMeta.error = '';
       applyLiveQuotes();
       const clock = shanghaiClock(new Date());
-      const session = inTradingSession(clock) && stamp && stamp.slice(0, 8) === clock.ymd;
+      const session = inQuoteWindow(clock) && stamp && stamp.slice(0, 8) === clock.ymd;
       paintLiveStatus(session ? 'live' : 'closed');
       return session;
     } catch (err) {
       liveMeta.error = String(err && err.message || err);
       paintLiveStatus('error');
-      return inTradingSession(shanghaiClock(new Date()));
+      return inQuoteWindow(shanghaiClock(new Date()));
     } finally {
       liveBusy = false;
     }
@@ -1695,7 +1700,7 @@
   function startLivePoll() {
     stopLivePoll();
     if (document.hidden) return;
-    if (!inTradingSession(shanghaiClock(new Date()))) return;
+    if (!inQuoteWindow(shanghaiClock(new Date()))) return;
     liveTimer = setInterval(() => {
       if (!document.hidden) refreshLiveQuotes().then(session => { if (!session) stopLivePoll(); });
     }, LIVE_POLL_MS);
