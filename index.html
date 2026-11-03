@@ -224,7 +224,7 @@
         <div>
           <label for="etfSelect">选择 ETF</label>
           <select id="etfSelect"></select>
-          <div class="field-hint" style="font-size:.75rem;color:var(--muted);margin-top:.35rem;line-height:1.45">回撤系数看的是距近一年最高净值的回撤，不是较上月净值。买多少主要由回撤决定。溢价系数只按各只自己的今日溢价相对自己的 P60 做轻度修正（约 0.85–1.15），高溢价再轻轻封顶，深回撤时溢价系数还有下限。</div>
+          <div class="field-hint" style="font-size:.75rem;color:var(--muted);margin-top:.35rem;line-height:1.45">回撤系数默认用今日盘中 IOPV 相对近一年最高公布净值，不是等明天的净值日。买多少主要由这个回撤决定。没有今日 IOPV 时退回已公布净值，并标明滞后。</div>
         </div>
       </div>
       <div class="form-row">
@@ -233,7 +233,7 @@
           <input id="baseline" type="number" min="0" step="100" value="3000" />
         </div>
         <div>
-          <label for="peakDd">距近一年最高净值回撤 %</label>
+          <label for="peakDd">距近一年最高净值回撤 %（按今日盘中 IOPV）</label>
           <input id="peakDd" type="number" min="0" step="0.01" />
           <div class="field-hint" id="peakHint" style="font-size:.75rem;color:var(--muted);margin-top:.35rem;line-height:1.45">口径：最新净值相对近一年内最高净值。这是回撤系数的输入，不是较上月同一天。</div>
         </div>
@@ -274,11 +274,11 @@
       <details class="advanced">
         <summary>系数规则说明</summary>
         <p style="font-size:.85rem;line-height:1.55;margin:.6rem 0 0">
-          <strong>回撤口径</strong>：回撤系数看「距近一年最高净值的回撤」（最新净值 ÷ 近 365 天内最高净值 − 1，取正数）。<strong>较上月净值</strong>（约一个月前同一天）只显示作参照，不进入系数。<br/>
+          <strong>回撤口径</strong>：交易时段默认用「今日盘中 IOPV ÷ 近一年最高公布净值 − 1」的下跌幅度（取正数）。高点仍是已公布净值历史里的近一年高点。已公布净值回撤另显示，方便对照滞后。没有今日 IOPV 时，输入退回已公布净值回撤。<strong>较上月净值</strong>只作参照，不进系数。<br/>
           回撤系数，相邻锚点之间线性：&lt;5%→1.0；5%→1.67；10%→3.33；15%→6.67；20%→8.33；25%→10.0；30%→11.67；40%→13.33；&gt;40% 仍为 13.33。例如 7.5% 约为 2.5，12.5% 约为 5.0。最新净值日相对前一净值日下跌 ≥3%，在这个系数上再 +0.5。<br/>
           溢价系数只轻度修正金额，买多少仍主要由回撤系数决定。相对自己的 P60 连续变化：比 P60 低 5 个点及以上为 1.15，持平为 1.00，高出 5 个点及以上为 0.85，中间线性。绝对软顶：P≥22% 时不超过 0.85，P≥18% 时不超过 0.90，P≥15% 时不超过 0.95。比最便宜同类贵 5 个点及以上时不超过 0.90。回撤够深时设下限，避免溢价把金额砍得太狠：距高点回撤 ≥15% 时系数不低于 0.95，≥10% 时不低于 0.90。这样长期高溢价不会被抬高的 P60 洗成中性，但也不再把系数一刀砍到 0.50。<br/>
           建议金额 = 基准 × 回撤系数 × 溢价系数，<strong>没有 2 倍上限</strong>。159501 明显贵时，买入代码仍指向纳指短名单里更合适的一只。标普500不参与这个金额，用下面那张标普计算器（基准 2000，另一套回撤阶梯）。卖出不进这个买入金额：触发时记录本按这一边的持仓市值给出人民币，单次约 6%，且不超过这一边本年剩余的 20%，卖后仍留至少 75% 的这一边峰值市值。纳指和标普不合并。<br/>
-          盘中「今日溢价 P」在页面打开且处于 A 股交易时段时，大约每 20 秒从公开行情重取，并重算溢价系数、建议金额和短名单排序。P60、高点回撤、单日净值涨跌不跟着这 20 秒变。
+          盘中「今日溢价 P」和「距高点回撤」在页面打开且处于 A 股交易时段时，大约每 20 秒按公开行情重取。回撤跟着今日 IOPV 变。P60 和单日净值涨跌仍用定时快照。没有今日 IOPV 时，回撤退回已公布净值。
         </p>
       </details>
       <div class="calc-out" id="calcOut"></div>
@@ -293,7 +293,7 @@
         <div>
           <label for="spxSelect">选择标普500 ETF</label>
           <select id="spxSelect"></select>
-          <div class="field-hint" style="font-size:.75rem;color:var(--muted);margin-top:.35rem;line-height:1.45">买多少主要由距近一年最高净值的回撤决定。溢价系数只用这只自己的今日溢价、自己的 P60，以及标普短名单里更便宜的一只，不用纳指的 P60。</div>
+          <div class="field-hint" style="font-size:.75rem;color:var(--muted);margin-top:.35rem;line-height:1.45">买多少默认按这只标普 ETF 的今日盘中 IOPV，相对它自己近一年最高公布净值。没有今日 IOPV 时退回已公布净值。溢价系数只用标普自己的 P 和 P60。</div>
         </div>
       </div>
       <div class="form-row">
@@ -302,7 +302,7 @@
           <input id="spxBaseline" type="number" min="0" step="100" value="2000" />
         </div>
         <div>
-          <label for="spxPeakDd">距近一年最高净值回撤 %</label>
+          <label for="spxPeakDd">距近一年最高净值回撤 %（按今日盘中 IOPV）</label>
           <input id="spxPeakDd" type="number" min="0" step="0.01" />
           <div class="field-hint" id="spxPeakHint" style="font-size:.75rem;color:var(--muted);margin-top:.35rem;line-height:1.45">口径：这只标普 ETF 的最新净值相对近一年内最高净值。</div>
         </div>
@@ -332,7 +332,7 @@
       <details class="advanced">
         <summary>标普系数规则</summary>
         <p style="font-size:.85rem;line-height:1.55;margin:.6rem 0 0">
-          基准默认 <strong>2000</strong> 元。回撤不足 5% 时系数为 1，金额就是基准。从 5% 起，系数为回撤百分点 ÷ 2，金额大约是回撤百分点 × 1000：5%→2.5（¥5000），10%→5（¥10000），15%→7.5（¥15000），20%→10（¥20000），25%→12.5（¥25000），30%→15（¥30000），35%→17.5（¥35000），40%→20（¥40000）。中间线性，例如 7.5%→3.75（¥7500）。比 40% 更深仍按同一斜率，<strong>不封顶</strong>。前一净值日跌幅 ≥3%，系数再 +0.5。<br/>
+          基准默认 <strong>2000</strong> 元。回撤默认用今日盘中 IOPV 相对近一年最高公布净值；没有今日 IOPV 时用已公布净值，并标明滞后。回撤不足 5% 时系数为 1，金额就是基准。从 5% 起，系数为回撤百分点 ÷ 2，金额大约是回撤百分点 × 1000：5%→2.5（¥5000），10%→5（¥10000），15%→7.5（¥15000），20%→10（¥20000），25%→12.5（¥25000），30%→15（¥30000），35%→17.5（¥35000），40%→20（¥40000）。中间线性，例如 7.5%→3.75（¥7500）。比 40% 更深仍按同一斜率，<strong>不封顶</strong>。前一净值日跌幅 ≥3%，系数再 +0.5。<br/>
           溢价系数和纳指同一套轻度修正（大约 0.85–1.15，高溢价软顶，深回撤有下限），但 P、P60、最便宜同类都只取标普500短名单。513500 明显贵时，买入代码改到标普短名单里更合适的一只。建议金额 = 基准 × 回撤系数 × 溢价系数。<br/>
           卖出只在这只净值处于近 60 日新高且溢价明显贵时触发，金额只按标普持仓：大约标普市值的 6%，且不超过标普本年剩余的 20% 额度，卖后仍留下至少 75% 的标普峰值市值。仅供个人记录辅助，非投资建议。
         </p>
@@ -547,7 +547,7 @@
       <ul class="checklist">
         <li><span class="n">1</span><div>看本页顶部<strong>今日建议定投金额</strong>与建议标的。标普500在下面单独一张卡片，基准 2000，不替换纳指金额。交易日大约从 10:30（北京时间）起，页面会按小时更新到 14:20。</div></li>
         <li><span class="n">2</span><div>核对<strong>今日溢价 P</strong>与<strong>P60</strong>。159501 明显贵时，到「今日同类怎么选」里看纳指短名单的今日优先；标普500是另一条可选，不替换顶部金额。</div></li>
-        <li><span class="n">3</span><div>看<strong>距近一年最高净值的回撤</strong>：这是回撤系数的输入。较上月净值只作参照。回撤越深，建议金额越高，深回撤可以到基准的 13.33 倍，先核对备用金。</div></li>
+        <li><span class="n">3</span><div>看<strong>距近一年最高净值的回撤（按今日盘中 IOPV）</strong>：这是回撤系数的输入。旁边仍有已公布净值回撤。没有今日 IOPV 时用已公布数字，并标明滞后。较上月净值只作参照。</div></li>
         <li><span class="n">4</span><div>若给出卖出金额：纳指和标普分开算。每一边大约是自己市值的 6%，不超过这一边本年剩余的 20%，卖完还要留下至少 75% 的这一边峰值市值。不要把两边合成一个底仓。</div></li>
         <li><span class="n">5</span><div>数据在交易日大约每小时刷新一次（北京时间 <strong>10:20–14:20</strong>），不是实时行情；下单仍以券商 IOPV 为准。也可在仓库 Actions 里手动运行「刷新并部署日报」。不需要 Grok Bot。</div></li>
       </ul>
@@ -761,8 +761,12 @@
     const navDate = (etf && etf.nav_date) || (D.primary && D.primary.nav_date) || '';
     const momFrom = (etf && etf.mom_from_date) || (D.primary && D.primary.mom_from_date) || '';
     const momTo = (etf && etf.mom_to_date) || (D.primary && D.primary.mom_to_date) || '';
+    const ddView = drawdownView(etf);
+    const ddHow = ddView.source === 'iopv'
+      ? `按今日盘中 IOPV，高点${peakDate || '—'}`
+      : `已公布净值，净值日${navDate || '—'}，滞后`;
     const reasonParts = [
-      `距近一年高点回撤${fmt(peak)}%（${peakDate}→${navDate}）→ 回撤系数 ${fmt(dd.c)}（${dd.label}）`,
+      `距近一年高点回撤${fmt(peak)}%（${ddHow}）→ 回撤系数 ${fmt(dd.c)}（${dd.label}）`,
       `溢价 ${fmt(p)}%（${pr.label}）→ 溢价系数 ${fmt(pr.c)}`,
       `较上月净值${mom >= 0 ? '+' : ''}${fmt(mom)}%（${momFrom}→${momTo}，只作参照）`,
     ];
@@ -782,7 +786,7 @@
       <span class="badge mid">回撤系数 ${fmt(dd.c)} · 溢价系数 ${fmt(pr.c)}</span>
     `;
     document.getElementById('kpiGrid').innerHTML = `
-      <div class="kpi"><div class="k">距近一年高点回撤</div><div class="v">${fmt(peak)}%</div><div class="s">高点 ${peakDate || '—'} → 净值日 ${navDate || '—'} · 回撤系数的输入</div></div>
+      <div class="kpi"><div class="k">${ddView.source === 'iopv' ? '距近一年高点回撤（按今日盘中 IOPV）' : '距近一年高点回撤（已公布净值）'}</div><div class="v">${fmt(peak)}%</div><div class="s">${ddKpiSub(etf, peak)}</div></div>
       <div class="kpi"><div class="k">今日溢价 P</div><div class="v">${fmt(p)}%</div><div class="s">相对 P60 ${fmt(p - p60)} 个百分点</div></div>
       <div class="kpi"><div class="k">近60日溢价中位数 P60</div><div class="v">${fmt(p60)}%</div><div class="s">净值折溢价滚动中位数</div></div>
       <div class="kpi"><div class="k">较上月净值（参照）</div><div class="v ${signCls(mom)}">${mom >= 0 ? '+' : ''}${fmt(mom)}%</div><div class="s">${momFrom} → ${momTo} · 不进回撤系数</div></div>
@@ -904,8 +908,12 @@
     const navDate = (etf && etf.nav_date) || '';
     const momFrom = (etf && etf.mom_from_date) || '';
     const momTo = (etf && etf.mom_to_date) || '';
+    const ddView = drawdownView(etf);
+    const ddHow = ddView.source === 'iopv'
+      ? `按今日盘中 IOPV，高点${peakDate || '—'}`
+      : `已公布净值，净值日${navDate || '—'}，滞后`;
     const reasonParts = [
-      `距近一年高点回撤${fmt(peak)}%（${peakDate || '—'}→${navDate || '—'}）→ 回撤系数 ${fmt(dd.c)}（${dd.label}）`,
+      `距近一年高点回撤${fmt(peak)}%（${ddHow}）→ 回撤系数 ${fmt(dd.c)}（${dd.label}）`,
       `溢价 ${fmt(p)}%（${pr.label}）→ 溢价系数 ${fmt(pr.c)}`,
       `较上月净值${mom == null || Number.isNaN(mom) ? '—' : ((mom >= 0 ? '+' : '') + fmt(mom) + '%')}（${momFrom || '—'}→${momTo || '—'}，只作参照）`,
     ];
@@ -934,7 +942,7 @@
     const kpi = document.getElementById('spxKpi');
     if (kpi) {
       kpi.innerHTML = `
-        <div class="kpi"><div class="k">距近一年高点回撤</div><div class="v">${fmt(peak)}%</div><div class="s">高点 ${peakDate || '—'} → 净值日 ${navDate || '—'} · 回撤系数的输入</div></div>
+        <div class="kpi"><div class="k">${ddView.source === 'iopv' ? '距近一年高点回撤（按今日盘中 IOPV）' : '距近一年高点回撤（已公布净值）'}</div><div class="v">${fmt(peak)}%</div><div class="s">${ddKpiSub(etf, peak)}</div></div>
         <div class="kpi"><div class="k">今日溢价 P</div><div class="v">${fmt(p)}%</div><div class="s">相对自己的 P60 ${p60 == null || Number.isNaN(p - p60) ? '—' : fmt(p - p60)} 个百分点</div></div>
         <div class="kpi"><div class="k">标普 P60</div><div class="v">${fmt(p60)}%</div><div class="s">这只标普近60日净值溢价中位数</div></div>
         <div class="kpi"><div class="k">较上月净值（参照）</div><div class="v ${mom == null || Number.isNaN(mom) ? '' : signCls(mom)}">${mom == null || Number.isNaN(mom) ? '—' : ((mom >= 0 ? '+' : '') + fmt(mom) + '%')}</div><div class="s">${momFrom || '—'} → ${momTo || '—'} · 不进回撤系数</div></div>
@@ -950,11 +958,7 @@
     const momRef = document.getElementById('spxMom');
     const peakDate = (etf && etf.peak_date) || '';
     const navDate = (etf && etf.nav_date) || '';
-    if (hint) {
-      hint.textContent = peakDate && navDate
-        ? `口径：最新净值相对近一年内最高净值（高点 ${peakDate} → 净值日 ${navDate}）。`
-        : '口径：这只标普 ETF 的最新净值相对近一年内最高净值。';
-    }
+    if (hint) hint.textContent = drawdownHintText(etf);
     if (dayHint) {
       const from = (etf && etf.day_from_date) || '';
       dayHint.textContent = from && navDate
@@ -1009,8 +1013,9 @@
     if (!etf) return;
     const q = liveMap[SPX_CODE];
     const peerMin = spxCheapestOther(SPX_CODE);
+    const ddInfo = drawdownView(etf);
     paintSpxHero(
-      Number(etf.peak_dd_pct),
+      ddInfo.pct == null ? Number(etf.peak_dd_pct) : ddInfo.pct,
       Number(etf.day_chg_pct),
       etf.mom_pct == null ? NaN : Number(etf.mom_pct),
       q ? q.premium : Number(etf.p),
@@ -1031,8 +1036,10 @@
     }
     spxPLocked = false;
     spxPeerLocked = false;
+    spxDdLocked = false;
     const q = liveMap[etf.code];
-    document.getElementById('spxPeakDd').value = etf.peak_dd_pct == null ? '' : fmt(etf.peak_dd_pct);
+    const ddInfo = drawdownView(etf);
+    document.getElementById('spxPeakDd').value = ddInfo.pct == null ? '' : fmt(ddInfo.pct);
     document.getElementById('spxDayChg').value = etf.day_chg_pct == null ? '' : fmt(etf.day_chg_pct);
     document.getElementById('spxPToday').value = fmt(q ? q.premium : etf.p);
     document.getElementById('spxP60').value = etf.p60 == null ? '' : fmt(etf.p60);
@@ -1113,12 +1120,7 @@
     const peakDate = (etf && etf.peak_date) || '';
     const navDate = (etf && etf.nav_date) || '';
     const stale = etf && etf.nav_stale;
-    if (hint) {
-      hint.textContent = peakDate && navDate
-        ? `口径：最新净值相对近一年内最高净值（高点 ${peakDate} → 净值日 ${navDate}）。这是回撤系数的输入，不是较上月同一天。`
-          + (stale ? ` 这只净值日 ${navDate}，落后于同类最新 ${etf.nav_freshest}，回撤窗口和其他基金不一致。` : '')
-        : '口径：最新净值相对近一年内最高净值。这是回撤系数的输入，不是较上月同一天。';
-    }
+    if (hint) hint.textContent = drawdownHintText(etf);
     if (dayHint) {
       const from = (etf && etf.day_from_date) || '';
       dayHint.textContent = from && navDate
@@ -1133,13 +1135,82 @@
   const liveMap = {};
   let pLocked = false;
   let peerLocked = false;
+  let ddLocked = false;
+  let spxDdLocked = false;
+  function peakNavOf(etf) {
+    if (!etf) return null;
+    if (etf.peak_nav != null) return Number(etf.peak_nav);
+    if (etf.code === '159501' && D.primary && D.primary.peak_nav != null) return Number(D.primary.peak_nav);
+    return null;
+  }
+  function iopvDrawdownPct(peakNav, iopv) {
+    const peak = Number(peakNav);
+    const est = Number(iopv);
+    if (!(peak > 0) || !(est > 0)) return null;
+    return Math.max(0, (peak - est) / peak * 100);
+  }
+  function stampIsToday(stamp) {
+    const digits = String(stamp || '').replace(/\D/g, '');
+    return digits.length >= 8 && digits.slice(0, 8) === shanghaiClock(new Date()).ymd;
+  }
+  function freshIopv(code) {
+    if (!code || !inTradingSession(shanghaiClock(new Date()))) return null;
+    const q = liveMap[code];
+    if (q && q.iopv > 0 && stampIsToday(q.stamp)) return { iopv: q.iopv, stamp: q.stamp, source: '行情' };
+    if (code === '159501' && D.primary && Number(D.primary.quote_iopv) > 0 && stampIsToday(D.primary.quote_date)) {
+      return { iopv: Number(D.primary.quote_iopv), stamp: String(D.primary.quote_date).replace(/-/g, '') + '000000', source: '快照' };
+    }
+    const peer = (D.peers || []).find(p => p.code === code);
+    if (peer && Number(peer.iopv) > 0 && stampIsToday(peer.live_asof)) {
+      return { iopv: Number(peer.iopv), stamp: String(peer.live_asof).replace(/\D/g, ''), source: '快照' };
+    }
+    const pools = [].concat((D.calculator && D.calculator.etfs) || [], (D.spx && D.spx.etfs) || []);
+    const row = pools.find(e => e && e.code === code && Number(e.iopv) > 0 && stampIsToday(e.iopv_asof));
+    if (row) return { iopv: Number(row.iopv), stamp: String(row.iopv_asof).replace(/\D/g, ''), source: '快照' };
+    return null;
+  }
+  function drawdownView(etf) {
+    const published = etf && etf.peak_dd_pct != null ? Number(etf.peak_dd_pct) : null;
+    const fresh = etf ? freshIopv(etf.code) : null;
+    const peakNav = peakNavOf(etf);
+    const iopvDd = fresh ? iopvDrawdownPct(peakNav, fresh.iopv) : null;
+    if (iopvDd != null) return { pct: iopvDd, source: 'iopv', fresh, published, peakNav };
+    return { pct: published, source: 'nav', fresh: null, published, peakNav };
+  }
+  function drawdownHintText(etf) {
+    const info = drawdownView(etf);
+    const peakDate = (etf && etf.peak_date) || (etf && etf.code === '159501' && D.primary && D.primary.peak_date) || '—';
+    const navDate = (etf && etf.nav_date) || '—';
+    const pub = info.published == null ? '—' : fmt(info.published) + '%';
+    const stale = etf && etf.nav_stale ? ` 这只净值日 ${navDate}，落后于同类最新 ${etf.nav_freshest}。` : '';
+    if (info.source === 'iopv' && info.fresh) {
+      const when = formatStamp(info.fresh.stamp) || info.fresh.stamp;
+      return `口径：距近一年最高净值回撤（按今日盘中 IOPV）。IOPV ${fmt(info.fresh.iopv, 4)}（${when}），高点净值 ${info.peakNav == null ? '—' : fmt(info.peakNav, 4)}（${peakDate}）。已公布净值回撤 ${pub}（净值日 ${navDate}）。${stale}`;
+    }
+    return `没有今日盘中 IOPV，回撤暂用已公布净值 ${pub}（净值日 ${navDate}，高点 ${peakDate}）。这个数字滞后 1–2 天，不是今天的估计净值。${stale}`;
+  }
+  function ddKpiSub(etf, inputPct) {
+    const info = drawdownView(etf);
+    const peakDate = (etf && etf.peak_date) || '—';
+    const navDate = (etf && etf.nav_date) || '—';
+    const pub = info.published == null ? '—' : fmt(info.published) + '%';
+    const manual = info.pct != null && inputPct != null && !Number.isNaN(Number(inputPct)) && Math.abs(Number(inputPct) - info.pct) > 0.05;
+    if (manual) return `输入已改。已公布净值回撤 ${pub}（净值日 ${navDate}）`;
+    if (info.source === 'iopv' && info.fresh) {
+      const when = formatStamp(info.fresh.stamp) || '';
+      return `IOPV ${fmt(info.fresh.iopv, 4)}${when ? ' · ' + when : ''} · 高点 ${peakDate} · 已公布净值回撤 ${pub}`;
+    }
+    return `暂用已公布净值（滞后）· 高点 ${peakDate} → 净值日 ${navDate}`;
+  }
   function applyEtf(code) {
     const etf = calculatorEtfs().find(e => e.code === code) || calculatorEtfs()[0];
     if (!etf) return;
     pLocked = false;
     peerLocked = false;
+    ddLocked = false;
     const q = liveMap[etf.code];
-    document.getElementById('peakDd').value = fmt(etf.peak_dd_pct);
+    const ddInfo = drawdownView(etf);
+    document.getElementById('peakDd').value = ddInfo.pct == null ? '' : fmt(ddInfo.pct);
     document.getElementById('dayChg').value = fmt(etf.day_chg_pct);
     document.getElementById('pToday').value = fmt(q ? q.premium : etf.p);
     document.getElementById('p60').value = fmt(etf.p60);
@@ -1247,6 +1318,7 @@
     document.getElementById(id).addEventListener('input', () => {
       if (id === 'pToday') pLocked = true;
       if (id === 'peerMin') peerLocked = true;
+      if (id === 'peakDd') ddLocked = true;
       if (id === 'monthInvested' || id === 'reserve') saveCash();
       recompute();
     });
@@ -1257,6 +1329,7 @@
       document.getElementById(id).addEventListener('input', () => {
         if (id === 'spxPToday') spxPLocked = true;
         if (id === 'spxPeerMin') spxPeerLocked = true;
+        if (id === 'spxPeakDd') spxDdLocked = true;
         recomputeSpx();
       });
     });
@@ -1525,8 +1598,9 @@
     const etf = calculatorEtfs().find(e => e.code === '159501');
     if (!etf) return;
     const q = liveMap['159501'];
+    const ddInfo = drawdownView(etf);
     paintHero(
-      Number(etf.peak_dd_pct),
+      ddInfo.pct == null ? Number(etf.peak_dd_pct) : ddInfo.pct,
       Number(etf.day_chg_pct),
       Number(etf.mom_pct),
       q ? q.premium : Number(etf.p),
@@ -1545,6 +1619,12 @@
     if (!peerLocked) {
       const peer = cheapestOtherPremium(selected);
       if (peer != null) document.getElementById('peerMin').value = fmt(peer);
+    }
+    if (!ddLocked) {
+      const etf = calculatorEtfs().find(e => e.code === selected);
+      const info = drawdownView(etf);
+      if (info.pct != null) document.getElementById('peakDd').value = fmt(info.pct);
+      setPeakHint(etf);
     }
     (D.peers || []).forEach(p => {
       const q = liveMap[p.code];
@@ -1567,6 +1647,12 @@
       if (!spxPeerLocked) {
         const peer = spxCheapestOther(spxCode);
         if (peer != null) document.getElementById('spxPeerMin').value = fmt(peer);
+      }
+      if (!spxDdLocked) {
+        const etf = spxEtfs().find(e => e.code === spxCode);
+        const info = drawdownView(etf);
+        if (info.pct != null) document.getElementById('spxPeakDd').value = fmt(info.pct);
+        spxSetHints(etf);
       }
       recomputeSpx();
       paintSpxHeroFromPrimary();

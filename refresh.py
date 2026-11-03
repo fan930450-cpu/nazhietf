@@ -417,6 +417,10 @@ def _self_check() -> None:
     odd = parse_tencent_fields(sample_fields)
     if not odd or abs(odd["premium"] - 20.49) > 1e-6:
         raise SystemExit(f"IOPV 异常时应改用溢价字段: {odd}")
+    published = iopv_drawdown_pct(1.9591, 1.7831)
+    live_dd = iopv_drawdown_pct(1.9591, 1.7586)
+    if published is None or live_dd is None or not (live_dd > published + 1.0):
+        raise SystemExit(f"IOPV 回撤应高于已公布净值回撤: {published} {live_dd}")
 
 
 def _official_bars(bars: list[dict]) -> list[dict]:
@@ -1520,6 +1524,17 @@ def _cboe_vix() -> list[dict]:
     return rows
 
 
+def iopv_drawdown_pct(peak_nav: float | None, iopv: float | None) -> float | None:
+    """距近一年最高公布净值的回撤，分母是高点净值，分子用今日 IOPV 代替滞后的公布净值。"""
+    if peak_nav is None or iopv is None:
+        return None
+    peak = float(peak_nav)
+    est = float(iopv)
+    if peak <= 0 or est <= 0:
+        return None
+    return max(0.0, (peak - est) / peak * 100.0)
+
+
 def trailing_drawdown_pct(points: list[dict], window_days: int = US_PEAK_WINDOW_DAYS) -> dict[str, float]:
     """收盘价 ÷ 近 window_days 天（含当天）最高收盘价 − 1，单位百分点。负数或 0。"""
     out: dict[str, float] = {}
@@ -1718,8 +1733,10 @@ def build_payload(
     nav_dates = {code: st["nav_date"] for code, st in (peer_stats or {}).items() if st.get("nav_date")}
     nav_dates[PRIMARY] = latest_nav_date
     picks = align_pick_nav_dates(picks, nav_dates)
-    dc, dlabel = drawdown_coef(peak_dd, day_chg)
-    pc, plabel, is_expensive = premium_coef(p_for_calc, p60, peer_min, peak_dd)
+    iopv_dd = iopv_drawdown_pct(metrics.get("peak_nav"), live_primary.get("iopv") if use_live else None)
+    dd_for_amount = iopv_dd if iopv_dd is not None else peak_dd
+    dc, dlabel = drawdown_coef(dd_for_amount, day_chg)
+    pc, plabel, is_expensive = premium_coef(p_for_calc, p60, peer_min, dd_for_amount)
     base = DEFAULT_BASELINE
     amount = base * dc * pc
     suggest_sell = bool(is_nav_60_high and is_expensive)
@@ -1747,10 +1764,17 @@ def build_payload(
         }
     parts = [
         (
-            f"距近一年高点回撤{peak_dd:.2f}%（高点{metrics['peak_date']}→净值日{latest_nav_date}）"
-            f"→回撤系数{dc:.2f}（{dlabel}）"
-            if peak_dd is not None
-            else "近一年高点回撤缺失"
+            (
+                f"距近一年高点回撤{dd_for_amount:.2f}%（按今日盘中IOPV，高点{metrics['peak_date']}；已公布净值回撤{peak_dd:.2f}%）"
+                f"→回撤系数{dc:.2f}（{dlabel}）"
+                if iopv_dd is not None and peak_dd is not None
+                else (
+                    f"距近一年高点回撤{peak_dd:.2f}%（已公布净值，高点{metrics['peak_date']}→净值日{latest_nav_date}）"
+                    f"→回撤系数{dc:.2f}（{dlabel}）"
+                    if peak_dd is not None
+                    else "近一年高点回撤缺失"
+                )
+            )
         ),
         f"溢价{p_for_calc:.2f}%（{plabel}）→溢价系数{pc:.2f}",
         (
@@ -1800,6 +1824,7 @@ def build_payload(
             "mom_from_date": prev_date,
             "mom_to_date": latest_nav_date,
             "peak_dd_pct": peak_dd,
+            "peak_dd_iopv_pct": None if iopv_dd is None else round(iopv_dd, 4),
             "peak_nav": metrics["peak_nav"],
             "peak_date": metrics["peak_date"],
             "peak_window_start": metrics["peak_window_start"],
@@ -1812,6 +1837,7 @@ def build_payload(
             "P60": round(p60, 4),
             "mom_pct": round(mom_pct, 4) if mom_pct is not None else None,
             "peak_dd_pct": peak_dd,
+            "peak_dd_iopv_pct": None if iopv_dd is None else round(iopv_dd, 4),
             "peak_date": metrics["peak_date"],
             "day_chg_pct": day_chg,
             "drawdown_coef": round(dc, 4),
@@ -1860,6 +1886,15 @@ def build_payload(
             )
         },
     }
+    def _stamp_iopv(rows: list[dict] | None) -> None:
+        for row in rows or []:
+            quote = spot.get(row.get("code") or "") or {}
+            if quote.get("iopv"):
+                row["iopv"] = quote["iopv"]
+                row["iopv_asof"] = quote.get("date") or ""
+
+    _stamp_iopv((payload.get("calculator") or {}).get("etfs"))
+    _stamp_iopv((payload.get("spx") or {}).get("etfs"))
     atomic_write(
         ROOT / "data.js",
         "window.DASHBOARD_DATA = " + json.dumps(payload, ensure_ascii=False, separators=(",", ":")) + ";\n",
