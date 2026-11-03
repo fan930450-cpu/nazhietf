@@ -554,6 +554,23 @@
     </div>
   </section>
 
+  <section id="usSection">
+    <h2>美股回撤与恐慌指数 <span class="hint">QQQ 对应纳指 · SPY 对应标普 · VIX 用右轴</span></h2>
+    <div class="card">
+      <div class="ledger-actions" id="usRanges">
+        <button type="button" class="btn" data-us-range="31">近一个月</button>
+        <button type="button" class="btn" data-us-range="183">近半年</button>
+        <button type="button" class="btn primary" data-us-range="365">近一年</button>
+      </div>
+      <div class="grid" id="usChips" style="margin-top:12px"></div>
+      <div class="chart-box" style="margin-top:12px">
+        <canvas id="usChart"></canvas>
+        <svg class="fallback-chart" id="usSvg" style="display:none" viewBox="0 0 1000 320" preserveAspectRatio="none"></svg>
+      </div>
+      <p class="pick-src" id="usCaption"></p>
+    </div>
+  </section>
+
   <footer>
     仅供个人定投记录与执行辅助，<strong>非投资建议</strong>。溢价与净值存在披露时滞；盘中请以券商 IOPV / 行情为准。
     数据来源：东方财富基金净值、新浪财经 / 腾讯财经 K 线、QDII Lens 同类参考溢价快照。交易日大约每小时刷新一次（北京时间 10:20–14:20），不是实时行情；下单仍以券商 IOPV 为准。
@@ -1620,6 +1637,148 @@
       if (typeof Chart !== 'undefined') { clearInterval(t); tryChart(); }
       else if (n > 20) { clearInterval(t); drawSvgFallback(); }
     }, 200);
+  }
+
+  // 美股底层：QQQ / SPY 回撤用近 365 天滚动高点，切换区间不改同一天的回撤。
+  const US_RANGES = { 31: '近一个月', 183: '近半年', 365: '近一年' };
+  let usChart = null;
+  let usRange = 365;
+  function shiftDate(iso, days) {
+    const d = new Date(iso + 'T00:00:00Z');
+    d.setUTCDate(d.getUTCDate() + days);
+    return d.toISOString().slice(0, 10);
+  }
+  function usRows(days) {
+    const rows = (D.us && D.us.rows) || [];
+    if (!rows.length) return [];
+    const end = rows[rows.length - 1].date;
+    const start = shiftDate(end, -days);
+    return rows.filter(r => r.date >= start);
+  }
+  function seriesStats(rows, key) {
+    const vals = rows.map(r => r[key]).filter(v => v != null && !Number.isNaN(Number(v)));
+    if (!vals.length) return { last: null, extreme: null };
+    const last = Number(vals[vals.length - 1]);
+    const extreme = key === 'vix' ? Math.max(...vals.map(Number)) : Math.min(...vals.map(Number));
+    return { last, extreme };
+  }
+  function paintUs(days) {
+    usRange = days;
+    document.querySelectorAll('#usRanges button').forEach(btn => {
+      btn.classList.toggle('primary', Number(btn.dataset.usRange) === days);
+    });
+    const rows = usRows(days);
+    const caption = document.getElementById('usCaption');
+    const chips = document.getElementById('usChips');
+    const us = D.us || {};
+    const src = us.sources || {};
+    const srcText = ['qqq', 'spy', 'vix'].map(k => src[k] ? `${k.toUpperCase()}：${src[k]}` : '').filter(Boolean).join('；');
+    const warn = (us.warnings || []).join('；');
+    if (caption) {
+      caption.textContent = rows.length
+        ? `回撤 = 收盘价 ÷ ${us.peak_window_label || '近 365 天滚动最高收盘价'} − 1。近一个月、近半年、近一年只改图上的窗口，同一天的回撤不因切换而变。QQQ 是纳斯达克100，SPY 是标普500，VIX 是恐慌指数（右轴）。${srcText ? '来源 ' + srcText + '。' : ''}${warn ? '注意：' + warn + '。' : ''}仅供个人记录辅助，非投资建议。`
+        : `还没有 QQQ / SPY / VIX 日线。${warn ? warn + '。' : ''}仅供个人记录辅助，非投资建议。`;
+    }
+    const q = seriesStats(rows, 'qqq_dd');
+    const s = seriesStats(rows, 'spy_dd');
+    const v = seriesStats(rows, 'vix');
+    const chip = (k, v1, s1) => `<div class="kpi"><div class="k">${k}</div><div class="v">${v1}</div><div class="s">${s1}</div></div>`;
+    const fmtDd = (n) => n == null ? '—' : (n > 0 ? '+' : '') + Number(n).toFixed(2) + '%';
+    const fmtV = (n) => n == null ? '—' : Number(n).toFixed(2);
+    if (chips) {
+      chips.innerHTML = [
+        chip('QQQ 当前回撤', fmtDd(q.last), US_RANGES[days] + '最大 ' + fmtDd(q.extreme)),
+        chip('SPY 当前回撤', fmtDd(s.last), US_RANGES[days] + '最大 ' + fmtDd(s.extreme)),
+        chip('VIX 当前', fmtV(v.last), US_RANGES[days] + '最高 ' + fmtV(v.extreme)),
+      ].join('');
+    }
+    const labels = rows.map(r => r.date);
+    const qdd = rows.map(r => r.qqq_dd == null ? null : r.qqq_dd);
+    const sdd = rows.map(r => r.spy_dd == null ? null : r.spy_dd);
+    const vix = rows.map(r => r.vix == null ? null : r.vix);
+    const canvas = document.getElementById('usChart');
+    const svg = document.getElementById('usSvg');
+    if (!rows.length) {
+      if (canvas) canvas.style.display = 'none';
+      if (svg) {
+        svg.style.display = 'block';
+        svg.innerHTML = '<text x="24" y="40" fill="#8fa3c8" font-size="14">暂无美股日线</text>';
+      }
+      return;
+    }
+    if (typeof Chart === 'undefined') {
+      if (canvas) canvas.style.display = 'none';
+      if (svg) {
+        svg.style.display = 'block';
+        const W = 1000, H = 320, pad = 36;
+        const ddVals = qdd.concat(sdd).filter(v => v != null);
+        const vixVals = vix.filter(v => v != null);
+        const minD = Math.min(...ddVals, 0) - 1;
+        const maxD = 0.5;
+        const minVix = 0;
+        const maxVix = Math.max(...vixVals, 1) * 1.05;
+        const x = (i) => pad + (W - 2 * pad) * (i / Math.max(1, rows.length - 1));
+        const yD = (v) => H - pad - (H - 2 * pad) * ((v - minD) / (maxD - minD));
+        const yV = (v) => H - pad - (H - 2 * pad) * ((v - minVix) / (maxVix - minVix));
+        const path = (arr, yFn) => {
+          let d = '';
+          let started = false;
+          arr.forEach((v, i) => {
+            if (v == null) { started = false; return; }
+            d += (started ? 'L' : 'M') + x(i).toFixed(1) + ',' + yFn(v).toFixed(1);
+            started = true;
+          });
+          return d;
+        };
+        svg.innerHTML = `
+          <rect width="100%" height="100%" fill="#151f36"/>
+          <path d="${path(qdd, yD)}" fill="none" stroke="#5b8cff" stroke-width="1.6"/>
+          <path d="${path(sdd, yD)}" fill="none" stroke="#3ddc97" stroke-width="1.6"/>
+          <path d="${path(vix, yV)}" fill="none" stroke="#ffb020" stroke-width="1.6"/>
+          <text x="${pad}" y="18" fill="#8fa3c8" font-size="12">SVG 备用图 · 左轴回撤 · 右轴 VIX</text>
+        `;
+      }
+      return;
+    }
+    if (canvas) canvas.style.display = 'block';
+    if (svg) svg.style.display = 'none';
+    if (usChart) { usChart.destroy(); usChart = null; }
+    usChart = new Chart(canvas.getContext('2d'), {
+      type: 'line',
+      data: {
+        labels,
+        datasets: [
+          { label: 'QQQ 回撤', data: qdd, borderColor: '#5b8cff', borderWidth: 1.6, pointRadius: 0, tension: 0.12, yAxisID: 'y', spanGaps: true },
+          { label: 'SPY 回撤', data: sdd, borderColor: '#3ddc97', borderWidth: 1.6, pointRadius: 0, tension: 0.12, yAxisID: 'y', spanGaps: true },
+          { label: 'VIX', data: vix, borderColor: '#ffb020', borderWidth: 1.6, pointRadius: 0, tension: 0.12, yAxisID: 'y1', spanGaps: true },
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        interaction: { mode: 'index', intersect: false },
+        plugins: {
+          legend: { labels: { color: '#8fa3c8', boxWidth: 12 } },
+          tooltip: { callbacks: { label: (c) => c.dataset.yAxisID === 'y1'
+            ? `${c.dataset.label}: ${Number(c.raw).toFixed(2)}`
+            : `${c.dataset.label}: ${Number(c.raw).toFixed(2)}%` } }
+        },
+        scales: {
+          x: { ticks: { color: '#8fa3c8', maxTicksLimit: 8 }, grid: { color: 'rgba(42,58,92,.5)' } },
+          y: { position: 'left', ticks: { color: '#8fa3c8', callback: (v) => v + '%' }, grid: { color: 'rgba(42,58,92,.5)' } },
+          y1: { position: 'right', ticks: { color: '#ffb020' }, grid: { drawOnChartArea: false } }
+        }
+      }
+    });
+  }
+  const usRanges = document.getElementById('usRanges');
+  if (usRanges) {
+    usRanges.addEventListener('click', (ev) => {
+      const btn = ev.target.closest('[data-us-range]');
+      if (!btn) return;
+      paintUs(Number(btn.dataset.usRange));
+    });
+    paintUs(365);
   }
 })();
 </script>

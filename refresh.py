@@ -11,6 +11,7 @@ import json
 import re
 import statistics
 import time
+import urllib.parse
 import urllib.request
 from calendar import monthrange
 from concurrent.futures import ThreadPoolExecutor
@@ -388,6 +389,17 @@ def _self_check() -> None:
         raise SystemExit(f"标普单日急跌加分自检失败 got={got} {label}")
     if abs(spx_drawdown_coef(10, -2.99)[0] - 5.0) > 1e-9:
         raise SystemExit("标普未满 3% 的单日跌不应加分")
+    sample = trailing_drawdown_pct(
+        [
+            {"date": "2025-01-01", "close": 100},
+            {"date": "2025-06-01", "close": 120},
+            {"date": "2026-01-01", "close": 90},
+        ]
+    )
+    if abs(sample["2025-01-01"]) > 1e-9 or abs(sample["2025-06-01"]) > 1e-9:
+        raise SystemExit(f"滚动高点当日应为 0: {sample}")
+    if abs(sample["2026-01-01"] - (-25.0)) > 1e-9:
+        raise SystemExit(f"365 天滚动回撤自检失败: {sample}")
 
 
 def _official_bars(bars: list[dict]) -> list[dict]:
@@ -1373,6 +1385,163 @@ def build_spx_block(picks: dict | None, peer_stats: dict[str, dict] | None) -> d
     }
 
 
+US_PEAK_WINDOW_DAYS = 365
+US_YAHOO = {
+    "qqq": "QQQ",
+    "spy": "SPY",
+    "vix": "^VIX",
+}
+
+
+def _yahoo_daily(symbol: str, range_: str = "2y") -> list[dict]:
+    """Yahoo chart API v8 日线。日期用 UTC，避免北京时间把美股交易日拨到下一天。"""
+    url = (
+        "https://query1.finance.yahoo.com/v8/finance/chart/"
+        + urllib.parse.quote(symbol)
+        + f"?range={range_}&interval=1d&includeAdjustedClose=true"
+    )
+    raw = json.loads(get(url, retries=2, timeout=30))
+    result = (raw.get("chart") or {}).get("result") or []
+    if not result:
+        err = ((raw.get("chart") or {}).get("error") or {}).get("description") or "空结果"
+        raise RuntimeError(f"Yahoo {symbol}: {err}")
+    block = result[0]
+    ts = block.get("timestamp") or []
+    quote = ((block.get("indicators") or {}).get("quote") or [{}])[0]
+    adj = (((block.get("indicators") or {}).get("adjclose") or [{}])[0] or {}).get("adjclose")
+    closes = quote.get("close") or []
+    rows = []
+    for i, t in enumerate(ts):
+        c = None
+        if adj and i < len(adj) and adj[i] is not None:
+            c = float(adj[i])
+        elif i < len(closes) and closes[i] is not None:
+            c = float(closes[i])
+        if c is None or c <= 0:
+            continue
+        day = datetime.fromtimestamp(int(t), timezone.utc).strftime("%Y-%m-%d")
+        rows.append({"date": day, "close": c})
+    rows.sort(key=lambda r: r["date"])
+    dedup: dict[str, float] = {}
+    for r in rows:
+        dedup[r["date"]] = r["close"]
+    return [{"date": d, "close": dedup[d]} for d in sorted(dedup)]
+
+
+def _cboe_vix() -> list[dict]:
+    """CBOE 官方 VIX 日线，Yahoo 失败时用。"""
+    raw = get(
+        "https://cdn.cboe.com/api/global/us_indices/daily_prices/VIX_History.csv",
+        retries=2,
+        timeout=30,
+    ).decode("utf-8", "replace")
+    rows = []
+    for line in raw.splitlines()[1:]:
+        parts = line.split(",")
+        if len(parts) < 5 or not parts[4]:
+            continue
+        try:
+            day = datetime.strptime(parts[0].strip(), "%m/%d/%Y").strftime("%Y-%m-%d")
+            rows.append({"date": day, "close": float(parts[4])})
+        except ValueError:
+            continue
+    rows.sort(key=lambda r: r["date"])
+    if len(rows) > 600:
+        rows = rows[-600:]
+    return rows
+
+
+def trailing_drawdown_pct(points: list[dict], window_days: int = US_PEAK_WINDOW_DAYS) -> dict[str, float]:
+    """收盘价 ÷ 近 window_days 天（含当天）最高收盘价 − 1，单位百分点。负数或 0。"""
+    out: dict[str, float] = {}
+    for i, row in enumerate(points):
+        day = row["date"]
+        close = float(row["close"])
+        start = (datetime.strptime(day, "%Y-%m-%d") - timedelta(days=window_days)).strftime("%Y-%m-%d")
+        peak = close
+        for prev in points[: i + 1]:
+            if prev["date"] >= start and float(prev["close"]) > peak:
+                peak = float(prev["close"])
+        out[day] = round((close / peak - 1.0) * 100.0, 4) if peak > 0 else 0.0
+    return out
+
+
+def _load_saved_us() -> dict | None:
+    path = DATA / "dashboard_payload.json"
+    if not path.exists():
+        return None
+    try:
+        saved = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    us = saved.get("us")
+    if isinstance(us, dict) and us.get("rows"):
+        return us
+    return None
+
+
+def fetch_us_block() -> tuple[dict, list[str]]:
+    """QQQ、SPY、VIX 约两年日线。回撤按近 365 天滚动高点预先算好。"""
+    warnings: list[str] = []
+    series: dict[str, list[dict]] = {}
+    sources: dict[str, str] = {}
+    for key, symbol in US_YAHOO.items():
+        try:
+            rows = _yahoo_daily(symbol)
+            if len(rows) < 40:
+                raise RuntimeError(f"只有 {len(rows)} 根")
+            series[key] = rows
+            sources[key] = f"Yahoo chart v8 {symbol}"
+            print(f"美股 {symbol}: {rows[0]['date']} → {rows[-1]['date']} ({len(rows)})")
+        except Exception as e:  # noqa: BLE001
+            print(f"Yahoo {symbol} 失败:", e)
+            if key == "vix":
+                try:
+                    rows = _cboe_vix()
+                    if len(rows) < 40:
+                        raise RuntimeError(f"CBOE 只有 {len(rows)} 根")
+                    series[key] = rows
+                    sources[key] = "CBOE VIX_History.csv"
+                    warnings.append("VIX 改用 CBOE 日线（Yahoo 失败）")
+                    print(f"VIX CBOE: {rows[0]['date']} → {rows[-1]['date']} ({len(rows)})")
+                    continue
+                except Exception as e2:  # noqa: BLE001
+                    print("CBOE VIX 失败:", e2)
+            warnings.append(f"{symbol} 日线没取到")
+    if not series:
+        old = _load_saved_us()
+        if old:
+            warnings.append("美股日线接口失败，沿用上一份 QQQ/SPY/VIX 快照")
+            return old, warnings
+        return {
+            "peak_window_days": US_PEAK_WINDOW_DAYS,
+            "peak_window_label": "近 365 天滚动最高收盘价",
+            "sources": {},
+            "warnings": warnings or ["QQQ、SPY、VIX 都没有取到"],
+            "rows": [],
+        }, warnings
+    dd = {key: trailing_drawdown_pct(rows) for key, rows in series.items() if key != "vix"}
+    by_date: dict[str, dict] = {}
+    for key, rows in series.items():
+        for row in rows:
+            item = by_date.setdefault(row["date"], {"date": row["date"]})
+            item[key] = round(float(row["close"]), 4)
+            if key in dd:
+                item[key + "_dd"] = dd[key][row["date"]]
+    rows_out = [by_date[d] for d in sorted(by_date)]
+    # 图上的「近一年」需要窗口起点之前还有一年高点，所以多留一段。
+    if len(rows_out) > 560:
+        rows_out = rows_out[-560:]
+    block = {
+        "peak_window_days": US_PEAK_WINDOW_DAYS,
+        "peak_window_label": "近 365 天滚动最高收盘价",
+        "sources": sources,
+        "warnings": warnings,
+        "rows": rows_out,
+    }
+    return block, warnings
+
+
 def build_payload(
     premium_rows: list[dict],
     nav_rows: list[dict],
@@ -1383,6 +1552,7 @@ def build_payload(
     warnings: list[str],
     picks: dict | None = None,
     peer_stats: dict[str, dict] | None = None,
+    us: dict | None = None,
 ) -> dict:
     if len(premium_rows) < 30:
         raise RuntimeError(f"溢价历史过短: {len(premium_rows)}")
@@ -1572,6 +1742,13 @@ def build_payload(
         "peers": peers_sorted,
         "picks": picks,
         "spx": build_spx_block(picks, peer_stats or {}),
+        "us": us if us is not None else (_load_saved_us() or {
+            "peak_window_days": US_PEAK_WINDOW_DAYS,
+            "peak_window_label": "近 365 天滚动最高收盘价",
+            "sources": {},
+            "warnings": ["QQQ、SPY、VIX 还没有快照"],
+            "rows": [],
+        }),
         "calculator": {
             "etfs": _calculator_etfs(
                 peers_sorted,
@@ -1674,8 +1851,10 @@ def main() -> None:
     if missing:
         warnings.append("部分同类缺少近一年高点回撤或 P60：" + "、".join(missing))
 
+    us_block, us_warnings = fetch_us_block()
+    warnings.extend(us_warnings)
     payload = build_payload(
-        premium_rows, nav_rows, closes, peers, spot, ref_date, warnings, picks, peer_stats
+        premium_rows, nav_rows, closes, peers, spot, ref_date, warnings, picks, peer_stats, us_block
     )
     b = payload["briefing"]
     print(
