@@ -149,6 +149,12 @@
   .sell-box { border: 1px solid rgba(167,139,250,.45); background: rgba(167,139,250,.08); border-radius: 14px; padding: 12px 14px; }
   .sell-box h3 { margin: 0 0 6px; font-size: 1rem; }
   .sell-amt { font-size: 1.8rem; font-weight: 800; font-variant-numeric: tabular-nums; letter-spacing: -.02em; margin: 2px 0 6px; }
+  .sell-split { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 8px; }
+  @media (max-width: 800px) { .sell-split { grid-template-columns: 1fr; } }
+  .sell-family { background: rgba(255,255,255,.03); border: 1px solid var(--line); border-radius: 14px; padding: 12px; }
+  .sell-family h3 { margin: 0 0 6px; font-size: .95rem; }
+  .sell-family .sell-amt { font-size: 1.45rem; }
+  .sell-family .grid { grid-template-columns: 1fr 1fr; }
   .btn { background: var(--bg2); color: var(--text); border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px; cursor: pointer; font: inherit; }
   .btn:hover { border-color: var(--blue); }
   .btn.primary { background: rgba(91,140,255,.22); border-color: var(--blue); }
@@ -271,7 +277,7 @@
           <strong>回撤口径</strong>：回撤系数看「距近一年最高净值的回撤」（最新净值 ÷ 近 365 天内最高净值 − 1，取正数）。<strong>较上月净值</strong>（约一个月前同一天）只显示作参照，不进入系数。<br/>
           回撤系数，相邻锚点之间线性：&lt;5%→1.0；5%→1.67；10%→3.33；15%→6.67；20%→8.33；25%→10.0；30%→11.67；40%→13.33；&gt;40% 仍为 13.33。例如 7.5% 约为 2.5，12.5% 约为 5.0。最新净值日相对前一净值日下跌 ≥3%，在这个系数上再 +0.5。<br/>
           溢价系数只轻度修正金额，买多少仍主要由回撤系数决定。相对自己的 P60 连续变化：比 P60 低 5 个点及以上为 1.15，持平为 1.00，高出 5 个点及以上为 0.85，中间线性。绝对软顶：P≥22% 时不超过 0.85，P≥18% 时不超过 0.90，P≥15% 时不超过 0.95。比最便宜同类贵 5 个点及以上时不超过 0.90。回撤够深时设下限，避免溢价把金额砍得太狠：距高点回撤 ≥15% 时系数不低于 0.95，≥10% 时不低于 0.90。这样长期高溢价不会被抬高的 P60 洗成中性，但也不再把系数一刀砍到 0.50。<br/>
-          建议金额 = 基准 × 回撤系数 × 溢价系数，<strong>没有 2 倍上限</strong>。159501 明显贵时，买入代码仍指向纳指短名单里更合适的一只。标普500不参与这个金额，用下面那张标普计算器（基准 2000，另一套回撤阶梯）。卖出不进这个买入金额：触发时记录本按持仓市值给出人民币，单次约 6%，且不超过本年剩余的 20%，卖后仍留至少 75% 的本年峰值市值。<br/>
+          建议金额 = 基准 × 回撤系数 × 溢价系数，<strong>没有 2 倍上限</strong>。159501 明显贵时，买入代码仍指向纳指短名单里更合适的一只。标普500不参与这个金额，用下面那张标普计算器（基准 2000，另一套回撤阶梯）。卖出不进这个买入金额：触发时记录本按这一边的持仓市值给出人民币，单次约 6%，且不超过这一边本年剩余的 20%，卖后仍留至少 75% 的这一边峰值市值。纳指和标普不合并。<br/>
           盘中「今日溢价 P」在页面打开且处于 A 股交易时段时，大约每 20 秒从公开行情重取，并重算溢价系数、建议金额和短名单排序。P60、高点回撤、单日净值涨跌不跟着这 20 秒变。
         </p>
       </details>
@@ -542,7 +548,7 @@
         <li><span class="n">1</span><div>看本页顶部<strong>今日建议定投金额</strong>与建议标的。标普500在下面单独一张卡片，基准 2000，不替换纳指金额。交易日大约从 10:30（北京时间）起，页面会按小时更新到 14:20。</div></li>
         <li><span class="n">2</span><div>核对<strong>今日溢价 P</strong>与<strong>P60</strong>。159501 明显贵时，到「今日同类怎么选」里看纳指短名单的今日优先；标普500是另一条可选，不替换顶部金额。</div></li>
         <li><span class="n">3</span><div>看<strong>距近一年最高净值的回撤</strong>：这是回撤系数的输入。较上月净值只作参照。回撤越深，建议金额越高，深回撤可以到基准的 13.33 倍，先核对备用金。</div></li>
-        <li><span class="n">4</span><div>若顶部给出卖出金额：按记录本里的那一笔（大约合计市值的 6%，且不超过本年剩余的 20% 额度，卖完还要留下至少 75% 的本年峰值市值）。还没记持仓时，仍只提示 5–8%。</div></li>
+        <li><span class="n">4</span><div>若给出卖出金额：纳指和标普分开算。每一边大约是自己市值的 6%，不超过这一边本年剩余的 20%，卖完还要留下至少 75% 的这一边峰值市值。不要把两边合成一个底仓。</div></li>
         <li><span class="n">5</span><div>数据在交易日大约每小时刷新一次（北京时间 <strong>10:20–14:20</strong>），不是实时行情；下单仍以券商 IOPV 为准。也可在仓库 Actions 里手动运行「刷新并部署日报」。不需要 Grok Bot。</div></li>
       </ul>
     </div>
@@ -704,25 +710,18 @@
     const families = [];
     if (sell) families.push('nasdaq');
     if (spOn) families.push('sp500');
-    const triggered = families.length > 0;
     let advice = null;
     if (window.NazhiLedger && typeof NazhiLedger.render === 'function') {
-      try {
-        const reason = sell && spOn
-          ? '纳指和标普都满足近60日净值新高且溢价明显贵，按持仓里溢价更高的一只。'
-          : (sell
-            ? '纳指100（159501）净值近60日新高，且溢价明显贵。优先卖持有的纳指里溢价更高的代码。'
-            : (spOn ? '标普500净值近60日新高，且溢价明显贵。优先卖持有的标普里溢价更高的代码。' : ''));
-        advice = NazhiLedger.render({ families, triggered, reason });
-      } catch (err) { advice = null; }
+      try { advice = NazhiLedger.render({ families, triggered: families.length > 0 }); }
+      catch (err) { advice = null; }
     }
-    const ledgerSell = triggered && advice && advice.hasHoldings;
+    const ledgerSell = sell && advice && advice.hasHoldings;
     let sellText = '不卖战术仓';
     let sellClass = 'nosell';
     let sellPhrase = '暂不触发卖战术仓';
     let sellKpi = '否';
     let sellSub = '未同时满足新高+明显贵';
-    if (triggered && !ledgerSell) {
+    if (sell && !ledgerSell) {
       sellText = '建议卖战术仓 5–8%';
       sellClass = 'sell';
       sellPhrase = '净值近60日新高且明显贵 → 可卖战术仓 5–8%';
@@ -733,7 +732,7 @@
       sellClass = 'sell';
       sellPhrase = '建议卖出约 ¥' + fmtYen(advice.amount) + (advice.code ? '（优先 ' + advice.code + '）' : '');
       sellKpi = '¥' + fmtYen(advice.amount);
-      sellSub = (advice.code ? '优先 ' + advice.code + ' · ' : '') + '约总市值 6%，受本年 20% 与底仓 75% 约束。仅供个人记录辅助，非投资建议';
+      sellSub = (advice.code ? '优先 ' + advice.code + ' · ' : '') + '约纳指市值 6%，受纳指本年 20% 与纳指底仓 75% 约束。仅供个人记录辅助，非投资建议';
     } else if (ledgerSell) {
       sellText = '已触发，额度或底仓不够';
       sellClass = 'sell';

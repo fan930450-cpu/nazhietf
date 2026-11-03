@@ -548,40 +548,46 @@
     if (binding === 'core') return '底仓 75%';
     return '单次 6%';
   }
-  function sellHtml(plan, reason) {
-    const peakWhen = plan.peakAsOf ? `，记于 ${esc(plan.peakAsOf)}` : '';
-    const stats = `
-      <div class="grid" style="margin-top:10px">
-        <div class="kpi"><div class="k">本年已卖</div><div class="v">¥${fmtMoney(plan.soldYTD)}</div><div class="s">占峰值 ${plan.soldPct.toFixed(2)}% · 上限 20%</div></div>
-        <div class="kpi"><div class="k">剩余可卖额度</div><div class="v">¥${fmtMoney(plan.annualRoom)}</div><div class="s">峰值 × 20% − 本年已卖</div></div>
-        <div class="kpi"><div class="k">底仓线</div><div class="v">¥${fmtMoney(plan.coreLine)}</div><div class="s">峰值的 75% · 当前为峰值的 ${plan.mvPctOfPeak.toFixed(2)}%</div></div>
-      </div>`;
-    const rule = `<p class="pick-intro">底仓以本年以来最高合计市值为参照（现峰值 ¥${fmtMoney(plan.peakMV)}${peakWhen}）。已实现卖出累计不超过峰值的 20%。单次战术仓取总市值的 6%（5–8% 的中位，约 ¥${fmtMoney(plan.bandLo)}–¥${fmtMoney(plan.bandHi)}），再和剩余额度、以及「卖后仍不低于峰值 75%」里更紧的那个对齐。建议金额取整到元，不会超过这三道里最紧的一道。现价优先公开行情，否则用日报快照或持仓快照价。本页算得出全部现价、且新市值没有一下子高出已记峰值 25% 以上时，才会把峰值抬高。仅供个人记录辅助，非投资建议。</p>`;
-    const jump = plan.peakRejected ? '<p class="pick-intro">这次合计市值比已记录峰值高出 25% 以上，没有自动抬峰值。若行情是真的，导出 JSON 改 peaks 再导入。</p>' : '';
-    if (!plan.triggered) {
-      return `<h3>卖出额度</h3><p>现在不卖。要同时满足净值近 60 日新高和溢价明显贵，才给出卖出金额。</p>${stats}${jump}${rule}`;
-    }
-    if (!plan.hasHoldings) {
-      return `<h3>卖出额度</h3><p>条件已经满足，但还没有持仓快照，所以只提示卖总市值的 5–8%，不算人民币。</p>${stats}${rule}`;
-    }
-    if (plan.missingPrices > 0 && !(plan.totalMV > 0)) {
-      return `<h3>卖出额度</h3><p>条件已经满足，但持仓缺少现价，算不出市值。</p>${stats}${rule}`;
-    }
-    let head = '';
-    if (!(plan.amount > 0)) {
-      head = `<h3>建议卖出</h3><div class="sell-amt">¥0</div><p>${esc(reason || '')} 再卖就会低于峰值的 75%，或本年 20% 已经用完。本次被「${bindingText(plan.binding)}」卡住。</p>`;
-    } else if (!plan.code && !plan.name) {
-      head = `<h3>建议卖出</h3><div class="sell-amt">¥${fmtMoney(plan.amount)}</div><p>${esc(reason || '')} 账上没有这个品种的持仓，金额仍按全部合计市值估算，没有指定代码。</p>`;
-    } else {
+  function quotaBlock(title, plan) {
+    if (!plan) return '';
+    const peakWhen = plan.peakAsOf ? `（记于 ${esc(plan.peakAsOf)}）` : '';
+    let head = '<p>现在不卖。要同时满足这一边的净值近 60 日新高和溢价明显贵。</p>';
+    if (plan.triggered && !plan.hasHoldings) {
+      head = '<p>条件已经满足，但还没有这一边的持仓，所以只提示卖该品种市值的 5–8%，不算人民币。</p>';
+    } else if (plan.triggered && plan.missingPrices > 0 && !(plan.totalMV > 0)) {
+      head = '<p>条件已经满足，但这一边的持仓缺少现价，算不出市值。</p>';
+    } else if (plan.triggered && !(plan.amount > 0)) {
+      head = `<p>已触发，但再卖就会低于这一边峰值的 75%，或本年 20% 已经用完。本次被「${bindingText(plan.binding)}」卡住。</p>`;
+    } else if (plan.triggered && !plan.code && !plan.name) {
+      head = `<div class="sell-amt">¥${fmtMoney(plan.amount)}</div><p>金额只按这一边的市值估算，账上没有可指定的代码。</p>`;
+    } else if (plan.triggered) {
       const bits = (plan.allocation || []).map((a) => `${esc(a.account || '未填账户')}约 ¥${fmtMoney(a.sellMV)}（约 ${fmtShares(a.sellShares)} 份，现价 ${fmtPx(a.price)}）`).join('；');
       const one = plan.allocation && plan.allocation.length === 1;
       const fit = one ? '这一笔没有超出该账户这一只的市值。' : '同一代码按市值从大到小分到各账户。';
-      head = `<h3>建议卖出</h3><div class="sell-amt">¥${fmtMoney(plan.amount)}</div>
-        <p>${esc(reason || '')}</p>
-        <p>优先 <strong>${esc(plan.code || '（代码空）')} ${esc(plan.name || '')}</strong>${plan.premium == null ? '' : `，溢价 ${fmtPrem(plan.premium)}`}。${bits}。${fit}</p>`;
+      head = `<div class="sell-amt">¥${fmtMoney(plan.amount)}</div>
+        <p>优先 <strong>${esc(plan.code || '（代码空）')} ${esc(plan.name || '')}</strong>${plan.premium == null ? '' : `，溢价 ${fmtPrem(plan.premium)}`}。${bits}。${fit}</p>
+        <p>取数：这一边市值 × 6% = ¥${fmtMoney(plan.tactical)}；本年还可卖 ¥${fmtMoney(plan.annualRoom)}；为留下 75% 底仓最多卖 ¥${fmtMoney(plan.coreRoom)}。本次被「${bindingText(plan.binding)}」卡住。卖后剩余约 ¥${fmtMoney(plan.afterMV)}，为这一边峰值的 ${plan.afterPct.toFixed(2)}%。</p>`;
     }
-    const clampLine = `<p>取数：总市值 × 6% = ¥${fmtMoney(plan.tactical)}；本年还可卖 ¥${fmtMoney(plan.annualRoom)}；为留下 75% 底仓最多卖 ¥${fmtMoney(plan.coreRoom)}。本次被「${bindingText(plan.binding)}」卡住。卖后剩余约 ¥${fmtMoney(plan.afterMV)}，为峰值的 ${plan.afterPct.toFixed(2)}%。</p>`;
-    return head + clampLine + stats + jump + rule;
+    const jump = plan.peakRejected ? '<p>这次市值比已记录峰值高出 25% 以上，没有自动抬峰值。</p>' : '';
+    return `<div class="sell-family">
+      <h3>${title}</h3>
+      ${head}
+      ${jump}
+      <div class="grid">
+        <div class="kpi"><div class="k">这一边市值</div><div class="v">¥${fmtMoney(plan.totalMV)}</div><div class="s">单次约 6%，¥${fmtMoney(plan.bandLo)}–¥${fmtMoney(plan.bandHi)}</div></div>
+        <div class="kpi"><div class="k">本年已卖</div><div class="v">¥${fmtMoney(plan.soldYTD)}</div><div class="s">占这一边峰值 ${plan.soldPct.toFixed(2)}% · 上限 20%</div></div>
+        <div class="kpi"><div class="k">剩余可卖</div><div class="v">¥${fmtMoney(plan.annualRoom)}</div><div class="s">峰值 × 20% − 本年已卖</div></div>
+        <div class="kpi"><div class="k">底仓线</div><div class="v">¥${fmtMoney(plan.coreLine)}</div><div class="s">峰值 ¥${fmtMoney(plan.peakMV)} 的 75%${peakWhen} · 当前 ${plan.mvPctOfPeak.toFixed(2)}%</div></div>
+      </div>
+    </div>`;
+  }
+  function sellSplitHtml(nasdaq, sp500) {
+    return `<h3>卖出额度</h3>
+      <p>纳指底仓和标普底仓分开算，不把两边合成一个底仓。每一边都是：卖后至少留下该边峰值市值的 75%，本年卖出不超过该边峰值的 20%，单次大约是该边市值的 6%。仅供个人记录辅助，非投资建议。</p>
+      <div class="sell-split">
+        ${quotaBlock('纳指底仓', nasdaq)}
+        ${quotaBlock('标普底仓', sp500)}
+      </div>`;
   }
   function card(title, roll) {
     const pnl = roll.pnl == null ? '现价不全' : `浮盈亏 ${roll.pnl > 0 ? '+' : ''}${fmtMoney(roll.pnl)}（${fmtPct(roll.pnlPct)}）`;
@@ -668,15 +674,15 @@
   }
   function render(view) {
     if (!state) return null;
-    let plan = currentPlan(view || {});
-    plan._families = (view && view.families) || [];
-    plan.triggered = !!(view && view.triggered);
-    plan = maybeRaisePeak(plan);
-    lastPlan = plan;
+    const families = (view && view.families) || [];
+    const full = currentPlan({ families: [], triggered: false });
+    const nasdaq = scopedSell('nasdaq', families.indexOf('nasdaq') >= 0);
+    const sp500 = scopedSell('sp500', families.indexOf('sp500') >= 0);
+    lastPlan = nasdaq;
     const panel = document.getElementById('sellPanel');
-    if (panel) panel.innerHTML = sellHtml(plan, (view && view.reason) || '');
-    paint(plan);
-    return plan;
+    if (panel) panel.innerHTML = sellSplitHtml(nasdaq, sp500);
+    paint(full);
+    return nasdaq;
   }
   function val(id) {
     const el = document.getElementById(id);
