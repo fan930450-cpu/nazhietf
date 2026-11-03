@@ -654,9 +654,6 @@
       } else if (memoryOnly) {
         note.hidden = false;
         note.textContent = '当前浏览器不让网页保存本地记录，刷新后会丢失。请先导出 JSON。';
-      } else if ((state.rows || []).some((r) => r.seed) || (state.trades || []).some((t) => t.seed)) {
-        note.hidden = false;
-        note.textContent = '带「种子」的行来自 2026-11-02 的持仓截图和笔记，只在这台浏览器还没有记录时写入过一次。广发纳指按同类表记为 159941 广发纳指100，不对就改代码。三笔买入只在流水里，没有再加到数量上。';
       } else {
         note.hidden = true;
         note.textContent = '';
