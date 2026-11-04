@@ -163,7 +163,8 @@
       const sellMV = Math.min(left, h.mv);
       out.push({
         id: h.id,
-        account: h.account || '',
+        account: brokerOf(h),
+        broker: brokerOf(h),
         code: h.code || '',
         name: h.name || '',
         price: h.price,
@@ -220,10 +221,14 @@
       triggered: !!opts.triggered,
     });
   }
+  const KNOWN_BROKERS = ['平安证券', '银河证券', '招商证券'];
+  function brokerOf(row) {
+    return String((row && (row.broker || row.account)) || '').trim().slice(0, 40);
+  }
   function holdingKey(h) {
     const code = (h.code || '').trim();
     const name = (h.name || '').trim();
-    return [h.account || '', h.family || '', code || ('name:' + name)].join('|');
+    return [brokerOf(h), h.family || '', code || ('name:' + name)].join('|');
   }
   function tradeShares(trade) {
     const shares = num(trade.shares);
@@ -253,7 +258,8 @@
     if (idx < 0) {
       copy.push({
         id: uid('h'),
-        account: trade.account || '',
+        account: brokerOf(trade),
+        broker: brokerOf(trade),
         family: trade.family === 'sp500' ? 'sp500' : 'nasdaq',
         code: (trade.code || '').trim(),
         name: trade.name || '',
@@ -309,7 +315,8 @@
       id: String(t.id || uid('t')),
       date,
       side,
-      account: String(t.account || ''),
+      account: brokerOf(t),
+      broker: brokerOf(t),
       family: t.family === 'sp500' ? 'sp500' : 'nasdaq',
       code: String(t.code || '').trim(),
       name: String(t.name || ''),
@@ -331,7 +338,8 @@
     const cost = num(h.cost);
     return {
       id: String(h.id || uid('h')),
-      account: String(h.account || ''),
+      account: brokerOf(h),
+      broker: brokerOf(h),
       family: h.family === 'sp500' ? 'sp500' : 'nasdaq',
       code: String(h.code || '').trim(),
       name: String(h.name || ''),
@@ -369,16 +377,16 @@
   }
   function createSeed() {
     const rows = [
-      { id: 'seed-h-pingan-159501', account: '平安证券', family: 'nasdaq', code: '159501', name: '嘉实纳斯达克100', shares: 11500, cost: 2.111, snapshotPrice: 2.144, note: '2026-11-02 持仓截图', seed: true },
-      { id: 'seed-h-pingan-513500', account: '平安证券', family: 'sp500', code: '513500', name: '博时标普500', shares: 2800, cost: 2.556, snapshotPrice: 2.654, note: '2026-11-02 持仓截图', seed: true },
-      { id: 'seed-h-galaxy-159501', account: '银河证券', family: 'nasdaq', code: '159501', name: '嘉实纳斯达克100', shares: 9300, cost: 1.8844, snapshotPrice: 2.144, note: '2026-11-02 持仓截图', seed: true },
-      { id: 'seed-h-galaxy-513500', account: '银河证券', family: 'sp500', code: '513500', name: '博时标普500', shares: 7700, cost: 2.3627, snapshotPrice: 2.654, note: '2026-11-02 持仓截图', seed: true },
-      { id: 'seed-h-galaxy-159941', account: '银河证券', family: 'nasdaq', code: '159941', name: '广发纳指100', shares: 6900, cost: 1.3354, snapshotPrice: 1.653, note: '截图为广发纳指，按同类表对应 159941 广发纳指100，可改', seed: true },
+      { id: 'seed-h-pingan-159501', account: '平安证券', broker: '平安证券', family: 'nasdaq', code: '159501', name: '嘉实纳斯达克100', shares: 11500, cost: 2.111, snapshotPrice: 2.144, note: '2026-11-02 持仓截图', seed: true },
+      { id: 'seed-h-pingan-513500', account: '平安证券', broker: '平安证券', family: 'sp500', code: '513500', name: '博时标普500', shares: 2800, cost: 2.556, snapshotPrice: 2.654, note: '2026-11-02 持仓截图', seed: true },
+      { id: 'seed-h-galaxy-159501', account: '银河证券', broker: '银河证券', family: 'nasdaq', code: '159501', name: '嘉实纳斯达克100', shares: 9300, cost: 1.8844, snapshotPrice: 2.144, note: '2026-11-02 持仓截图', seed: true },
+      { id: 'seed-h-galaxy-513500', account: '银河证券', broker: '银河证券', family: 'sp500', code: '513500', name: '博时标普500', shares: 7700, cost: 2.3627, snapshotPrice: 2.654, note: '2026-11-02 持仓截图', seed: true },
+      { id: 'seed-h-galaxy-159941', account: '银河证券', broker: '银河证券', family: 'nasdaq', code: '159941', name: '广发纳指100', shares: 6900, cost: 1.3354, snapshotPrice: 1.653, note: '截图为广发纳指，按同类表对应 159941 广发纳指100，可改', seed: true },
     ];
     const trades = [
-      { id: 'seed-t-20261019-159501', date: '2026-10-19', side: 'buy', account: '', family: 'nasdaq', code: '159501', name: '嘉实纳斯达克100', amount: 3000, price: 2.182, premium: null, shares: round4(3000 / 2.182), note: '笔记；账户待确认；回撤约6.56%', seed: true, journal: true, createdAt: '2026-10-19T09:00:00+08:00' },
-      { id: 'seed-t-20261102-159501', date: '2026-11-02', side: 'buy', account: '银河证券', family: 'nasdaq', code: '159501', name: '嘉实纳斯达克100', amount: 19400, price: 2.136, premium: 19, shares: round4(19400 / 2.136), note: '回撤约9%', seed: true, journal: true, createdAt: '2026-11-02T15:00:00+08:00' },
-      { id: 'seed-t-20261102-513500', date: '2026-11-02', side: 'buy', account: '银河证券', family: 'sp500', code: '513500', name: '博时标普500', amount: 4200, price: 2.632, premium: 9, shares: round4(4200 / 2.632), note: '回撤约3%', seed: true, journal: true, createdAt: '2026-11-02T15:05:00+08:00' },
+      { id: 'seed-t-20261019-159501', date: '2026-10-19', side: 'buy', account: '', broker: '', family: 'nasdaq', code: '159501', name: '嘉实纳斯达克100', amount: 3000, price: 2.182, premium: null, shares: round4(3000 / 2.182), note: '笔记；账户待确认；回撤约6.56%', seed: true, journal: true, createdAt: '2026-10-19T09:00:00+08:00' },
+      { id: 'seed-t-20261102-159501', date: '2026-11-02', side: 'buy', account: '银河证券', broker: '银河证券', family: 'nasdaq', code: '159501', name: '嘉实纳斯达克100', amount: 19400, price: 2.136, premium: 19, shares: round4(19400 / 2.136), note: '回撤约9%', seed: true, journal: true, createdAt: '2026-11-02T15:00:00+08:00' },
+      { id: 'seed-t-20261102-513500', date: '2026-11-02', side: 'buy', account: '银河证券', broker: '银河证券', family: 'sp500', code: '513500', name: '博时标普500', amount: 4200, price: 2.632, premium: 9, shares: round4(4200 / 2.632), note: '回撤约3%', seed: true, journal: true, createdAt: '2026-11-02T15:05:00+08:00' },
     ];
     let mv = 0;
     rows.forEach((h) => { mv += h.shares * h.snapshotPrice; });
@@ -561,9 +569,9 @@
     } else if (plan.triggered && !plan.code && !plan.name) {
       head = `<div class="sell-amt">¥${fmtMoney(plan.amount)}</div><p>金额只按这一边的市值估算，账上没有可指定的代码。</p>`;
     } else if (plan.triggered) {
-      const bits = (plan.allocation || []).map((a) => `${esc(a.account || '未填账户')}约 ¥${fmtMoney(a.sellMV)}（约 ${fmtShares(a.sellShares)} 份，现价 ${fmtPx(a.price)}）`).join('；');
+      const bits = (plan.allocation || []).map((a) => `${esc(a.broker || a.account || '未填券商')}约 ¥${fmtMoney(a.sellMV)}（约 ${fmtShares(a.sellShares)} 份，现价 ${fmtPx(a.price)}）`).join('；');
       const one = plan.allocation && plan.allocation.length === 1;
-      const fit = one ? '这一笔没有超出该账户这一只的市值。' : '同一代码按市值从大到小分到各账户。';
+      const fit = one ? '这一笔没有超出该券商这一只的市值。' : '同一代码按市值从大到小分到各券商。';
       head = `<div class="sell-amt">¥${fmtMoney(plan.amount)}</div>
         <p>优先 <strong>${esc(plan.code || '（代码空）')} ${esc(plan.name || '')}</strong>${plan.premium == null ? '' : `，溢价 ${fmtPrem(plan.premium)}`}。${bits}。${fit}</p>
         <p>取数：这一边市值 × 6% = ¥${fmtMoney(plan.tactical)}；本年还可卖 ¥${fmtMoney(plan.annualRoom)}；为留下 75% 底仓最多卖 ¥${fmtMoney(plan.coreRoom)}。本次被「${bindingText(plan.binding)}」卡住。卖后剩余约 ¥${fmtMoney(plan.afterMV)}，为这一边峰值的 ${plan.afterPct.toFixed(2)}%。</p>`;
@@ -589,30 +597,60 @@
         ${quotaBlock('标普底仓', sp500)}
       </div>`;
   }
+  function brokerCards(list) {
+    const map = new Map();
+    (list || []).filter((h) => h.shares > 0).forEach((h) => {
+      const name = brokerOf(h) || '未填券商';
+      const cur = map.get(name) || { mv: 0, cost: 0, missing: false };
+      if (h.mv == null) cur.missing = true;
+      else cur.mv += h.mv;
+      cur.cost += h.costAmount || 0;
+      map.set(name, cur);
+    });
+    const order = ['平安证券', '银河证券', '招商证券'];
+    return Array.from(map.keys()).sort((a, b) => {
+      const ia = order.indexOf(a);
+      const ib = order.indexOf(b);
+      return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib) || a.localeCompare(b, 'zh');
+    }).map((name) => {
+      const row = map.get(name);
+      const pnl = row.missing ? null : row.mv - row.cost;
+      return card(name, {
+        mv: row.mv,
+        cost: row.cost,
+        pnl,
+        pnlPct: row.cost > 0 && pnl != null ? (pnl / row.cost) * 100 : null,
+      });
+    }).join('');
+  }
   function card(title, roll) {
     const pnl = roll.pnl == null ? '现价不全' : `浮盈亏 ${roll.pnl > 0 ? '+' : ''}${fmtMoney(roll.pnl)}（${fmtPct(roll.pnlPct)}）`;
     return `<div class="kpi"><div class="k">${title}</div><div class="v">¥${fmtMoney(roll.mv)}</div><div class="s">成本 ¥${fmtMoney(roll.cost)} · ${pnl}</div></div>`;
   }
   function sortHoldings(list) {
     const fam = { nasdaq: 0, sp500: 1 };
-    const acc = { '平安证券': 0, '银河证券': 1 };
-    return list.slice().sort((a, b) => (
-      (fam[a.family] == null ? 9 : fam[a.family]) - (fam[b.family] == null ? 9 : fam[b.family])
-      || String(a.code || '').localeCompare(String(b.code || ''))
-      || (acc[a.account] == null ? 9 : acc[a.account]) - (acc[b.account] == null ? 9 : acc[b.account])
-      || String(a.account || '').localeCompare(String(b.account || ''))
-    ));
+    const acc = { '平安证券': 0, '银河证券': 1, '招商证券': 2 };
+    return list.slice().sort((a, b) => {
+      const aBroker = brokerOf(a);
+      const bBroker = brokerOf(b);
+      return (fam[a.family] == null ? 9 : fam[a.family]) - (fam[b.family] == null ? 9 : fam[b.family])
+        || String(a.code || '').localeCompare(String(b.code || ''))
+        || (acc[aBroker] == null ? 9 : acc[aBroker]) - (acc[bBroker] == null ? 9 : acc[bBroker])
+        || aBroker.localeCompare(bBroker, 'zh');
+    });
   }
   function paint(plan) {
     const cards = document.getElementById('holdingCards');
     if (cards) {
       cards.innerHTML = card('纳指100', plan.byFamily.nasdaq) + card('标普500', plan.byFamily.sp500) + card('全部', plan.byFamily.all);
     }
+    const brokers = document.getElementById('holdingBrokers');
+    if (brokers) brokers.innerHTML = brokerCards(plan.valued);
     const body = document.getElementById('holdingBody');
     if (body) {
       const rows = sortHoldings(plan.valued.filter((h) => h.shares > 0 || h.note || h.code));
       body.innerHTML = rows.length ? rows.map((h) => `<tr>
-        <td>${esc(h.account || '未填')}</td>
+        <td>${esc(brokerOf(h) || '未填')}</td>
         <td>${familyLabel(h.family)}</td>
         <td><strong>${esc(h.code || '—')}</strong></td>
         <td>${esc(h.name || '')}${h.seed ? '<span class="tag wait">种子</span>' : ''}${h.note ? `<span class="sub">${esc(h.note)}</span>` : ''}</td>
@@ -645,7 +683,7 @@
       tbody.innerHTML = trades.length ? trades.map((t) => `<tr>
         <td>${esc(t.date)}</td>
         <td><span class="badge ${t.side === 'sell' ? 'sell' : 'ok'}">${t.side === 'sell' ? '卖出' : '买入'}</span></td>
-        <td>${esc(t.account || '未填')}</td>
+        <td>${esc(brokerOf(t) || '未填')}</td>
         <td>${familyLabel(t.family)}</td>
         <td><strong>${esc(t.code || '—')}</strong></td>
         <td>${esc(t.name || '')}${t.seed ? '<span class="tag wait">种子</span>' : ''}</td>
@@ -700,6 +738,40 @@
     const sel = val(selectId);
     if (sel === '__custom') return val(customId).trim();
     return sel.trim();
+  }
+  function readBroker(selectId, customId) {
+    const sel = val(selectId);
+    if (sel === '__other') return val(customId).trim().slice(0, 40);
+    return String(sel || '').trim();
+  }
+  function setBroker(selectId, customId, name) {
+    const select = document.getElementById(selectId);
+    const custom = document.getElementById(customId);
+    if (!select || !custom) return;
+    const broker = String(name || '').trim().slice(0, 40);
+    if (!broker) {
+      select.value = '';
+      custom.value = '';
+      custom.hidden = true;
+      return;
+    }
+    if (KNOWN_BROKERS.indexOf(broker) >= 0) {
+      select.value = broker;
+      custom.value = '';
+      custom.hidden = true;
+      return;
+    }
+    select.value = '__other';
+    custom.value = broker;
+    custom.hidden = false;
+  }
+  function wireBroker(selectId, customId) {
+    const select = document.getElementById(selectId);
+    const custom = document.getElementById(customId);
+    if (!select || !custom) return;
+    const sync = () => { custom.hidden = select.value !== '__other'; };
+    select.addEventListener('change', sync);
+    sync();
   }
   function setCode(selectId, customId, code) {
     const select = document.getElementById(selectId);
@@ -768,6 +840,7 @@
     if (date) date.value = shanghaiToday();
     const side = document.getElementById('tradeSide');
     if (side) side.value = 'buy';
+    setBroker('tradeAccount', 'tradeBrokerCustom', '');
     setCode('tradeCode', 'tradeCodeCustom', '');
     const name = document.getElementById('tradeName');
     if (name) { name.value = ''; name.dataset.auto = ''; }
@@ -793,7 +866,8 @@
     return {
       date: val('tradeDate'),
       side: val('tradeSide') === 'sell' ? 'sell' : 'buy',
-      account: val('tradeAccount'),
+      account: readBroker('tradeAccount', 'tradeBrokerCustom'),
+      broker: readBroker('tradeAccount', 'tradeBrokerCustom'),
       family: val('tradeFamily') === 'sp500' ? 'sp500' : 'nasdaq',
       code: selectedCode('tradeCode', 'tradeCodeCustom'),
       name: val('tradeName').trim(),
@@ -823,7 +897,7 @@
     if (!(trade.amount > 0)) return setTradeMsg('请填写金额，或同时填写价格和数量。');
     if (!(trade.price > 0)) return setTradeMsg('请填写价格。');
     const update = document.getElementById('tradeUpdate').checked && !editingTradeId;
-    if (update && !trade.account) return setTradeMsg('勾了更新持仓时请选择账户。');
+    if (update && !trade.broker) return setTradeMsg('勾了更新持仓时请选择券商。');
     if (update && !trade.code && !trade.name) return setTradeMsg('勾了更新持仓时请填写代码或名称。');
     if (editingTradeId) {
       const idx = state.trades.findIndex((t) => t.id === editingTradeId);
@@ -859,8 +933,10 @@
   function onHoldSubmit(ev) {
     ev.preventDefault();
     if (!guardWrite()) { setHoldMsg('本地记录读失败。先清空或导入。'); return; }
+    const broker = readBroker('holdAccount', 'holdBrokerCustom');
     const row = {
-      account: val('holdAccount'),
+      account: broker,
+      broker,
       family: val('holdFamily') === 'sp500' ? 'sp500' : 'nasdaq',
       code: selectedCode('holdCode', 'holdCodeCustom'),
       name: val('holdName').trim(),
@@ -877,7 +953,7 @@
     if (editingHoldId) {
       const idx = state.rows.findIndex((r) => r.id === editingHoldId);
       if (idx < 0) return setHoldMsg('找不到这条持仓。');
-      if (state.rows.some((r) => r.id !== editingHoldId && holdingKey(r) === key)) return setHoldMsg('已经有同一账户和代码的持仓。');
+      if (state.rows.some((r) => r.id !== editingHoldId && holdingKey(r) === key)) return setHoldMsg('已经有同一券商和代码的持仓。');
       state.rows[idx] = Object.assign({}, state.rows[idx], row, { id: editingHoldId });
     } else {
       const idx = state.rows.findIndex((r) => holdingKey(r) === key);
@@ -895,6 +971,7 @@
   }
   function resetHoldForm() {
     editingHoldId = '';
+    setBroker('holdAccount', 'holdBrokerCustom', '');
     setCode('holdCode', 'holdCodeCustom', '');
     ['holdName', 'holdShares', 'holdCost', 'holdSnap', 'holdNote'].forEach((id) => {
       const el = document.getElementById(id);
@@ -911,7 +988,7 @@
     editingTradeId = t.id;
     document.getElementById('tradeDate').value = t.date;
     document.getElementById('tradeSide').value = t.side;
-    document.getElementById('tradeAccount').value = t.account || '';
+    setBroker('tradeAccount', 'tradeBrokerCustom', brokerOf(t));
     document.getElementById('tradeFamily').value = t.family === 'sp500' ? 'sp500' : 'nasdaq';
     setCode('tradeCode', 'tradeCodeCustom', t.code || '');
     const name = document.getElementById('tradeName');
@@ -933,7 +1010,7 @@
   }
   function fillHold(h) {
     editingHoldId = h.id;
-    document.getElementById('holdAccount').value = h.account || '';
+    setBroker('holdAccount', 'holdBrokerCustom', brokerOf(h));
     document.getElementById('holdFamily').value = h.family === 'sp500' ? 'sp500' : 'nasdaq';
     setCode('holdCode', 'holdCodeCustom', h.code || '');
     const name = document.getElementById('holdName');
@@ -955,9 +1032,9 @@
   function prefillBuy() {
     const s = ctx && ctx.buySuggestion && ctx.buySuggestion();
     if (!s || !(num(s.amount) > 0)) return setTradeMsg('计算器里还没有建议金额。');
-    const keepAccount = val('tradeAccount');
+    const keepBroker = readBroker('tradeAccount', 'tradeBrokerCustom');
     resetTradeForm();
-    document.getElementById('tradeAccount').value = keepAccount;
+    setBroker('tradeAccount', 'tradeBrokerCustom', keepBroker);
     document.getElementById('tradeDate').value = shanghaiToday();
     document.getElementById('tradeSide').value = 'buy';
     const known = familyOfCode(s.code, ctx.data);
@@ -978,7 +1055,7 @@
     document.getElementById('tradeUpdate').disabled = false;
     syncSide();
     document.getElementById('tradeForm').scrollIntoView({ behavior: 'smooth', block: 'center' });
-    setTradeMsg('已按今天的建议金额填入，还没有保存。请选账户，核对价格和溢价后再记一笔。');
+    setTradeMsg('已按今天的建议金额填入，还没有保存。请选券商，核对价格和溢价后再记一笔。');
   }
   function exportJson() {
     const payload = {
@@ -1026,6 +1103,8 @@
     bound = true;
     fillCodeSelect(document.getElementById('tradeCode'));
     fillCodeSelect(document.getElementById('holdCode'));
+    wireBroker('tradeAccount', 'tradeBrokerCustom');
+    wireBroker('holdAccount', 'holdBrokerCustom');
     const tradeForm = document.getElementById('tradeForm');
     const holdForm = document.getElementById('holdForm');
     if (tradeForm) tradeForm.addEventListener('submit', onTradeSubmit);
