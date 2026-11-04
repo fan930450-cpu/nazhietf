@@ -10,6 +10,8 @@
   const TRADES_KEY = 'nazhietf.trades';
   const HOLDINGS_KEY = 'nazhietf.holdings';
   const BROKER_SWAP_KEY = 'nazhietf.brokerSwapV1';
+  const CMS_SEED_KEY = 'nazhietf.cmsSeedV1';
+  const CMS_SEED_ID = 'seed-h-cms-159501';
   const TACTICAL_MID = 0.06;
   const ANNUAL_CAP = 0.20;
   const CORE_FLOOR = 0.75;
@@ -426,6 +428,32 @@
     (trades || []).forEach(swapRow);
     return changed;
   }
+  function cmsSeedHolding() {
+    return {
+      id: CMS_SEED_ID,
+      account: '招商证券',
+      broker: '招商证券',
+      family: 'nasdaq',
+      code: '159501',
+      name: '嘉实纳斯达克100',
+      shares: 18300,
+      cost: 1.8303,
+      snapshotPrice: 2.12,
+      note: '2026-11-04 招商证券持仓截图（老公）',
+      seed: true,
+    };
+  }
+  function hasCmsNasdaqHolding(rows) {
+    return (rows || []).some((row) => {
+      if (String((row && row.id) || '') === CMS_SEED_ID) return true;
+      return brokerOf(row) === '招商证券' && String((row && row.code) || '').trim() === '159501';
+    });
+  }
+  function insertCmsSeed(rows) {
+    if (!rows || hasCmsNasdaqHolding(rows)) return false;
+    rows.push(cmsSeedHolding());
+    return true;
+  }
   function createSeed() {
     const rows = [
       { id: 'seed-h-galaxy-159501', account: '银河证券', broker: '银河证券', family: 'nasdaq', code: '159501', name: '嘉实纳斯达克100', shares: 11500, cost: 2.111, snapshotPrice: 2.144, note: '2026-11-02 持仓截图', seed: true },
@@ -433,6 +461,7 @@
       { id: 'seed-h-pingan-159501', account: '平安证券', broker: '平安证券', family: 'nasdaq', code: '159501', name: '嘉实纳斯达克100', shares: 9300, cost: 1.8844, snapshotPrice: 2.144, note: '2026-11-02 持仓截图', seed: true },
       { id: 'seed-h-pingan-513500', account: '平安证券', broker: '平安证券', family: 'sp500', code: '513500', name: '博时标普500', shares: 7700, cost: 2.3627, snapshotPrice: 2.654, note: '2026-11-02 持仓截图', seed: true },
       { id: 'seed-h-pingan-159941', account: '平安证券', broker: '平安证券', family: 'nasdaq', code: '159941', name: '广发纳指100', shares: 6900, cost: 1.3354, snapshotPrice: 1.653, note: '截图为广发纳指，按同类表对应 159941 广发纳指100，可改', seed: true },
+      cmsSeedHolding(),
     ];
     const trades = [
       { id: 'seed-t-20261019-159501', date: '2026-10-19', side: 'buy', account: '', broker: '', family: 'nasdaq', code: '159501', name: '嘉实纳斯达克100', amount: 3000, price: 2.182, premium: null, shares: round4(3000 / 2.182), note: '笔记；账户待确认；回撤约6.56%', seed: true, journal: true, createdAt: '2026-10-19T09:00:00+08:00' },
@@ -483,6 +512,7 @@
     if (tRaw == null && hRaw == null) {
       state = createSeed();
       storageSet(BROKER_SWAP_KEY, '1');
+      storageSet(CMS_SEED_KEY, '1');
       persist();
       return;
     }
@@ -500,6 +530,11 @@
         const changed = applyBrokerSwap(state.rows, state.trades);
         storageSet(BROKER_SWAP_KEY, '1');
         if (changed) persist();
+      }
+      if (storageGet(CMS_SEED_KEY) !== '1') {
+        const inserted = insertCmsSeed(state.rows);
+        storageSet(CMS_SEED_KEY, '1');
+        if (inserted) persist();
       }
     } catch (e) {
       state = { trades: [], rows: [], peaks: {}, peaksByFamily: {}, seeded: true, loadError: true };
@@ -1300,6 +1335,7 @@
     CORE_FLOOR,
     createSeed,
     applyBrokerSwap,
+    insertCmsSeed,
     clampSell,
     ytdSold,
     computePlan,
