@@ -580,9 +580,9 @@
     <h2>美股回撤与恐慌指数 <span class="hint">QQQ 对应纳指 · SPY 对应标普 · VIX 用右轴</span></h2>
     <div class="card">
       <div class="ledger-actions" id="usRanges">
-        <button type="button" class="btn" data-us-range="31">近一个月</button>
+        <button type="button" class="btn primary" data-us-range="31">近一个月</button>
         <button type="button" class="btn" data-us-range="183">近半年</button>
-        <button type="button" class="btn primary" data-us-range="365">近一年</button>
+        <button type="button" class="btn" data-us-range="365">近一年</button>
       </div>
       <div class="grid" id="usChips" style="margin-top:12px"></div>
       <div class="chart-box" style="margin-top:12px">
@@ -1845,10 +1845,12 @@
   }
 
   // 美股底层：QQQ / SPY 回撤用近 365 天滚动高点，切换区间不改同一天的回撤。
-  // 没存过选择时默认近一年。浏览器里已有 nazhietf.usRange 时沿用上次的窗口。
+  // 没存过或无效时默认近一个月。nazhietf.usRangeDefaultMonthV1 只执行一次：
+  // 这次打开强制回到近一个月（含之前误存的 365），之后点按钮才记住新窗口。
   const US_RANGES = { 31: '近一个月', 183: '近半年', 365: '近一年' };
   const US_RANGE_KEY = 'nazhietf.usRange';
-  const US_RANGE_DEFAULT = 365;
+  const US_RANGE_MIGRATE_KEY = 'nazhietf.usRangeDefaultMonthV1';
+  const US_RANGE_DEFAULT = 31;
   let usChart = null;
   let usRange = US_RANGE_DEFAULT;
   function savedUsRange() {
@@ -1863,6 +1865,20 @@
   }
   function rememberUsRange(days) {
     try { localStorage.setItem(US_RANGE_KEY, String(days)); } catch (e) { /* 隐私模式不保存 */ }
+  }
+  function initialUsRange() {
+    try {
+      if (localStorage.getItem(US_RANGE_MIGRATE_KEY) === '1') {
+        const saved = savedUsRange();
+        return saved == null ? US_RANGE_DEFAULT : saved;
+      }
+      // 先写区间再写标记。标记写失败时下次还会再强制一次，避免 365 被当成用户选择留下来。
+      localStorage.setItem(US_RANGE_KEY, String(US_RANGE_DEFAULT));
+      localStorage.setItem(US_RANGE_MIGRATE_KEY, '1');
+      return US_RANGE_DEFAULT;
+    } catch (e) {
+      return US_RANGE_DEFAULT;
+    }
   }
   function shiftDate(iso, days) {
     const d = new Date(iso + 'T00:00:00Z');
@@ -2002,8 +2018,7 @@
       rememberUsRange(days);
       paintUs(days);
     });
-    const saved = savedUsRange();
-    paintUs(saved == null ? US_RANGE_DEFAULT : saved);
+    paintUs(initialUsRange());
   }
 })();
 </script>
