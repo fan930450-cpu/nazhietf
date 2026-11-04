@@ -1,6 +1,6 @@
-/* 买卖记录本。持仓和流水只放在浏览器 localStorage，不进数据刷新。
- * 键：nazhietf.trades、nazhietf.holdings。
- * 持仓快照是数量和成本的依据；流水是日记。卖出金额用持仓数量 × 现价。
+/* 买卖记录本。持仓和流水只放在这一台浏览器的 localStorage，不进数据刷新，也不上传。
+ * 键：nazhietf.trades、nazhietf.holdings。别人打开同一网址看不到、也改不了。
+ * 页面不带任何示例持仓。持仓快照是数量和成本的依据；流水是日记。卖出金额用持仓数量 × 现价。
  */
 (function (root, factory) {
   const api = factory();
@@ -9,9 +9,7 @@
 })(typeof globalThis !== 'undefined' ? globalThis : this, function () {
   const TRADES_KEY = 'nazhietf.trades';
   const HOLDINGS_KEY = 'nazhietf.holdings';
-  const BROKER_SWAP_KEY = 'nazhietf.brokerSwapV1';
-  const CMS_SEED_KEY = 'nazhietf.cmsSeedV1';
-  const CMS_SEED_ID = 'seed-h-cms-159501';
+  const PURGE_KEY = 'nazhietf.publishedSeedPurgeV1';
   const TACTICAL_MID = 0.06;
   const ANNUAL_CAP = 0.20;
   const CORE_FLOOR = 0.75;
@@ -256,6 +254,7 @@
       if ((num(copy[idx].shares) || 0) + 1e-6 < shares) return { ok: false, rows: copy, message: '持仓数量不够，未扣减。' };
       copy[idx].shares = round4((num(copy[idx].shares) || 0) - shares);
       if (price > 0) copy[idx].snapshotPrice = price;
+      copy[idx].seed = false;
       return { ok: true, rows: copy, message: '已从持仓扣减数量，成本价未改。' };
     }
     if (idx < 0) {
@@ -378,104 +377,38 @@
       seeded,
     };
   }
-  const SEED_ID_SWAP = {
-    'seed-h-pingan-159501': 'seed-h-galaxy-159501',
-    'seed-h-pingan-513500': 'seed-h-galaxy-513500',
-    'seed-h-galaxy-159501': 'seed-h-pingan-159501',
-    'seed-h-galaxy-513500': 'seed-h-pingan-513500',
-    'seed-h-galaxy-159941': 'seed-h-pingan-159941',
-  };
-  const SEED_PAIRS = [
-    { code: '159501', shares: 11500, cost: 2.111 },
-    { code: '513500', shares: 2800, cost: 2.556 },
-    { code: '159501', shares: 9300, cost: 1.8844 },
-    { code: '159941', shares: 6900, cost: 1.3354 },
-    { code: '513500', shares: 7700, cost: 2.3627 },
-  ];
-  function nearNum(a, b) {
-    const x = num(a);
-    const y = num(b);
-    return x != null && y != null && Math.abs(x - y) < 0.0001;
+  function emptyLedger() {
+    return { trades: [], rows: [], peaks: {}, peaksByFamily: {}, seeded: true };
   }
-  function swappablePingAnOrGalaxy(row) {
-    const fields = [row && row.broker, row && row.account].map((v) => String(v || '').trim()).filter(Boolean);
-    if (!fields.length) return '';
-    if (fields.some((v) => v !== fields[0])) return '';
-    if (fields[0] !== '平安证券' && fields[0] !== '银河证券') return '';
-    return fields[0];
+  // 旧页面写进 localStorage 的示例行用 seed- 开头的 id，并且 seed 仍为 true。
+  // 用户后来保存过的行会把 seed 清掉，那些行留下。这里不保存示例里的数量或成本。
+  function isPublishedSeedRow(row) {
+    if (!row || row.seed !== true) return false;
+    return String(row.id || '').indexOf('seed-') === 0;
   }
-  function matchesSeedPair(row) {
-    const code = String((row && row.code) || '').trim();
-    const shares = row && row.shares;
-    const cost = row && (row.cost != null ? row.cost : row.price);
-    return SEED_PAIRS.some((p) => p.code === code && nearNum(shares, p.shares) && nearNum(cost, p.cost));
-  }
-  function applyBrokerSwap(rows, trades) {
-    let changed = false;
-    function swapRow(row) {
-      const label = swappablePingAnOrGalaxy(row);
-      if (!label) return;
-      const id = String((row && row.id) || '');
-      const byId = Object.prototype.hasOwnProperty.call(SEED_ID_SWAP, id);
-      if (!byId && !matchesSeedPair(row)) return;
-      const next = label === '平安证券' ? '银河证券' : '平安证券';
-      row.account = next;
-      row.broker = next;
-      if (byId) row.id = SEED_ID_SWAP[id];
-      changed = true;
+  function stripPublishedSeed(bundle) {
+    const prevRows = bundle.rows || [];
+    const prevTrades = bundle.trades || [];
+    const rows = prevRows.filter((row) => !isPublishedSeedRow(row));
+    const trades = prevTrades.filter((row) => !isPublishedSeedRow(row));
+    const removed = rows.length !== prevRows.length || trades.length !== prevTrades.length;
+    bundle.rows = rows;
+    bundle.trades = trades;
+    bundle.seeded = true;
+    if (removed && rows.length === 0 && trades.length === 0) {
+      bundle.peaks = {};
+      bundle.peaksByFamily = {};
     }
-    (rows || []).forEach(swapRow);
-    (trades || []).forEach(swapRow);
-    return changed;
-  }
-  function cmsSeedHolding() {
-    return {
-      id: CMS_SEED_ID,
-      account: '招商证券',
-      broker: '招商证券',
-      family: 'nasdaq',
-      code: '159501',
-      name: '嘉实纳斯达克100',
-      shares: 18300,
-      cost: 1.8303,
-      snapshotPrice: 2.12,
-      note: '2026-11-04 招商证券持仓截图（老公）',
-      seed: true,
-    };
-  }
-  function hasCmsNasdaqHolding(rows) {
-    return (rows || []).some((row) => {
-      if (String((row && row.id) || '') === CMS_SEED_ID) return true;
-      return brokerOf(row) === '招商证券' && String((row && row.code) || '').trim() === '159501';
-    });
-  }
-  function insertCmsSeed(rows) {
-    if (!rows || hasCmsNasdaqHolding(rows)) return false;
-    rows.push(cmsSeedHolding());
-    return true;
+    return removed;
   }
   function createSeed() {
-    const rows = [
-      { id: 'seed-h-galaxy-159501', account: '银河证券', broker: '银河证券', family: 'nasdaq', code: '159501', name: '嘉实纳斯达克100', shares: 11500, cost: 2.111, snapshotPrice: 2.144, note: '2026-11-02 持仓截图', seed: true },
-      { id: 'seed-h-galaxy-513500', account: '银河证券', broker: '银河证券', family: 'sp500', code: '513500', name: '博时标普500', shares: 2800, cost: 2.556, snapshotPrice: 2.654, note: '2026-11-02 持仓截图', seed: true },
-      { id: 'seed-h-pingan-159501', account: '平安证券', broker: '平安证券', family: 'nasdaq', code: '159501', name: '嘉实纳斯达克100', shares: 9300, cost: 1.8844, snapshotPrice: 2.144, note: '2026-11-02 持仓截图', seed: true },
-      { id: 'seed-h-pingan-513500', account: '平安证券', broker: '平安证券', family: 'sp500', code: '513500', name: '博时标普500', shares: 7700, cost: 2.3627, snapshotPrice: 2.654, note: '2026-11-02 持仓截图', seed: true },
-      { id: 'seed-h-pingan-159941', account: '平安证券', broker: '平安证券', family: 'nasdaq', code: '159941', name: '广发纳指100', shares: 6900, cost: 1.3354, snapshotPrice: 1.653, note: '截图为广发纳指，按同类表对应 159941 广发纳指100，可改', seed: true },
-      cmsSeedHolding(),
-    ];
-    const trades = [
-      { id: 'seed-t-20261019-159501', date: '2026-10-19', side: 'buy', account: '', broker: '', family: 'nasdaq', code: '159501', name: '嘉实纳斯达克100', amount: 3000, price: 2.182, premium: null, shares: round4(3000 / 2.182), note: '笔记；账户待确认；回撤约6.56%', seed: true, journal: true, createdAt: '2026-10-19T09:00:00+08:00' },
-      { id: 'seed-t-20261102-159501', date: '2026-11-02', side: 'buy', account: '银河证券', broker: '银河证券', family: 'nasdaq', code: '159501', name: '嘉实纳斯达克100', amount: 19400, price: 2.136, premium: 19, shares: round4(19400 / 2.136), note: '回撤约9%', seed: true, journal: true, createdAt: '2026-11-02T15:00:00+08:00' },
-      { id: 'seed-t-20261102-513500', date: '2026-11-02', side: 'buy', account: '银河证券', broker: '银河证券', family: 'sp500', code: '513500', name: '博时标普500', amount: 4200, price: 2.632, premium: 9, shares: round4(4200 / 2.632), note: '回撤约3%', seed: true, journal: true, createdAt: '2026-11-02T15:05:00+08:00' },
-    ];
-    let mv = 0;
-    rows.forEach((h) => { mv += h.shares * h.snapshotPrice; });
-    return {
-      trades,
-      rows,
-      peaks: { '2026': { mv: round2(mv), asOf: '2026-11-02' } },
-      seeded: true,
-    };
+    return emptyLedger();
+  }
+  function applyBrokerSwap() {
+    return false;
+  }
+  function insertCmsSeed() {
+    return false;
   }
 
   let ctx = null;
@@ -510,9 +443,8 @@
     const tRaw = storageGet(TRADES_KEY);
     const hRaw = storageGet(HOLDINGS_KEY);
     if (tRaw == null && hRaw == null) {
-      state = createSeed();
-      storageSet(BROKER_SWAP_KEY, '1');
-      storageSet(CMS_SEED_KEY, '1');
+      state = emptyLedger();
+      storageSet(PURGE_KEY, '1');
       persist();
       return;
     }
@@ -524,20 +456,16 @@
         holdings: Array.isArray(hold) ? hold : hold,
         peaks: hold && hold.peaks,
         peaksByFamily: hold && hold.peaksByFamily,
-        seeded: hold && hold.seeded != null ? hold.seeded : true,
+        seeded: true,
       });
-      if (storageGet(BROKER_SWAP_KEY) !== '1') {
-        const changed = applyBrokerSwap(state.rows, state.trades);
-        storageSet(BROKER_SWAP_KEY, '1');
-        if (changed) persist();
-      }
-      if (storageGet(CMS_SEED_KEY) !== '1') {
-        const inserted = insertCmsSeed(state.rows);
-        storageSet(CMS_SEED_KEY, '1');
-        if (inserted) persist();
+      const purged = stripPublishedSeed(state);
+      if (purged || storageGet(PURGE_KEY) !== '1') {
+        storageSet(PURGE_KEY, '1');
+        persist();
       }
     } catch (e) {
-      state = { trades: [], rows: [], peaks: {}, peaksByFamily: {}, seeded: true, loadError: true };
+      state = emptyLedger();
+      state.loadError = true;
     }
   }
   function catalog() {
@@ -745,7 +673,7 @@
         <td>${esc(brokerOf(h) || '未填')}</td>
         <td>${familyLabel(h.family)}</td>
         <td><strong>${esc(h.code || '—')}</strong></td>
-        <td>${esc(h.name || '')}${h.seed ? '<span class="tag wait">种子</span>' : ''}${h.note ? `<span class="sub cell-wrap">${esc(h.note)}</span>` : ''}</td>
+        <td>${esc(h.name || '')}${h.note ? `<span class="sub cell-wrap">${esc(h.note)}</span>` : ''}</td>
         <td class="num">${fmtShares(h.shares)}</td>
         <td class="num">${fmtPx(h.cost)}</td>
         <td class="num">${fmtMoney(h.costAmount)}</td>
@@ -778,7 +706,7 @@
         <td>${esc(brokerOf(t) || '未填')}</td>
         <td>${familyLabel(t.family)}</td>
         <td><strong>${esc(t.code || '—')}</strong></td>
-        <td>${esc(t.name || '')}${t.seed ? '<span class="tag wait">种子</span>' : ''}</td>
+        <td>${esc(t.name || '')}</td>
         <td class="num">${fmtMoney(t.amount)}</td>
         <td class="num">${fmtPx(t.price)}</td>
         <td class="num">${t.premium == null ? '—' : fmtPrem(t.premium)}</td>
@@ -996,7 +924,7 @@
       if (idx < 0) return setTradeMsg('找不到这条流水。');
       const prev = state.trades[idx];
       state.trades[idx] = Object.assign({}, prev, trade, {
-        id: prev.id, seed: prev.seed, journal: prev.journal, createdAt: prev.createdAt,
+        id: prev.id, seed: false, journal: prev.journal, createdAt: prev.createdAt,
       });
       persist();
       resetTradeForm();
@@ -1176,6 +1104,7 @@
       try {
         const raw = JSON.parse(String(reader.result || ''));
         const bundle = normalizeBundle(raw);
+        stripPublishedSeed(bundle);
         if (!window.confirm('导入会覆盖这台浏览器里的流水、持仓和峰值。确定？')) return;
         state = bundle;
         state.loadError = false;
@@ -1238,8 +1167,8 @@
       onImportFile(file);
     });
     document.getElementById('ledgerClear').addEventListener('click', () => {
-      if (!window.confirm('清空这台浏览器里的流水、持仓和峰值？不会自动再写入种子。')) return;
-      state = { trades: [], rows: [], peaks: {}, seeded: true, loadError: false };
+      if (!window.confirm('清空这台浏览器里的流水、持仓和峰值？只清这一台，不会写到别人的浏览器。')) return;
+      state = { trades: [], rows: [], peaks: {}, peaksByFamily: {}, seeded: true, loadError: false };
       persist();
       resetTradeForm();
       resetHoldForm();

@@ -423,9 +423,9 @@
   </section>
 
   <section id="ledgerSection">
-    <h2>买卖记录本 <span class="hint">只存在这台浏览器 · 可导出 JSON 备份</span></h2>
+    <h2>买卖记录本 <span class="hint">只存在这台浏览器 · 不上传、不同步</span></h2>
     <div class="card">
-      <p class="pick-intro">持仓快照按券商和代码记数量、成本价。卖出额度仍按纳指、标普各自合计，不按券商拆开。现价优先用本页公开行情，没有则用日报快照或你填的快照价。买卖记录是流水，不会自动把同一笔再加进数量。新记一笔时可以勾选顺手改持仓：买入按金额加权更新成本，卖出只扣数量。改掉旧流水不会回头改持仓。仅供个人记录辅助，非投资建议。</p>
+      <p class="pick-intro">持仓与买卖记录只存在本机浏览器 localStorage；别人打开同一网址看不到你的数据，也改不了你的数据（每人各自一份本地数据）。没有服务器上的共享账本，在一台设备上修改不会写到另一位访客。第一次打开是空的持仓和空的流水。持仓快照按券商和代码记数量、成本价。卖出额度仍按纳指、标普各自合计，不按券商拆开。现价优先用本页公开行情，没有则用日报快照或你填的快照价。买卖记录是流水，不会自动把同一笔再加进数量。新记一笔时可以勾选顺手改持仓：买入按金额加权更新成本，卖出只扣数量。改掉旧流水不会回头改持仓。可以导出 JSON 备份，不要把导出文件提交进仓库。仅供个人记录辅助，非投资建议。</p>
       <div id="ledgerSeedNote" class="note-banner" hidden></div>
       <div id="sellPanel" class="sell-box" aria-live="polite">卖出额度计算中…</div>
 
@@ -573,7 +573,7 @@
       </form>
       <p id="tradeMsg" class="pick-intro"></p>
 
-      <h3 class="ledger-h">流水 <span class="hint">新的在前 · 种子笔记不会重复加仓</span></h3>
+      <h3 class="ledger-h">流水 <span class="hint">新的在前 · 只在这台浏览器</span></h3>
       <p class="scroll-hint">表格可左右滑动</p>
       <div class="table-scroll">
         <table>
@@ -592,7 +592,7 @@
         <input id="ledgerFile" type="file" accept="application/json,.json" hidden />
         <button type="button" class="btn" id="ledgerClear">清空本机记录</button>
       </div>
-      <p class="pick-src">存在键名 nazhietf.trades 和 nazhietf.holdings。清空或导入之后，不会再次自动写入种子。不要把导出的 JSON 提交进仓库。</p>
+      <p class="pick-src">存在键名 nazhietf.trades 和 nazhietf.holdings，只在这台浏览器的 localStorage 里。别人打开同一网址看不到你的数据，也改不了你的数据。不要把导出的 JSON 提交进仓库。</p>
     </div>
   </section>
 
