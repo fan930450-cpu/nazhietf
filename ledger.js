@@ -9,6 +9,7 @@
 })(typeof globalThis !== 'undefined' ? globalThis : this, function () {
   const TRADES_KEY = 'nazhietf.trades';
   const HOLDINGS_KEY = 'nazhietf.holdings';
+  const BROKER_SWAP_KEY = 'nazhietf.brokerSwapV1';
   const TACTICAL_MID = 0.06;
   const ANNUAL_CAP = 0.20;
   const CORE_FLOOR = 0.75;
@@ -375,13 +376,63 @@
       seeded,
     };
   }
+  const SEED_ID_SWAP = {
+    'seed-h-pingan-159501': 'seed-h-galaxy-159501',
+    'seed-h-pingan-513500': 'seed-h-galaxy-513500',
+    'seed-h-galaxy-159501': 'seed-h-pingan-159501',
+    'seed-h-galaxy-513500': 'seed-h-pingan-513500',
+    'seed-h-galaxy-159941': 'seed-h-pingan-159941',
+  };
+  const SEED_PAIRS = [
+    { code: '159501', shares: 11500, cost: 2.111 },
+    { code: '513500', shares: 2800, cost: 2.556 },
+    { code: '159501', shares: 9300, cost: 1.8844 },
+    { code: '159941', shares: 6900, cost: 1.3354 },
+    { code: '513500', shares: 7700, cost: 2.3627 },
+  ];
+  function nearNum(a, b) {
+    const x = num(a);
+    const y = num(b);
+    return x != null && y != null && Math.abs(x - y) < 0.0001;
+  }
+  function swappablePingAnOrGalaxy(row) {
+    const fields = [row && row.broker, row && row.account].map((v) => String(v || '').trim()).filter(Boolean);
+    if (!fields.length) return '';
+    if (fields.some((v) => v !== fields[0])) return '';
+    if (fields[0] !== '平安证券' && fields[0] !== '银河证券') return '';
+    return fields[0];
+  }
+  function matchesSeedPair(row) {
+    const code = String((row && row.code) || '').trim();
+    const shares = row && row.shares;
+    const cost = row && (row.cost != null ? row.cost : row.price);
+    return SEED_PAIRS.some((p) => p.code === code && nearNum(shares, p.shares) && nearNum(cost, p.cost));
+  }
+  function applyBrokerSwap(rows, trades) {
+    let changed = false;
+    function swapRow(row) {
+      const label = swappablePingAnOrGalaxy(row);
+      if (!label) return;
+      const id = String((row && row.id) || '');
+      const byId = Object.prototype.hasOwnProperty.call(SEED_ID_SWAP, id);
+      if (!byId && !matchesSeedPair(row)) return;
+      const next = label === '平安证券' ? '银河证券' : '平安证券';
+      row.account = next;
+      row.broker = next;
+      if (byId) row.id = SEED_ID_SWAP[id];
+      changed = true;
+    }
+    (rows || []).forEach(swapRow);
+    (trades || []).forEach(swapRow);
+    return changed;
+  }
   function createSeed() {
     const rows = [
-      { id: 'seed-h-pingan-159501', account: '平安证券', broker: '平安证券', family: 'nasdaq', code: '159501', name: '嘉实纳斯达克100', shares: 11500, cost: 2.111, snapshotPrice: 2.144, note: '2026-11-02 持仓截图', seed: true },
-      { id: 'seed-h-pingan-513500', account: '平安证券', broker: '平安证券', family: 'sp500', code: '513500', name: '博时标普500', shares: 2800, cost: 2.556, snapshotPrice: 2.654, note: '2026-11-02 持仓截图', seed: true },
-      { id: 'seed-h-galaxy-159501', account: '银河证券', broker: '银河证券', family: 'nasdaq', code: '159501', name: '嘉实纳斯达克100', shares: 9300, cost: 1.8844, snapshotPrice: 2.144, note: '2026-11-02 持仓截图', seed: true },
-      { id: 'seed-h-galaxy-513500', account: '银河证券', broker: '银河证券', family: 'sp500', code: '513500', name: '博时标普500', shares: 7700, cost: 2.3627, snapshotPrice: 2.654, note: '2026-11-02 持仓截图', seed: true },
-      { id: 'seed-h-galaxy-159941', account: '银河证券', broker: '银河证券', family: 'nasdaq', code: '159941', name: '广发纳指100', shares: 6900, cost: 1.3354, snapshotPrice: 1.653, note: '截图为广发纳指，按同类表对应 159941 广发纳指100，可改', seed: true },
+      { id: 'seed-h-galaxy-159501', account: '银河证券', broker: '银河证券', family: 'nasdaq', code: '159501', name: '嘉实纳斯达克100', shares: 11500, cost: 2.111, snapshotPrice: 2.144, note: '2026-11-02 持仓截图', seed: true },
+      { id: 'seed-h-galaxy-513500', account: '银河证券', broker: '银河证券', family: 'sp500', code: '513500', name: '博时标普500', shares: 2800, cost: 2.556, snapshotPrice: 2.654, note: '2026-11-02 持仓截图', seed: true },
+      { id: 'seed-h-pingan-159501', account: '平安证券', broker: '平安证券', family: 'nasdaq', code: '159501', name: '嘉实纳斯达克100', shares: 9300, cost: 1.8844, snapshotPrice: 2.144, note: '2026-11-02 持仓截图', seed: true },
+      { id: 'seed-h-pingan-513500', account: '平安证券', broker: '平安证券', family: 'sp500', code: '513500', name: '博时标普500', shares: 7700, cost: 2.3627, snapshotPrice: 2.654, note: '2026-11-02 持仓截图', seed: true },
+      { id: 'seed-h-pingan-159941', account: '平安证券', broker: '平安证券', family: 'nasdaq', code: '159941', name: '广发纳指100', shares: 6900, cost: 1.3354, snapshotPrice: 1.653, note: '截图为广发纳指，按同类表对应 159941 广发纳指100，可改', seed: true },
     ];
     const trades = [
       { id: 'seed-t-20261019-159501', date: '2026-10-19', side: 'buy', account: '', broker: '', family: 'nasdaq', code: '159501', name: '嘉实纳斯达克100', amount: 3000, price: 2.182, premium: null, shares: round4(3000 / 2.182), note: '笔记；账户待确认；回撤约6.56%', seed: true, journal: true, createdAt: '2026-10-19T09:00:00+08:00' },
@@ -431,6 +482,7 @@
     const hRaw = storageGet(HOLDINGS_KEY);
     if (tRaw == null && hRaw == null) {
       state = createSeed();
+      storageSet(BROKER_SWAP_KEY, '1');
       persist();
       return;
     }
@@ -444,6 +496,11 @@
         peaksByFamily: hold && hold.peaksByFamily,
         seeded: hold && hold.seeded != null ? hold.seeded : true,
       });
+      if (storageGet(BROKER_SWAP_KEY) !== '1') {
+        const changed = applyBrokerSwap(state.rows, state.trades);
+        storageSet(BROKER_SWAP_KEY, '1');
+        if (changed) persist();
+      }
     } catch (e) {
       state = { trades: [], rows: [], peaks: {}, peaksByFamily: {}, seeded: true, loadError: true };
     }
@@ -1242,6 +1299,7 @@
     ANNUAL_CAP,
     CORE_FLOOR,
     createSeed,
+    applyBrokerSwap,
     clampSell,
     ytdSold,
     computePlan,
