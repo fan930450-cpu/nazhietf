@@ -745,7 +745,7 @@
         <td>${esc(brokerOf(h) || '未填')}</td>
         <td>${familyLabel(h.family)}</td>
         <td><strong>${esc(h.code || '—')}</strong></td>
-        <td>${esc(h.name || '')}${h.seed ? '<span class="tag wait">种子</span>' : ''}${h.note ? `<span class="sub">${esc(h.note)}</span>` : ''}</td>
+        <td>${esc(h.name || '')}${h.seed ? '<span class="tag wait">种子</span>' : ''}${h.note ? `<span class="sub cell-wrap">${esc(h.note)}</span>` : ''}</td>
         <td class="num">${fmtShares(h.shares)}</td>
         <td class="num">${fmtPx(h.cost)}</td>
         <td class="num">${fmtMoney(h.costAmount)}</td>
@@ -783,7 +783,7 @@
         <td class="num">${fmtPx(t.price)}</td>
         <td class="num">${t.premium == null ? '—' : fmtPrem(t.premium)}</td>
         <td class="num">${fmtShares(t.shares)}</td>
-        <td>${esc(t.note || '')}</td>
+        <td>${t.note ? `<div class="cell-wrap">${esc(t.note)}</div>` : ''}</td>
         <td><button type="button" class="btn tiny" data-act="edit-trade" data-id="${esc(t.id)}">修改</button>
           <button type="button" class="btn tiny danger" data-act="del-trade" data-id="${esc(t.id)}">删除</button></td>
       </tr>`).join('') : '<tr><td colspan="12">还没有流水。</td></tr>';
