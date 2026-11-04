@@ -1845,9 +1845,25 @@
   }
 
   // 美股底层：QQQ / SPY 回撤用近 365 天滚动高点，切换区间不改同一天的回撤。
+  // 没存过选择时默认近一年。浏览器里已有 nazhietf.usRange 时沿用上次的窗口。
   const US_RANGES = { 31: '近一个月', 183: '近半年', 365: '近一年' };
+  const US_RANGE_KEY = 'nazhietf.usRange';
+  const US_RANGE_DEFAULT = 365;
   let usChart = null;
-  let usRange = 365;
+  let usRange = US_RANGE_DEFAULT;
+  function savedUsRange() {
+    try {
+      const raw = localStorage.getItem(US_RANGE_KEY);
+      if (raw == null || raw === '') return null;
+      const days = Number(raw);
+      return US_RANGES[days] ? days : null;
+    } catch (e) {
+      return null;
+    }
+  }
+  function rememberUsRange(days) {
+    try { localStorage.setItem(US_RANGE_KEY, String(days)); } catch (e) { /* 隐私模式不保存 */ }
+  }
   function shiftDate(iso, days) {
     const d = new Date(iso + 'T00:00:00Z');
     d.setUTCDate(d.getUTCDate() + days);
@@ -1981,9 +1997,13 @@
     usRanges.addEventListener('click', (ev) => {
       const btn = ev.target.closest('[data-us-range]');
       if (!btn) return;
-      paintUs(Number(btn.dataset.usRange));
+      const days = Number(btn.dataset.usRange);
+      if (!US_RANGES[days]) return;
+      rememberUsRange(days);
+      paintUs(days);
     });
-    paintUs(365);
+    const saved = savedUsRange();
+    paintUs(saved == null ? US_RANGE_DEFAULT : saved);
   }
 })();
 </script>
