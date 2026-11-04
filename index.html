@@ -293,7 +293,7 @@
   <section id="picksSection">
     <h2>今日同类怎么选 <span class="hint">先纳指100，再标普500 · 不改顶部的定投金额</span></h2>
     <div class="card">
-      <p class="pick-intro">纳指顶部金额按 159501 距近一年最高净值的回撤和它自己的溢价计算。标普金额在上面的标普卡片，按 513500 和标普自己的 P60 计算，两笔互不替换。这里只回答今天买哪只：成交够用时先看更低溢价；价差在约 1–2 个点内，再偏向更低的管理+托管费和更大规模。净值日落后的基金会标明，不拿它的回撤和已更新的基金比。</p>
+      <p class="pick-intro">纳指顶部金额按 159501 距近一年最高净值的回撤和它自己的溢价计算。标普金额在上面的标普卡片，按 513500 和标普自己的 P60 计算，两笔互不替换。这里只回答今天买哪只：成交够用时先看更低溢价；价差在约 1–2 个点内，再偏向更低的管理+托管费和更大规模。净值日相差一个公布日不影响今天买哪只。落后超过一个公布日的会标明，不拿它的回撤和已更新的基金比。</p>
       <div id="picksRoot">短名单加载中…</div>
     </div>
   </section>
@@ -759,11 +759,53 @@
     return { c, label, expensive };
   }
 
-  function nasdaqToday() {
-    const groups = (D.picks && D.picks.groups) || [];
-    const group = groups.find(g => g.id === 'nasdaq-100');
-    if (!group || !group.today_code) return null;
-    return (group.items || []).find(it => it.code === group.today_code) || null;
+  // 与 refresh.py 的 choose_today / resolve_buy_target 一致。净值日不参与这个选择。
+  const PICK_SPREAD = 2;
+  const PICK_MIN_TURNOVER = 50000000;
+  const PICK_EXPENSIVE_GAP = 5;
+
+  function withQuotePremium(it) {
+    const q = liveMap[it.code];
+    if (!q || q.premium == null || Number.isNaN(Number(q.premium))) return it;
+    return Object.assign({}, it, { ref_premium_pct: Number(q.premium) });
+  }
+  function shortlistItems(groupId) {
+    const group = ((D.picks && D.picks.groups) || []).find(g => g.id === groupId);
+    return ((group && group.items) || []).map(withQuotePremium);
+  }
+  function bandPick(items) {
+    if (!items.length) return null;
+    const floor = Math.min.apply(null, items.map(it => Number(it.ref_premium_pct)));
+    const band = items.filter(it => Number(it.ref_premium_pct) <= floor + PICK_SPREAD);
+    band.sort((a, b) => {
+      const fa = a.fee_total_pct == null ? 999 : Number(a.fee_total_pct);
+      const fb = b.fee_total_pct == null ? 999 : Number(b.fee_total_pct);
+      if (fa !== fb) return fa - fb;
+      return (b.aum_cny || 0) - (a.aum_cny || 0);
+    });
+    return band[0] || null;
+  }
+  function chooseToday(items) {
+    const priced = (items || []).filter(it => it && it.ref_premium_pct != null && !Number.isNaN(Number(it.ref_premium_pct)));
+    const liquid = priced.filter(it => it.turnover_cny == null || it.turnover_cny >= PICK_MIN_TURNOVER);
+    return bandPick(liquid.length ? liquid : priced);
+  }
+  function cheaperShortlistTarget(primaryCode, primaryPremium, expensive, items) {
+    const prem = Number(primaryPremium);
+    if (Number.isNaN(prem)) return null;
+    const liquid = (items || []).filter(it => {
+      if (!it || !it.code || it.ref_premium_pct == null || Number.isNaN(Number(it.ref_premium_pct))) return false;
+      return it.turnover_cny == null || it.turnover_cny >= PICK_MIN_TURNOVER;
+    });
+    const cheaper = liquid.filter(it => it.code !== primaryCode && Number(it.ref_premium_pct) < prem - 1e-9);
+    if (!cheaper.length) return null;
+    const floor = Math.min.apply(null, cheaper.map(it => Number(it.ref_premium_pct)));
+    const clearly = !!expensive || prem - floor >= PICK_EXPENSIVE_GAP;
+    if (!clearly) return null;
+    const chosen = bandPick(cheaper);
+    if (!chosen) return null;
+    const natural = bandPick(liquid);
+    return { item: chosen, overridden: !natural || natural.code === primaryCode };
   }
 
   function cheapestPeer() {
@@ -774,20 +816,28 @@
 
   function suggestBuyTarget(p, pr) {
     const cheap = cheapestPeer();
-    const ndxToday = nasdaqToday();
-    let targetCode = '159501', targetName = '嘉实纳斯达克100', targetPrem = p, targetNote = '主标的';
-    if (pr.expensive && ndxToday) {
-      targetCode = ndxToday.code;
-      targetName = ndxToday.name;
-      targetPrem = ndxToday.ref_premium_pct;
-      targetNote = '159501明显贵；价差约 2 个点内优先更低费率或更大规模';
-    } else if (pr.expensive && cheap) {
-      targetCode = cheap.code;
-      targetName = cheap.name;
-      targetPrem = cheap.ref_premium_pct;
-      targetNote = '159501明显贵，优先同类更便宜';
+    const alt = cheaperShortlistTarget('159501', p, pr && pr.expensive, shortlistItems('nasdaq-100'));
+    if (alt) {
+      return {
+        targetCode: alt.item.code,
+        targetName: alt.item.name || alt.item.code,
+        targetPrem: alt.item.ref_premium_pct,
+        targetNote: alt.overridden
+          ? '159501明显贵，优先同类更便宜'
+          : '159501明显贵；短名单在约 2 个点价差内优先更低费率或更大规模',
+        cheap,
+      };
     }
-    return { targetCode, targetName, targetPrem, targetNote, cheap };
+    if (pr && pr.expensive && cheap && Number(cheap.ref_premium_pct) < Number(p)) {
+      return {
+        targetCode: cheap.code,
+        targetName: cheap.name,
+        targetPrem: cheap.ref_premium_pct,
+        targetNote: '159501明显贵，优先同类更便宜',
+        cheap,
+      };
+    }
+    return { targetCode: '159501', targetName: '嘉实纳斯达克100', targetPrem: p, targetNote: '主标的', cheap };
   }
 
   function spFamilyTriggered() {
@@ -953,21 +1003,16 @@
     return best;
   }
 
-  function spxToday() {
-    const groups = groupsForView();
-    const group = groups.find(g => g.id === 'sp-500');
-    if (!group || !group.today_code) return null;
-    return (group.items || []).find(it => it.code === group.today_code) || null;
-  }
-
   function spxSuggestTarget(p, pr) {
-    const today = spxToday();
-    if (pr.expensive && today && today.code !== SPX_CODE) {
+    const alt = cheaperShortlistTarget(SPX_CODE, p, pr && pr.expensive, shortlistItems('sp-500'));
+    if (alt) {
       return {
-        code: today.code,
-        name: today.name || today.code,
-        prem: today.ref_premium_pct,
-        note: '513500明显贵；价差约 2 个点内优先更低费率或更大规模',
+        code: alt.item.code,
+        name: alt.item.name || alt.item.code,
+        prem: alt.item.ref_premium_pct,
+        note: alt.overridden
+          ? '513500明显贵，优先同类更便宜'
+          : '513500明显贵；标普短名单在约 2 个点价差内优先更低费率或更大规模',
       };
     }
     const etf = spxEtfs().find(e => e.code === SPX_CODE);
@@ -1480,33 +1525,17 @@
     const asof = it.tracking_asof ? `截至 ${it.tracking_asof}` : '';
     return `${fmt(it.tracking_error_pct)}%<span class="sub">${asof}</span>`;
   }
-  const PICK_SPREAD = 2;
-  const PICK_MIN_TURNOVER = 50000000;
-  function chooseTodayLive(items) {
-    const pool = items.filter(it => it.ref_premium_pct != null && !it.nav_stale && (it.turnover_cny == null || it.turnover_cny >= PICK_MIN_TURNOVER));
-    const usable = pool.length ? pool : items.filter(it => it.ref_premium_pct != null && !it.nav_stale);
-    if (!usable.length) return null;
-    const floor = Math.min.apply(null, usable.map(it => it.ref_premium_pct));
-    const band = usable.filter(it => it.ref_premium_pct <= floor + PICK_SPREAD);
-    band.sort((a, b) => {
-      const fa = a.fee_total_pct == null ? 999 : a.fee_total_pct;
-      const fb = b.fee_total_pct == null ? 999 : b.fee_total_pct;
-      if (fa !== fb) return fa - fb;
-      return (b.aum_cny || 0) - (a.aum_cny || 0);
-    });
-    return band[0] || null;
-  }
   function groupsForView() {
     const picks = D.picks;
     if (!picks) return [];
     return (picks.groups || []).map(group => {
       const items = (group.items || []).map(it => {
+        const next = withQuotePremium(it);
         const q = liveMap[it.code];
-        if (!q) return it;
-        return Object.assign({}, it, { ref_premium_pct: q.premium, live_price: q.price, iopv: q.iopv });
+        if (!q) return next;
+        return Object.assign({}, next, { live_price: q.price, iopv: q.iopv });
       });
-      if (!Object.keys(liveMap).length) return Object.assign({}, group, { items });
-      const today = chooseTodayLive(items);
+      const today = chooseToday(items);
       const ranked = items.map(it => Object.assign({}, it, { is_today: !!(today && it.code === today.code) }));
       ranked.sort((a, b) => (b.is_today - a.is_today) || ((a.ref_premium_pct == null ? 999 : a.ref_premium_pct) - (b.ref_premium_pct == null ? 999 : b.ref_premium_pct)));
       const todayLine = today ? `今日优先 ${today.code} ${today.name || ''} · 参考溢价 ${fmt(today.ref_premium_pct)}%` : (group.today_line || '');
