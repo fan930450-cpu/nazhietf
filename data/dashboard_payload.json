@@ -5000,7 +5000,9 @@
       "nav_premium_pct": 12.6302,
       "live_price": 2.37,
       "live_asof": "20261104 113450",
-      "is_primary": false
+      "is_primary": false,
+      "aum_cny": 5206403101.59,
+      "aum_as_of": "2026-09-30"
     },
     {
       "code": "159513",
@@ -5011,7 +5013,9 @@
       "nav_premium_pct": 12.6431,
       "live_price": 1.723,
       "live_asof": "20261104 113448",
-      "is_primary": false
+      "is_primary": false,
+      "aum_cny": 8247084312.16,
+      "aum_as_of": "2026-09-30"
     },
     {
       "code": "159632",
@@ -5022,7 +5026,9 @@
       "nav_premium_pct": 12.8576,
       "live_price": 2.363,
       "live_asof": "20261104 113451",
-      "is_primary": false
+      "is_primary": false,
+      "aum_cny": 11807689943.57,
+      "aum_as_of": "2026-09-30"
     },
     {
       "code": "513300",
@@ -5033,7 +5039,9 @@
       "nav_premium_pct": 13.763,
       "live_price": 2.594,
       "live_asof": "20261104 113450",
-      "is_primary": false
+      "is_primary": false,
+      "aum_cny": 13913693808.13,
+      "aum_as_of": "2026-09-30"
     },
     {
       "code": "159660",
@@ -5044,7 +5052,9 @@
       "nav_premium_pct": 13.6769,
       "live_price": 2.288,
       "live_asof": "20261104 113518",
-      "is_primary": false
+      "is_primary": false,
+      "aum_cny": 5774231766.58,
+      "aum_as_of": "2026-09-30"
     },
     {
       "code": "513390",
@@ -5055,7 +5065,9 @@
       "nav_premium_pct": 13.6044,
       "live_price": 2.35,
       "live_asof": "20261104 113459",
-      "is_primary": false
+      "is_primary": false,
+      "aum_cny": 5048198903.37,
+      "aum_as_of": "2026-09-30"
     },
     {
       "code": "513870",
@@ -5066,7 +5078,9 @@
       "nav_premium_pct": 14.3252,
       "live_price": 2.006,
       "live_asof": "20261104 113504",
-      "is_primary": false
+      "is_primary": false,
+      "aum_cny": 2890047086.53,
+      "aum_as_of": "2026-09-30"
     },
     {
       "code": "159659",
@@ -5077,7 +5091,9 @@
       "nav_premium_pct": 14.8148,
       "live_price": 2.288,
       "live_asof": "20261104 113442",
-      "is_primary": false
+      "is_primary": false,
+      "aum_cny": 10273843992.01,
+      "aum_as_of": "2026-09-30"
     },
     {
       "code": "159941",
@@ -5088,7 +5104,9 @@
       "nav_premium_pct": 16.1677,
       "live_price": 1.6,
       "live_asof": "20261104 113500",
-      "is_primary": false
+      "is_primary": false,
+      "aum_cny": 35053269451.03,
+      "aum_as_of": "2026-09-30"
     },
     {
       "code": "159696",
@@ -5099,7 +5117,9 @@
       "nav_premium_pct": 17.2078,
       "live_price": 2.005,
       "live_asof": "20261104 113503",
-      "is_primary": false
+      "is_primary": false,
+      "aum_cny": 5704500383.07,
+      "aum_as_of": "2026-09-30"
     },
     {
       "code": "513100",
@@ -5110,7 +5130,9 @@
       "nav_premium_pct": 17.9476,
       "live_price": 2.181,
       "live_asof": "20261104 113451",
-      "is_primary": false
+      "is_primary": false,
+      "aum_cny": 19765601284.11,
+      "aum_as_of": "2026-09-30"
     },
     {
       "code": "159501",
@@ -5121,7 +5143,63 @@
       "nav_premium_pct": 21.0252,
       "live_price": 2.092,
       "live_asof": "20261104 113509",
-      "is_primary": true
+      "is_primary": true,
+      "aum_cny": 13367955940.18,
+      "aum_as_of": "2026-09-30"
+    }
+  ],
+  "peers_spx": [
+    {
+      "code": "513650",
+      "name": "南方标普500",
+      "close": 1.942,
+      "iopv": 1.8243,
+      "ref_premium_pct": 6.4518,
+      "nav_premium_pct": 8.7052,
+      "live_price": 1.942,
+      "live_asof": "2026-11-03",
+      "is_primary": false,
+      "aum_cny": 8711339078.2,
+      "aum_as_of": "2026-09-30"
+    },
+    {
+      "code": "159655",
+      "name": "华夏标普500",
+      "close": 1.944,
+      "iopv": 1.8245,
+      "ref_premium_pct": 6.5497,
+      "nav_premium_pct": 8.6087,
+      "live_price": 1.944,
+      "live_asof": "2026-11-03",
+      "is_primary": false,
+      "aum_cny": 4171377744.31,
+      "aum_as_of": "2026-09-30"
+    },
+    {
+      "code": "159612",
+      "name": "国泰标普500",
+      "close": 2.011,
+      "iopv": 1.8785,
+      "ref_premium_pct": 7.0535,
+      "nav_premium_pct": 9.0047,
+      "live_price": 2.011,
+      "live_asof": "2026-11-03",
+      "is_primary": false,
+      "aum_cny": 977549238.98,
+      "aum_as_of": "2026-09-30"
+    },
+    {
+      "code": "513500",
+      "name": "博时标普500",
+      "close": 2.588,
+      "iopv": 2.3942,
+      "ref_premium_pct": 8.0946,
+      "nav_premium_pct": 10.8697,
+      "live_price": 2.588,
+      "live_asof": "2026-11-03",
+      "is_primary": true,
+      "aum_cny": 25181037712.79,
+      "aum_as_of": "2026-09-30"
     }
   ],
   "picks": {
