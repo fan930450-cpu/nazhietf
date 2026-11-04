@@ -401,6 +401,12 @@
     }
     return removed;
   }
+  function adoptUserLedger(bundle) {
+    (bundle.rows || []).forEach((row) => { row.seed = false; });
+    (bundle.trades || []).forEach((row) => { row.seed = false; });
+    bundle.seeded = true;
+    return bundle;
+  }
   function createSeed() {
     return emptyLedger();
   }
@@ -1103,9 +1109,8 @@
     reader.onload = () => {
       try {
         const raw = JSON.parse(String(reader.result || ''));
-        const bundle = normalizeBundle(raw);
-        stripPublishedSeed(bundle);
-        if (!window.confirm('导入会覆盖这台浏览器里的流水、持仓和峰值。确定？')) return;
+        const bundle = adoptUserLedger(normalizeBundle(raw));
+        if (!window.confirm('导入会覆盖这台浏览器里的流水、持仓和峰值。文件只写进这一台，不会上传。确定？')) return;
         state = bundle;
         state.loadError = false;
         persist();
