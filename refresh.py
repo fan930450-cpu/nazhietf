@@ -133,6 +133,50 @@ def short_name(name: str) -> str:
     return name or "纳指100"
 
 
+def fetch_aum_eastmoney(code: str) -> dict | None:
+    """天天基金规模变动表最新一行的期末净资产。单位从亿元换回人民币，失败就空着。"""
+    url = (
+        "https://fundf10.eastmoney.com/FundArchivesDatas.aspx"
+        f"?type=gmbd&code={code}&page=1&per=1"
+    )
+    raw = get(
+        url,
+        {"Referer": f"https://fundf10.eastmoney.com/gmbd_{code}.html"},
+        retries=2,
+        timeout=20,
+    )
+    text = raw.decode("utf-8", "replace")
+    m = re.search(
+        r"<tr><td>(\d{4}-\d{2}-\d{2})</td>"
+        r"<td[^>]*>[^<]*</td><td[^>]*>[^<]*</td><td[^>]*>[^<]*</td>"
+        r"<td[^>]*>([\d.]+)</td>",
+        text,
+    )
+    if not m:
+        return None
+    return {"aum_cny": float(m.group(2)) * 1e8, "aum_as_of": m.group(1)}
+
+
+def _fill_missing_aum(rows: list[dict]) -> None:
+    missing = [r for r in rows if r.get("code") and r.get("aum_cny") is None]
+    if not missing:
+        return
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        futs = {pool.submit(fetch_aum_eastmoney, r["code"]): r for r in missing}
+        for fut in futs:
+            row = futs[fut]
+            try:
+                got = fut.result()
+            except Exception as e:  # noqa: BLE001
+                print("规模失败", row["code"], e)
+                continue
+            if not got:
+                print("规模没有数字", row["code"])
+                continue
+            row["aum_cny"] = got["aum_cny"]
+            row["aum_as_of"] = got["aum_as_of"]
+
+
 def drawdown_coef(dd: float | None, day_chg: float | None = None) -> tuple[float, str]:
     """距近一年最高净值的回撤（正数，单位百分点）。与 index.html 一致。
 
@@ -649,6 +693,31 @@ def parse_qdiilens(html: str) -> tuple[list[dict], str | None, dict]:
             "nav_premium_pct": None,
         }
 
+    def blank_peer(code: str, name: str) -> dict:
+        return {
+            "code": code,
+            "name": short_name(name),
+            "ref_premium_pct": None,
+            "trading_date": None,
+            "close": None,
+            "iopv": None,
+            "nav_premium_pct": None,
+        }
+
+    # 行情对象不一定再带 index。先按基金名单把纳指、标普 ETF 都放进行列，后面的 quote 再填溢价。
+    spx_by_code: dict[str, dict] = {}
+    ident_re = re.compile(
+        r'\{"code":"(\d{6})","name":"([^"]+)","(?:full_name":"[^"]*",)?'
+        r'"kind":"etf","index":"(nasdaq-100|sp-500)"'
+    )
+    for code, name, index in ident_re.findall(text):
+        bucket = by_code if index == "nasdaq-100" else spx_by_code
+        row = bucket.get(code)
+        if row is None:
+            bucket[code] = blank_peer(code, name)
+        elif name:
+            row["name"] = short_name(name)
+
     start = 0
     marker = '"quote":{'
     while True:
@@ -664,7 +733,7 @@ def parse_qdiilens(html: str) -> tuple[list[dict], str | None, dict]:
         except json.JSONDecodeError:
             continue
         code = str(q.get("code") or "")
-        row = by_code.get(code)
+        row = by_code.get(code) or spx_by_code.get(code)
         if row is None:
             continue
         if q.get("market_price") is not None:
@@ -681,6 +750,7 @@ def parse_qdiilens(html: str) -> tuple[list[dict], str | None, dict]:
             row["name"] = short_name(str(q["name"]))
 
     funds: dict[str, dict] = {}
+    aum_by_code: dict[str, dict] = {}
     start = 0
     while True:
         i = text.find('"aum_cny":', start)
@@ -698,6 +768,13 @@ def parse_qdiilens(html: str) -> tuple[list[dict], str | None, dict]:
         except json.JSONDecodeError:
             continue
         code = str(fund.get("code") or "")
+        if not code:
+            continue
+        if fund.get("aum_cny") is not None:
+            aum_by_code[code] = {
+                "aum_cny": float(fund["aum_cny"]),
+                "aum_as_of": fund.get("aum_as_of"),
+            }
         if code not in PICK_CODES:
             continue
         mgmt, custody = _fee_pair(fund.get("fees") or [])
@@ -746,14 +823,32 @@ def parse_qdiilens(html: str) -> tuple[list[dict], str | None, dict]:
         if q.get("name"):
             slot["name"] = short_name(str(q["name"]))
 
-    peers = [by_code[c] for c in sorted(by_code)]
+    def attach_aum(rows: list[dict]) -> list[dict]:
+        kept = []
+        for row in rows:
+            if row.get("ref_premium_pct") is None and row.get("close") is None:
+                continue
+            extra = aum_by_code.get(row["code"])
+            if extra and extra.get("aum_cny") is not None:
+                row["aum_cny"] = extra["aum_cny"]
+                row["aum_as_of"] = extra.get("aum_as_of")
+            kept.append(row)
+        return kept
+
+    peers = attach_aum([by_code[c] for c in sorted(by_code)])
+    spx_peers = attach_aum([spx_by_code[c] for c in sorted(spx_by_code)])
     ref_date = None
     primary = by_code.get(PRIMARY)
     if primary:
         ref_date = primary.get("trading_date")
     elif peers:
         ref_date = peers[0].get("trading_date")
-    catalog = {"premiums": index_premiums, "funds": funds, "ref_date": ref_date}
+    catalog = {
+        "premiums": index_premiums,
+        "funds": funds,
+        "ref_date": ref_date,
+        "peers_spx": spx_peers,
+    }
     return peers, ref_date, catalog
 
 
@@ -935,11 +1030,12 @@ def build_picks(catalog: dict, tracking: dict[str, dict]) -> dict:
     }
 
 
-def fetch_qdiilens_bundle() -> tuple[list[dict], str | None, dict]:
+def fetch_qdiilens_bundle() -> tuple[list[dict], str | None, dict, list[dict]]:
     html = get("https://qdiilens.com/", timeout=40).decode("utf-8", "replace")
     peers, ref_date, catalog = parse_qdiilens(html)
     if not any(p["code"] == PRIMARY for p in peers) or len(peers) < 5:
         raise RuntimeError(f"QDII Lens 解析到的纳指 ETF 不足: {len(peers)}")
+    spx_peers = list(catalog.get("peers_spx") or [])
     try:
         tracking = fetch_tracking_errors()
     except Exception as e:  # noqa: BLE001
@@ -949,16 +1045,18 @@ def fetch_qdiilens_bundle() -> tuple[list[dict], str | None, dict]:
     print(
         "QDII Lens peers:",
         len(peers),
+        "spx:",
+        len(spx_peers),
         "ref_date=",
         ref_date,
         "picks=",
         [(g["id"], g["today_code"]) for g in picks["groups"]],
     )
-    return peers, ref_date, picks
+    return peers, ref_date, picks, spx_peers
 
 
-def _load_peers_csv() -> list[dict]:
-    path = DATA / "peers_latest.csv"
+def _load_peers_csv(path: Path | None = None) -> list[dict]:
+    path = path or (DATA / "peers_latest.csv")
     if not path.exists():
         return []
     rows = []
@@ -979,9 +1077,25 @@ def _load_peers_csv() -> list[dict]:
                     "iopv": num("iopv"),
                     "ref_premium_pct": num("ref_premium_pct"),
                     "nav_premium_pct": num("nav_premium_pct"),
+                    "aum_cny": num("aum_cny"),
+                    "aum_as_of": (r.get("aum_as_of") or "").strip() or None,
                 }
             )
     return rows
+
+
+def _load_saved_spx() -> list[dict]:
+    path = DATA / "dashboard_payload.json"
+    if not path.exists():
+        return _load_peers_csv(DATA / "peers_spx_latest.csv")
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return _load_peers_csv(DATA / "peers_spx_latest.csv")
+    rows = payload.get("peers_spx")
+    if isinstance(rows, list) and rows:
+        return rows
+    return _load_peers_csv(DATA / "peers_spx_latest.csv")
 
 
 def fetch_sina_spot(codes: list[str]) -> dict[str, dict]:
@@ -1637,6 +1751,7 @@ def build_payload(
     picks: dict | None = None,
     peer_stats: dict[str, dict] | None = None,
     us: dict | None = None,
+    spx_static: list[dict] | None = None,
 ) -> dict:
     if len(premium_rows) < 30:
         raise RuntimeError(f"溢价历史过短: {len(premium_rows)}")
@@ -1670,17 +1785,18 @@ def build_payload(
     day_chg = metrics["day_chg_pct"]
 
     use_live = intraday_quote_active(spot)
-    peers = []
-    for s in peers_static:
-        live = spot.get(s["code"], {})
-        ref = s.get("ref_premium_pct")
-        iopv = s.get("iopv")
-        if use_live and live.get("premium") is not None:
-            ref = live["premium"]
-        if use_live and live.get("iopv"):
-            iopv = live["iopv"]
-        peers.append(
-            {
+
+    def materialize(static_rows: list[dict], primary_code: str) -> list[dict]:
+        out = []
+        for s in static_rows:
+            live = spot.get(s["code"], {})
+            ref = s.get("ref_premium_pct")
+            iopv = s.get("iopv")
+            if use_live and live.get("premium") is not None:
+                ref = live["premium"]
+            if use_live and live.get("iopv"):
+                iopv = live["iopv"]
+            row = {
                 "code": s["code"],
                 "name": s.get("name") or s["code"],
                 "close": s.get("close") if s.get("close") is not None else live.get("price"),
@@ -1689,30 +1805,44 @@ def build_payload(
                 "nav_premium_pct": s.get("nav_premium_pct"),
                 "live_price": live.get("price"),
                 "live_asof": f"{live.get('date', '')} {live.get('time', '')}".strip() or None,
-                "is_primary": s["code"] == PRIMARY,
+                "is_primary": s["code"] == primary_code,
             }
-        )
-    if not any(p["code"] == PRIMARY for p in peers):
-        raise RuntimeError("同类列表缺少 159501")
-    peers_sorted = sorted(peers, key=lambda x: (x["ref_premium_pct"] is None, x["ref_premium_pct"] if x["ref_premium_pct"] is not None else 999))
+            if s.get("aum_cny") is not None:
+                row["aum_cny"] = round(float(s["aum_cny"]), 2)
+                if s.get("aum_as_of"):
+                    row["aum_as_of"] = s["aum_as_of"]
+            out.append(row)
+        out.sort(key=lambda x: (x["ref_premium_pct"] is None, x["ref_premium_pct"] if x["ref_premium_pct"] is not None else 999))
+        return out
 
-    with (DATA / "peers_latest.csv").open("w", newline="", encoding="utf-8") as f:
-        w = csv.DictWriter(
-            f,
-            fieldnames=[
-                "code",
-                "name",
-                "close",
-                "iopv",
-                "ref_premium_pct",
-                "nav_premium_pct",
-                "live_price",
-                "live_asof",
-                "is_primary",
-            ],
-        )
-        w.writeheader()
-        w.writerows(peers_sorted)
+    peers_sorted = materialize(peers_static, PRIMARY)
+    spx_sorted = materialize(spx_static or [], SPX_PRIMARY)
+    if not any(p["code"] == PRIMARY for p in peers_sorted):
+        raise RuntimeError("同类列表缺少 159501")
+
+    peer_fields = [
+        "code",
+        "name",
+        "close",
+        "iopv",
+        "ref_premium_pct",
+        "nav_premium_pct",
+        "live_price",
+        "live_asof",
+        "is_primary",
+        "aum_cny",
+        "aum_as_of",
+    ]
+
+    def write_peer_csv(path: Path, rows: list[dict]) -> None:
+        with path.open("w", newline="", encoding="utf-8") as f:
+            w = csv.DictWriter(f, fieldnames=peer_fields, extrasaction="ignore")
+            w.writeheader()
+            for row in rows:
+                w.writerow({key: row.get(key) for key in peer_fields})
+
+    write_peer_csv(DATA / "peers_latest.csv", peers_sorted)
+    write_peer_csv(DATA / "peers_spx_latest.csv", spx_sorted)
 
     peer_others = [p for p in peers_sorted if p["code"] != PRIMARY and p["ref_premium_pct"] is not None]
     peer_min_fund = peer_others[0] if peer_others else None
@@ -1855,6 +1985,7 @@ def build_payload(
         },
         "history": premium_rows,
         "peers": peers_sorted,
+        "peers_spx": spx_sorted,
         "picks": picks,
         "spx": build_spx_block(picks, peer_stats or {}),
         "us": us if us is not None else (_load_saved_us() or {
@@ -1919,6 +2050,7 @@ def main() -> None:
     nav_rows: list[dict] = []
     closes: list[dict] = []
     peers: list[dict] = []
+    spx_peers: list[dict] = []
     ref_date: str | None = None
     picks: dict | None = None
 
@@ -1939,10 +2071,11 @@ def main() -> None:
             print("行情拉取失败:", e)
             warnings.append("行情接口失败，溢价历史沿用本地 CSV")
         try:
-            peers, ref_date, picks = fut_lens.result()
+            peers, ref_date, picks, spx_peers = fut_lens.result()
         except Exception as e:  # noqa: BLE001
             print("QDII Lens 失败:", e)
             peers = _load_peers_csv() or [dict(p) for p in BAKED_PEERS]
+            spx_peers = _load_saved_spx()
             picks = _load_saved_picks()
             warnings.append("同类溢价接口失败，已用上一份快照")
 
@@ -1960,7 +2093,7 @@ def main() -> None:
 
     codes = []
     seen = set()
-    for row in peers:
+    for row in list(peers) + list(spx_peers):
         if row["code"] not in seen:
             seen.add(row["code"])
             codes.append(row["code"])
@@ -1975,10 +2108,25 @@ def main() -> None:
     if missing:
         warnings.append("部分同类缺少近一年高点回撤或 P60：" + "、".join(missing))
 
+    try:
+        _fill_missing_aum(list(peers) + list(spx_peers))
+    except Exception as e:  # noqa: BLE001
+        print("规模补齐失败:", e)
+        warnings.append("部分基金规模没有取到")
     us_block, us_warnings = fetch_us_block()
     warnings.extend(us_warnings)
     payload = build_payload(
-        premium_rows, nav_rows, closes, peers, spot, ref_date, warnings, picks, peer_stats, us_block
+        premium_rows,
+        nav_rows,
+        closes,
+        peers,
+        spot,
+        ref_date,
+        warnings,
+        picks,
+        peer_stats,
+        us_block,
+        spx_peers,
     )
     b = payload["briefing"]
     print(
