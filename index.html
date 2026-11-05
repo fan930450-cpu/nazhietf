@@ -186,7 +186,7 @@
   td.why { color: var(--muted); font-size: .8rem; line-height: 1.45; }
   td.why .cell-wrap { width: 16rem; max-width: 70vw; white-space: normal; }
   .sub.cell-wrap { width: 9.5rem; max-width: 46vw; }
-  td .sub { display: block; color: var(--muted); font-size: .72rem; margin-top: 2px; }
+  td .sub, th .sub { display: block; color: var(--muted); font-size: .72rem; font-weight: 500; margin-top: 2px; }
   .live-bar { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; justify-content: space-between; margin: 0 0 8px; color: var(--muted); font-size: .82rem; }
   .live-bar strong { color: var(--text); font-weight: 650; }
   .live-bar button { background: var(--card); color: var(--text); border: 1px solid var(--line); border-radius: 999px; padding: 6px 12px; cursor: pointer; font: inherit; }
@@ -287,8 +287,8 @@
     .btn.tiny { min-height: 40px; padding: 8px 12px; font-size: .85rem; }
     .form-actions, .ledger-actions:not(#usRanges) { flex-direction: column; align-items: stretch; }
     .form-actions .btn, .ledger-actions:not(#usRanges) .btn { width: 100%; text-align: center; }
-    #usRanges { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
-    #usRanges .btn { width: auto; min-height: 44px; padding: 10px 6px; }
+    #usRanges { display: flex; flex-wrap: wrap; gap: 8px; }
+    #usRanges .btn { flex: 1 1 calc(33.33% - 8px); width: auto; min-height: 44px; padding: 10px 6px; }
     .chk { align-items: center; }
     .chk input { width: 1.25rem; height: 1.25rem; margin-top: 0; flex: none; }
     input[type=number], input[type=text], input[type=date], select { min-height: 44px; }
@@ -733,7 +733,7 @@
         <table>
           <thead>
             <tr>
-              <th>代码</th><th>名称</th><th>参考溢价</th><th>净值溢价</th><th>收盘/现价</th><th>IOPV</th><th>基金规模</th><th>备注</th>
+              <th>代码</th><th>名称</th><th>参考溢价</th><th>净值溢价</th><th>收盘/现价</th><th>IOPV</th><th>基金规模</th><th>今年收益率（净值）<span class="sub" id="nasdaqYtdHead"></span></th><th>备注</th>
             </tr>
           </thead>
           <tbody id="peerBody"></tbody>
@@ -745,7 +745,7 @@
         <table>
           <thead>
             <tr>
-              <th>代码</th><th>名称</th><th>参考溢价</th><th>净值溢价</th><th>收盘/现价</th><th>IOPV</th><th>基金规模</th><th>备注</th>
+              <th>代码</th><th>名称</th><th>参考溢价</th><th>净值溢价</th><th>收盘/现价</th><th>IOPV</th><th>基金规模</th><th>今年收益率（净值）<span class="sub" id="spxYtdHead"></span></th><th>备注</th>
             </tr>
           </thead>
           <tbody id="peerBodySpx"></tbody>
@@ -780,6 +780,8 @@
         <button type="button" class="btn primary" data-us-range="31">近一个月</button>
         <button type="button" class="btn" data-us-range="183">近半年</button>
         <button type="button" class="btn" data-us-range="365">近一年</button>
+        <button type="button" class="btn" data-us-range="1095">近3年</button>
+        <button type="button" class="btn" data-us-range="1825">近5年</button>
       </div>
       <div class="grid" id="usChips" style="margin-top:12px"></div>
       <div class="chart-box" style="margin-top:12px">
@@ -2240,6 +2242,29 @@
     const asof = p.aum_as_of ? `<span class="sub">截至 ${p.aum_as_of}</span>` : '';
     return `${(n / 1e8).toFixed(1)} 亿${asof}`;
   }
+  function ytdText(n) {
+    if (n == null || Number.isNaN(Number(n))) return '';
+    const v = Number(n);
+    return (v > 0 ? '+' : '') + fmt(v) + '%';
+  }
+  function ytdCell(p) {
+    if (!p || p.ytd_nav_pct == null || Number.isNaN(Number(p.ytd_nav_pct))) return '—';
+    const n = Number(p.ytd_nav_pct);
+    const cls = n > 0.05 ? 'up' : (n < -0.05 ? 'down' : 'flat');
+    const bits = [];
+    if (p.ytd_nav_asof) bits.push('截至 ' + p.ytd_nav_asof);
+    if (p.ytd_nav_base_date) bits.push('基期 ' + p.ytd_nav_base_date);
+    const price = p.ytd_price_pct == null || Number.isNaN(Number(p.ytd_price_pct))
+      ? ''
+      : `<span class="sub">场内价格 ${ytdText(p.ytd_price_pct)}</span>`;
+    return `<span class="${cls}">${ytdText(n)}</span>${bits.length ? `<span class="sub">${bits.join(' · ')}</span>` : ''}${price}`;
+  }
+  function paintYtdHead(id, rows) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    const dates = (rows || []).map(p => p.ytd_nav_asof).filter(Boolean).sort();
+    el.textContent = dates.length ? '截至 ' + dates[dates.length - 1] : '';
+  }
   function paintPeerTable(tbody, rows) {
     if (!tbody) return;
     const list = (rows || []).slice().sort((a, b) => {
@@ -2253,7 +2278,7 @@
       const tr = document.createElement('tr');
       if (p.is_primary) tr.className = 'primary';
       else if (cheap && p.code === cheap.code) tr.className = 'cheap';
-      const note = p.is_primary ? '主标的' : (cheap && p.code === cheap.code ? '同类最低溢价' : '');
+      const note = p.note || (p.is_primary ? '主标的' : (cheap && p.code === cheap.code ? '同类最低溢价' : ''));
       tr.dataset.code = p.code;
       tr.innerHTML = `
         <td><strong>${p.code}</strong></td>
@@ -2263,9 +2288,12 @@
         <td class="js-px">${p.live_price != null ? fmt(p.live_price, 3) : (p.close != null ? fmt(p.close, 3) : '—')}</td>
         <td class="js-iopv">${p.iopv != null ? fmt(p.iopv, 4) : '—'}</td>
         <td class="js-aum">${fmtAum(p)}</td>
+        <td class="js-ytd">${ytdCell(p)}</td>
         <td>${note}</td>`;
       tbody.appendChild(tr);
     });
+    if (tbody.id === 'peerBody') paintYtdHead('nasdaqYtdHead', list);
+    if (tbody.id === 'peerBodySpx') paintYtdHead('spxYtdHead', list);
   }
   paintPeerTable(document.getElementById('peerBody'), D.peers || []);
   paintPeerTable(document.getElementById('peerBodySpx'), D.peers_spx || []);
@@ -2276,7 +2304,7 @@
   const sizeNote = document.getElementById('peerSizeNote');
   if (sizeNote) {
     const asof = sizeDates.length ? sizeDates.slice().sort().pop() : '—';
-    sizeNote.textContent = `基金规模是公开资料里的期末净资产，截至 ${asof}，不是今日市值。没有取到的格子留空，不编数字。仅供个人记录辅助，非投资建议。`;
+    sizeNote.textContent = `基金规模是公开资料里的期末净资产，截至 ${asof}，不是今日市值。今年收益率（净值）= 最新公布净值 ÷ 上年最后一个净值日的净值 − 1，不用行情价，所以不含溢价。场内价格今年收益率写在下面小字里。没有取到的格子留空，不编数字。仅供个人记录辅助，非投资建议。`;
   }
 
   function shanghaiMonth() {
@@ -2893,7 +2921,7 @@
   // 美股底层：QQQ / SPY 回撤用近 365 天滚动高点，切换区间不改同一天的回撤。
   // 没存过或无效时默认近一个月。nazhietf.usRangeDefaultMonthV1 只执行一次：
   // 这次打开强制回到近一个月（含之前误存的 365），之后点按钮才记住新窗口。
-  const US_RANGES = { 31: '近一个月', 183: '近半年', 365: '近一年' };
+  const US_RANGES = { 31: '近一个月', 183: '近半年', 365: '近一年', 1095: '近3年', 1825: '近5年' };
   const US_RANGE_KEY = 'nazhietf.usRange';
   const US_RANGE_MIGRATE_KEY = 'nazhietf.usRangeDefaultMonthV1';
   const US_RANGE_DEFAULT = 31;
@@ -2938,6 +2966,11 @@
     const start = shiftDate(end, -days);
     return rows.filter(r => r.date >= start);
   }
+  function usDdKey(prefix, days) {
+    if (days >= 1825) return prefix + '_dd_5y';
+    if (days >= 1095) return prefix + '_dd_3y';
+    return prefix + '_dd';
+  }
   function seriesStats(rows, key) {
     const vals = rows.map(r => r[key]).filter(v => v != null && !Number.isNaN(Number(v)));
     if (!vals.length) return { last: null, extreme: null };
@@ -2958,12 +2991,17 @@
     const srcText = ['qqq', 'spy', 'vix'].map(k => src[k] ? `${k.toUpperCase()}：${src[k]}` : '').filter(Boolean).join('；');
     const warn = (us.warnings || []).join('；');
     if (caption) {
+      const peakHow = days >= 1825
+        ? '近 5 年滚动最高收盘价；历史不够 5 年时，用已有数据里的最高收盘价'
+        : (days >= 1095
+          ? '近 3 年滚动最高收盘价；历史不够 3 年时，用已有数据里的最高收盘价'
+          : (us.peak_window_label || '近 365 天滚动最高收盘价'));
       caption.textContent = rows.length
-        ? `回撤 = 收盘价 ÷ ${us.peak_window_label || '近 365 天滚动最高收盘价'} − 1。近一个月、近半年、近一年只改图上的窗口，同一天的回撤不因切换而变。QQQ 是纳斯达克100，SPY 是标普500，VIX 是恐慌指数（右轴）。${srcText ? '来源 ' + srcText + '。' : ''}${warn ? '注意：' + warn + '。' : ''}仅供个人记录辅助，非投资建议。`
+        ? `回撤 = 收盘价 ÷ ${peakHow} − 1。近一个月、近半年、近一年仍用近 365 天高点，只改图上的窗口，同一天的回撤不因切换而变。近 3 年和近 5 年改用更长的滚动高点。更早的点按周留下，最近一段仍是日线。QQQ 是纳斯达克100，SPY 是标普500，VIX 是恐慌指数（右轴）。${srcText ? '来源 ' + srcText + '。' : ''}${warn ? '注意：' + warn + '。' : ''}仅供个人记录辅助，非投资建议。`
         : `还没有 QQQ / SPY / VIX 日线。${warn ? warn + '。' : ''}仅供个人记录辅助，非投资建议。`;
     }
-    const q = seriesStats(rows, 'qqq_dd');
-    const s = seriesStats(rows, 'spy_dd');
+    const q = seriesStats(rows, usDdKey('qqq', days));
+    const s = seriesStats(rows, usDdKey('spy', days));
     const v = seriesStats(rows, 'vix');
     const chip = (k, v1, s1) => `<div class="kpi"><div class="k">${k}</div><div class="v">${v1}</div><div class="s">${s1}</div></div>`;
     const fmtDd = (n) => n == null ? '—' : (n > 0 ? '+' : '') + Number(n).toFixed(2) + '%';
@@ -2976,8 +3014,8 @@
       ].join('');
     }
     const labels = rows.map(r => r.date);
-    const qdd = rows.map(r => r.qqq_dd == null ? null : r.qqq_dd);
-    const sdd = rows.map(r => r.spy_dd == null ? null : r.spy_dd);
+    const qdd = rows.map(r => r[usDdKey('qqq', days)] == null ? null : r[usDdKey('qqq', days)]);
+    const sdd = rows.map(r => r[usDdKey('spy', days)] == null ? null : r[usDdKey('spy', days)]);
     const vix = rows.map(r => r.vix == null ? null : r.vix);
     const canvas = document.getElementById('usChart');
     const svg = document.getElementById('usSvg');
