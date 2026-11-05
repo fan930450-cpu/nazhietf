@@ -2182,12 +2182,19 @@ def build_spx_block(picks: dict | None, peer_stats: dict[str, dict] | None) -> d
 US_PEAK_WINDOW_DAYS = 365
 US_RANGE_3Y_DAYS = 365 * 3
 US_RANGE_5Y_DAYS = 365 * 5
+US_RANGE_10Y_DAYS = 365 * 10
 # 近一年图要在窗口之前再留约一年高点，所以最近这一段保持日线。
 US_DAILY_TAIL = 560
 US_YAHOO = {
     "qqq": "QQQ",
     "spy": "SPY",
     "vix": "^VIX",
+}
+# 收盘价图要近 10 年。回撤图仍只画到近 5 年，VIX 不必跟着拉长。
+US_YAHOO_RANGE = {
+    "qqq": "10y",
+    "spy": "10y",
+    "vix": "5y",
 }
 
 
@@ -2198,7 +2205,7 @@ def _yahoo_daily(symbol: str, range_: str = "5y") -> list[dict]:
         + urllib.parse.quote(symbol)
         + f"?range={range_}&interval=1d&includeAdjustedClose=true"
     )
-    raw = json.loads(get(url, retries=2, timeout=30))
+    raw = json.loads(get(url, retries=2, timeout=60))
     result = (raw.get("chart") or {}).get("result") or []
     if not result:
         err = ((raw.get("chart") or {}).get("error") or {}).get("description") or "空结果"
@@ -2277,7 +2284,7 @@ def trailing_drawdown_pct(points: list[dict], window_days: int = US_PEAK_WINDOW_
 
 
 def _downsample_us_rows(rows: list[dict], daily_tail: int = US_DAILY_TAIL) -> list[dict]:
-    """最近一段保持日线。更早的按周留最后一个交易日，给近 3 年 / 近 5 年用。"""
+    """最近一段保持日线。更早的按周留最后一个交易日，给近 3 年 / 近 5 年回撤和近 10 年收盘价用。"""
     if len(rows) <= daily_tail:
         return rows
     head, tail = rows[:-daily_tail], rows[-daily_tail:]
@@ -2309,16 +2316,17 @@ def _load_saved_us() -> dict | None:
 
 
 def fetch_us_block() -> tuple[dict, list[str]]:
-    """QQQ、SPY、VIX 约五年日线。近 1 年回撤仍按 365 天滚动高点。
+    """QQQ、SPY 约十年日线，VIX 约五年。近 1 年回撤仍按 365 天滚动高点。
 
-    近 3 年、近 5 年另算更长的滚动高点。存盘时最近一段留日线，更早按周抽稀。
+    近 3 年、近 5 年另算更长的滚动高点。存盘时最近一段留日线，更早按周抽稀，
+    收盘价图的近 10 年用这些周点。
     """
     warnings: list[str] = []
     series: dict[str, list[dict]] = {}
     sources: dict[str, str] = {}
     for key, symbol in US_YAHOO.items():
         try:
-            rows = _yahoo_daily(symbol)
+            rows = _yahoo_daily(symbol, US_YAHOO_RANGE[key])
             if len(rows) < 40:
                 raise RuntimeError(f"只有 {len(rows)} 根")
             series[key] = rows
@@ -2376,6 +2384,7 @@ def fetch_us_block() -> tuple[dict, list[str]]:
         "peak_window_days": US_PEAK_WINDOW_DAYS,
         "peak_window_3y_days": US_RANGE_3Y_DAYS,
         "peak_window_5y_days": US_RANGE_5Y_DAYS,
+        "price_history_days": US_RANGE_10Y_DAYS,
         "peak_window_label": "近 365 天滚动最高收盘价",
         "sources": sources,
         "warnings": warnings,

@@ -285,10 +285,10 @@
     .live-bar button { padding: 10px 16px; }
     .btn { padding: 10px 14px; }
     .btn.tiny { min-height: 40px; padding: 8px 12px; font-size: .85rem; }
-    .form-actions, .ledger-actions:not(#usRanges) { flex-direction: column; align-items: stretch; }
-    .form-actions .btn, .ledger-actions:not(#usRanges) .btn { width: 100%; text-align: center; }
-    #usRanges, #pxRanges { display: flex; flex-wrap: wrap; gap: 8px; }
-    #usRanges .btn, #pxRanges .btn { flex: 1 1 calc(50% - 8px); width: auto; min-height: 44px; padding: 10px 6px; }
+    .form-actions, .ledger-actions:not(#usRanges):not(#pxRanges) { flex-direction: column; align-items: stretch; }
+    .form-actions .btn, .ledger-actions:not(#usRanges):not(#pxRanges) .btn { width: 100%; text-align: center; }
+    #usRanges, #pxRanges { display: flex; flex-direction: row; flex-wrap: wrap; gap: 8px; }
+    #usRanges .btn, #pxRanges .btn { flex: 1 1 calc(50% - 8px); width: auto; max-width: calc(50% - 4px); min-height: 44px; padding: 10px 6px; }
     .chk { align-items: center; }
     .chk input { width: 1.25rem; height: 1.25rem; margin-top: 0; flex: none; }
     input[type=number], input[type=text], input[type=date], select { min-height: 44px; }
@@ -800,6 +800,7 @@
         <button type="button" class="btn" data-px-range="183">近半年</button>
         <button type="button" class="btn" data-px-range="365">近1年</button>
         <button type="button" class="btn" data-px-range="1825">近5年</button>
+        <button type="button" class="btn" data-px-range="3650">近10年</button>
       </div>
       <div class="grid" id="pxChips" style="margin-top:12px"></div>
       <div class="chart-box" style="margin-top:12px">
@@ -3211,7 +3212,7 @@
     });
     paintUs(initialUsRange());
   }
-  const PX_RANGES = { 31: '近一个月', 183: '近半年', 365: '近1年', 1825: '近5年' };
+  const PX_RANGES = { 31: '近一个月', 183: '近半年', 365: '近1年', 1825: '近5年', 3650: '近10年' };
   let pxChart = null;
   function pxPoint(rows, key, fromEnd) {
     const list = fromEnd ? rows.slice().reverse() : rows;
@@ -3244,7 +3245,7 @@
     const fmtChg = (n) => n == null ? '—' : (n > 0 ? '+' : '') + Number(n).toFixed(2) + '%';
     if (caption) {
       caption.textContent = rows.length
-        ? '收盘价和上面的回撤图用同一份 Yahoo 日线。近 5 年里更早的点是每周一个，最近一段仍是每个交易日。区间涨跌 = 这段窗口里最后一次收盘 ÷ 最早一次收盘 − 1。QQQ 用左轴，SPY 用右轴。仅供个人记录辅助，非投资建议。'
+        ? '收盘价和上面的回撤图用同一份 Yahoo 日线。近 10 年里更早的点是每周一个，最近一段仍是每个交易日。区间涨跌 = 这段窗口里最后一次收盘 ÷ 最早一次收盘 − 1。QQQ 用左轴，SPY 用右轴。仅供个人记录辅助，非投资建议。'
         : '还没有 QQQ / SPY 收盘价。仅供个人记录辅助，非投资建议。';
     }
     const chip = (k, v1, s1) => `<div class="kpi"><div class="k">${k}</div><div class="v">${v1}</div><div class="s">${s1}</div></div>`;
