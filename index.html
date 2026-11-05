@@ -733,7 +733,7 @@
         <table>
           <thead>
             <tr>
-              <th>代码</th><th>名称</th><th>参考溢价</th><th>净值溢价</th><th>收盘/现价</th><th>IOPV</th><th>基金规模</th><th>今年收益率（净值）<span class="sub" id="nasdaqYtdHead"></span></th><th>备注</th>
+              <th>代码</th><th>名称</th><th>参考溢价</th><th>净值溢价</th><th>收盘/现价</th><th>IOPV</th><th>基金规模</th><th>跟踪误差<span class="sub">越低越好</span></th><th>今年收益率（净值）<span class="sub" id="nasdaqYtdHead"></span></th><th>备注</th>
             </tr>
           </thead>
           <tbody id="peerBody"></tbody>
@@ -745,7 +745,7 @@
         <table>
           <thead>
             <tr>
-              <th>代码</th><th>名称</th><th>参考溢价</th><th>净值溢价</th><th>收盘/现价</th><th>IOPV</th><th>基金规模</th><th>今年收益率（净值）<span class="sub" id="spxYtdHead"></span></th><th>备注</th>
+              <th>代码</th><th>名称</th><th>参考溢价</th><th>净值溢价</th><th>收盘/现价</th><th>IOPV</th><th>基金规模</th><th>跟踪误差<span class="sub">越低越好</span></th><th>今年收益率（净值）<span class="sub" id="spxYtdHead"></span></th><th>备注</th>
             </tr>
           </thead>
           <tbody id="peerBodySpx"></tbody>
@@ -1021,6 +1021,34 @@
     if (etf && etf.p != null && Number.isFinite(Number(etf.p))) return Number(etf.p);
     return null;
   }
+  function bestPeer(family) {
+    const rows = family === 'sp500' ? (D.peers_spx || []) : (D.peers || []);
+    const picks = ((D.picks && D.picks.groups) || []).find(g => g.id === (family === 'sp500' ? 'sp-500' : 'nasdaq-100'));
+    const byCode = {};
+    ((picks && picks.items) || []).forEach(it => { if (it && it.code) byCode[it.code] = it; });
+    const usable = [];
+    const seen = new Set();
+    rows.forEach(row => {
+      if (!row || !row.code || seen.has(row.code) || !isOnExchange(row.code)) return;
+      const prem = premiumNow(row.code);
+      if (prem == null || Number.isNaN(prem)) return;
+      seen.add(row.code);
+      const extra = byCode[row.code] || {};
+      usable.push({
+        code: row.code,
+        name: row.name || extra.name || row.code,
+        ref_premium_pct: prem,
+        tracking_error_pct: row.tracking_error_pct != null ? row.tracking_error_pct : extra.tracking_error_pct,
+        fee_total_pct: row.fee_total_pct != null ? row.fee_total_pct : extra.fee_total_pct,
+        aum_cny: row.aum_cny != null ? row.aum_cny : extra.aum_cny,
+        turnover_cny: row.turnover_cny != null ? row.turnover_cny : extra.turnover_cny,
+        ytd_nav_pct: row.ytd_nav_pct != null ? row.ytd_nav_pct : extra.ytd_nav_pct,
+      });
+    });
+    const best = chooseToday(usable);
+    if (!best) return null;
+    return { code: best.code, name: best.name, premium: Number(best.ref_premium_pct), reason: best.pick_reason || '综合分更低' };
+  }
   function lowestOnExchange(family) {
     const rows = family === 'sp500' ? (D.peers_spx || []) : (D.peers || []);
     const extra = family === 'sp500' ? spxEtfs() : calculatorEtfs();
@@ -1101,12 +1129,13 @@
         note: '场外模式，不买场内',
         cheap: venue.floor,
       };
-    } else if (venue.floor) {
+    } else if (bestPeer('nasdaq')) {
+      const best = bestPeer('nasdaq');
       target = {
-        code: venue.floor.code,
-        name: venue.floor.name,
-        prem: venue.floor.premium,
-        note: '场内溢价最低',
+        code: best.code,
+        name: best.name,
+        prem: best.premium,
+        note: best.reason,
         cheap: venue.floor,
       };
     } else {
@@ -1142,15 +1171,11 @@
     const pr = (!Number.isFinite(pNum) || !Number.isFinite(p60Num))
       ? { c: 1, label: '数据不足', expensive: false }
       : premiumCoef(pNum, p60Num, Number(peerMin), Number(peak));
-    let target = forceOnExchange(asTarget(spxSuggestTarget(pNum, pr)), 'sp500');
+    const best = bestPeer('sp500');
+    let target = best
+      ? { code: best.code, name: best.name, prem: best.premium, note: best.reason, cheap: null }
+      : forceOnExchange(asTarget(spxSuggestTarget(pNum, pr)), 'sp500');
     let plan = finishPlan(spxDrawdownCoef, peak, dayChg, pr.c, baseline, invested, target, normalFor(target.code, SPX_CODE, p60));
-    if (plan.pace.mode === 'add') {
-      const floor = lowestOnExchange('sp500');
-      if (floor) {
-        target = { code: floor.code, name: floor.name, prem: floor.premium, note: '同指数溢价最低，一次买入', cheap: floor };
-        plan = finishPlan(spxDrawdownCoef, peak, dayChg, pr.c, baseline, invested, target, normalFor(target.code, SPX_CODE, p60));
-      }
-    }
     plan.pr = pr;
     return plan;
   }
@@ -1328,7 +1353,7 @@
         });
         take[take.length - 1].headline = takeProfitHeadline(take[take.length - 1]);
       });
-      const peer = lowestOnExchange(family);
+      const peer = bestPeer(family);
       if (!peer) return;
       const rankedSwap = groupedHoldings(plan, true).map(g => {
         const prem = premiumNow(g.code);
@@ -1567,6 +1592,13 @@
   const PICK_SPREAD = 2;
   const PICK_MIN_TURNOVER = 50000000;
   const PICK_EXPENSIVE_GAP = 5;
+  // 和 refresh.py 的 SCORE_* 一致。综合分越低越好。
+  const SCORE_TE_WEIGHT = 2;
+  const SCORE_FEE_WEIGHT = 1;
+  const SCORE_YTD_LAG_WEIGHT = 0.5;
+  const SCORE_SIZE_MIN_CNY = 5e8;
+  const SCORE_SIZE_PENALTY = 2;
+  const SCORE_TURNOVER_PENALTY = 3;
 
   function withQuotePremium(it) {
     const q = liveMap[it.code];
@@ -1589,10 +1621,64 @@
     });
     return band[0] || null;
   }
+  function pickNums(items, key) {
+    return (items || []).map(it => Number(it && it[key])).filter(n => Number.isFinite(n));
+  }
+  function compositeScore(item, peers) {
+    let score = Number(item.ref_premium_pct);
+    if (item.tracking_error_pct != null && Number.isFinite(Number(item.tracking_error_pct))) {
+      score += SCORE_TE_WEIGHT * Number(item.tracking_error_pct);
+    }
+    const fees = pickNums(peers, 'fee_total_pct');
+    if (item.fee_total_pct != null && Number.isFinite(Number(item.fee_total_pct)) && fees.length) {
+      score += SCORE_FEE_WEIGHT * (Number(item.fee_total_pct) - Math.min.apply(null, fees));
+    }
+    const ytds = pickNums(peers, 'ytd_nav_pct');
+    if (item.ytd_nav_pct != null && Number.isFinite(Number(item.ytd_nav_pct)) && ytds.length) {
+      const sorted = ytds.slice().sort((a, b) => a - b);
+      const mid = Math.floor(sorted.length / 2);
+      const median = sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+      score += SCORE_YTD_LAG_WEIGHT * Math.max(0, median - Number(item.ytd_nav_pct));
+    }
+    if (item.aum_cny != null && Number.isFinite(Number(item.aum_cny)) && Number(item.aum_cny) < SCORE_SIZE_MIN_CNY) {
+      score += SCORE_SIZE_PENALTY;
+    }
+    if (item.turnover_cny != null && Number.isFinite(Number(item.turnover_cny)) && Number(item.turnover_cny) < PICK_MIN_TURNOVER) {
+      score += SCORE_TURNOVER_PENALTY;
+    }
+    return Math.round(score * 10000) / 10000;
+  }
+  function pickReason(item, peers) {
+    const prem = Number(item.ref_premium_pct);
+    const floor = Math.min.apply(null, peers.map(p => Number(p.ref_premium_pct)));
+    const bits = [prem <= floor + 0.05 ? '溢价最低' : ('溢价 ' + fmt(prem) + '%')];
+    const tes = pickNums(peers, 'tracking_error_pct');
+    if (item.tracking_error_pct != null && tes.length && Number(item.tracking_error_pct) <= Math.min.apply(null, tes) + 1e-9) {
+      bits.push('跟踪误差小');
+    }
+    const fees = pickNums(peers, 'fee_total_pct');
+    if (item.fee_total_pct != null && fees.length && Number(item.fee_total_pct) <= Math.min.apply(null, fees) + 1e-9) {
+      bits.push('费率更低');
+    }
+    const ytds = pickNums(peers, 'ytd_nav_pct');
+    if (item.ytd_nav_pct != null && ytds.length) {
+      const sorted = ytds.slice().sort((a, b) => a - b);
+      const mid = Math.floor(sorted.length / 2);
+      const median = sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+      if (Number(item.ytd_nav_pct) + 1e-9 >= median) bits.push('净值收益没落后');
+    }
+    if (bits.length === 1) bits.push('综合分更低');
+    return bits.slice(0, 3).join('且');
+  }
   function chooseToday(items) {
-    const priced = (items || []).filter(it => it && isOnExchange(it.code) && it.ref_premium_pct != null && !Number.isNaN(Number(it.ref_premium_pct)));
-    const liquid = priced.filter(it => it.turnover_cny == null || it.turnover_cny >= PICK_MIN_TURNOVER);
-    return bandPick(liquid.length ? liquid : priced);
+    const usable = (items || []).filter(it => it && isOnExchange(it.code) && it.ref_premium_pct != null && !Number.isNaN(Number(it.ref_premium_pct)));
+    if (!usable.length) return null;
+    usable.sort((a, b) => compositeScore(a, usable) - compositeScore(b, usable)
+      || Number(a.ref_premium_pct) - Number(b.ref_premium_pct)
+      || (Number(b.aum_cny) || 0) - (Number(a.aum_cny) || 0));
+    const best = usable[0];
+    best.pick_reason = pickReason(best, usable);
+    return best;
   }
   function cheaperShortlistTarget(primaryCode, primaryPremium, expensive, items) {
     const prem = Number(primaryPremium);
@@ -2288,6 +2374,7 @@
         <td class="js-px">${p.live_price != null ? fmt(p.live_price, 3) : (p.close != null ? fmt(p.close, 3) : '—')}</td>
         <td class="js-iopv">${p.iopv != null ? fmt(p.iopv, 4) : '—'}</td>
         <td class="js-aum">${fmtAum(p)}</td>
+        <td class="js-te">${p.tracking_error_pct == null ? '—' : fmt(p.tracking_error_pct) + '%'}${p.tracking_asof ? `<span class="sub">截至 ${p.tracking_asof}</span>` : ''}</td>
         <td class="js-ytd">${ytdCell(p)}</td>
         <td>${note}</td>`;
       tbody.appendChild(tr);
@@ -2304,7 +2391,7 @@
   const sizeNote = document.getElementById('peerSizeNote');
   if (sizeNote) {
     const asof = sizeDates.length ? sizeDates.slice().sort().pop() : '—';
-    sizeNote.textContent = `基金规模是公开资料里的期末净资产，截至 ${asof}，不是今日市值。今年收益率（净值）= 最新公布净值 ÷ 上年最后一个净值日的净值 − 1，不用行情价，所以不含溢价。场内价格今年收益率写在下面小字里。没有取到的格子留空，不编数字。仅供个人记录辅助，非投资建议。`;
+    sizeNote.textContent = `基金规模是公开资料里的期末净资产，截至 ${asof}，不是今日市值。今年收益率（净值）= 最新公布净值 ÷ 上年最后一个净值日的净值 − 1，不用行情价。跟踪误差是天天基金特色数据里的年化跟踪误差，越低越好；没有公开数字就写 —，不估算。没有取到的格子留空。仅供个人记录辅助，非投资建议。`;
   }
 
   function shanghaiMonth() {
@@ -2486,11 +2573,13 @@
         if (!q) return next;
         return Object.assign({}, next, { live_price: q.price, iopv: q.iopv });
       });
-      const today = chooseToday(items);
-      const ranked = items.map(it => Object.assign({}, it, { is_today: !!(today && it.code === today.code) }));
+      const best = bestPeer(group.id === 'sp-500' ? 'sp500' : 'nasdaq');
+      const ranked = items.map(it => Object.assign({}, it, { is_today: !!(best && it.code === best.code) }));
       ranked.sort((a, b) => (b.is_today - a.is_today) || ((a.ref_premium_pct == null ? 999 : a.ref_premium_pct) - (b.ref_premium_pct == null ? 999 : b.ref_premium_pct)));
-      const todayLine = today ? `今日优先 ${today.code} ${today.name || ''} · 参考溢价 ${fmt(today.ref_premium_pct)}%` : (group.today_line || '');
-      return Object.assign({}, group, { items: ranked, today_line: todayLine, today_code: today ? today.code : group.today_code });
+      const todayLine = best
+        ? `今日优先 ${best.code} ${best.name || ''} · ${best.reason}`
+        : (group.today_line || '');
+      return Object.assign({}, group, { items: ranked, today_line: todayLine, today_code: best ? best.code : group.today_code });
     });
   }
   function renderPicks() {
