@@ -24,9 +24,11 @@ DATA.mkdir(exist_ok=True)
 
 CST = timezone(timedelta(hours=8))
 PRIMARY = "159501"
-# 计算器与顶部金额的默认基准。页面预填、自检和写入 briefing 都用这个数。
+# 每月基准。本月目标上限 = 每月基准 × 回撤系数 × 溢价系数。
+# 今天实际可买还要扣本机当月已投，脚本看不到那份流水。
+# 页面预填、自检和写入 briefing 都用这个数。
 DEFAULT_BASELINE = 3000.0
-# 标普500是另一条定投，基准 2000，回撤阶梯和纳指不同。主标的用短名单里的 513500。
+# 标普500是另一条定投，每月基准 2000，回撤阶梯和纳指不同。主标的用短名单里的 513500。
 SPX_BASELINE = 2000.0
 SPX_PRIMARY = "513500"
 # 距高点回撤（正数百分点）→ 回撤系数。不足 5% 为 1.0；超过最后一档封顶。
@@ -293,6 +295,46 @@ def premium_coef(
     return coef, label, expensive
 
 
+def _yen_round(n: float) -> int:
+    """正数四舍五入到元，和 JavaScript Math.round 一致。"""
+    value = float(n)
+    if value <= 0:
+        return 0
+    return int(value + 0.5)
+
+
+def dca_pace(
+    baseline: float,
+    invested: float,
+    drawdown_pct: float | None,
+    dd_coef: float,
+    prem_coef: float,
+) -> dict:
+    """与 index.html 的 dcaPace 一致。这里没有本机流水，只固定规则。
+
+    topup：已投还没到每月基准，今天补差额。
+    rest：已到基准，回撤不到 5%，今天不买。
+    add：已到基准，回撤 ≥5%，按本月目标上限补差额。
+    tier：已到基准，回撤 ≥5%，这一档上限已经投满。
+    """
+    base = max(0.0, float(baseline or 0))
+    spent = max(0.0, float(invested or 0))
+    target = base * float(dd_coef) * float(prem_coef)
+    gap = max(0.0, target - spent)
+    dd = None if drawdown_pct is None else float(drawdown_pct)
+    deep = dd is not None and dd >= 5
+    done = _yen_round(base) > 0 and _yen_round(spent) >= _yen_round(base)
+    if not done:
+        mode = "topup"
+    elif not deep:
+        mode = "rest"
+    elif _yen_round(gap) <= 0:
+        mode = "tier"
+    else:
+        mode = "add"
+    return {"mode": mode, "gap_yen": _yen_round(gap), "target": target, "done": done, "deep": deep}
+
+
 def _self_check() -> None:
     expect = [
         (0, 1.0),
@@ -321,7 +363,7 @@ def _self_check() -> None:
         raise SystemExit(f"单日急跌加分自检失败 got={got} {label}")
     if abs(drawdown_coef(20, -2.99)[0] - 8.33) > 1e-9:
         raise SystemExit("未满 3% 的单日跌不应加分")
-    # 基准 3000，溢价系数 1.0，单日涨跌 0。锚点金额取两位小数系数，接近整千。
+    # 每月基准 3000，溢价系数 1.0，单日涨跌 0。下面是本月目标上限，不是每天要买的金额。
     amount_expect = {
         5: 5010.0,
         10: 9990.0,
@@ -360,9 +402,9 @@ def _self_check() -> None:
         raise SystemExit("相对 P60 ≥+5 自检失败")
     if abs(_premium_relative(18, 15) - 0.91) > 1e-9:
         raise SystemExit(f"相对 P60 线性自检失败 {_premium_relative(18, 15)}")
-    # 基准 3000，peakDd=10，dayChg=0，P=18，P60=15，peerMin=12。
+    # 每月基准 3000，peakDd=10，dayChg=0，P=18，P60=15，peerMin=12。
     # 相对 ~0.91 → 绝对软顶 0.90 → 同类 0.90 → 回撤下限 0.90。
-    # 回撤系数 3.33。金额 = 3000 × 3.33 × 0.90 = 8991。
+    # 回撤系数 3.33。本月目标上限 = 3000 × 3.33 × 0.90 = 8991。
     coef, label, expensive = premium_coef(18, 15, 12, 10)
     sample_dd, _sample_label = drawdown_coef(10, 0)
     sample_amount = DEFAULT_BASELINE * sample_dd * coef
@@ -436,6 +478,37 @@ def _self_check() -> None:
         raise SystemExit(f"标普单日急跌加分自检失败 got={got} {label}")
     if abs(spx_drawdown_coef(10, -2.99)[0] - 5.0) > 1e-9:
         raise SystemExit("标普未满 3% 的单日跌不应加分")
+
+    def _pace(baseline: float, invested: float, dd: float | None, dd_c: float, pr_c: float, mode: str, gap: int) -> None:
+        got = dca_pace(baseline, invested, dd, dd_c, pr_c)
+        if got["mode"] != mode or got["gap_yen"] != gap:
+            raise SystemExit(f"定投节奏自检失败 expect {mode} ¥{gap} got {got}")
+
+    # 没投满每月基准：今天补到本月目标上限，哪怕回撤已经 ≥5%。
+    _pace(3000, 0, 0, 1, 1, "topup", 3000)
+    _pace(3000, 1000, 10, 3.33, 0.9, "topup", 7991)
+    _pace(2000, 0, 4, 1, 1, "topup", 2000)
+    _pace(3000, 2999.4, 10, 3.33, 1, "topup", 6991)
+    # 已投 ≥ 每月基准，回撤不到 5%：今天不买。溢价把上限压到基准以下也一样。
+    _pace(3000, 3000, 4.9, 1, 1, "rest", 0)
+    _pace(3000, 3000, 0, 1, 0.85, "rest", 0)
+    # 已投满基准、回撤不到 5% 时，溢价系数把上限抬过已投也不买。页面今天显示 0。
+    premium_rest = dca_pace(3000, 3000, 4.9, 1, 1.15)
+    if premium_rest["mode"] != "rest" or premium_rest["gap_yen"] != 450:
+        raise SystemExit(f"浅回撤已完成时不应进入加仓 {premium_rest}")
+    _pace(2000, 5000, 4.99, 1, 1, "rest", 0)
+    _pace(3000, 4000, None, 1, 1, "rest", 0)
+    # 已完成且回撤 ≥5%：差额才是加仓。差额为 0 则这一档已经加完。
+    _pace(3000, 3000, 10, 3.33, 0.9, "add", 5991)
+    _pace(2000, 2000, 5, 2.5, 1, "add", 3000)
+    _pace(3000, 8991, 10, 3.33, 0.9, "tier", 0)
+    _pace(3000, 8990.6, 10, 3.33, 0.9, "tier", 0)
+    _pace(0, 0, 10, 2, 1, "topup", 0)
+    # 纳指 3000 和标普 2000 两套基准，不把已投并成一笔。
+    nasdaq_done = dca_pace(3000, 3000, 4, 1, 1)
+    spx_open = dca_pace(2000, 0, 4, 1, 1)
+    if nasdaq_done["mode"] != "rest" or spx_open["mode"] != "topup" or spx_open["gap_yen"] != 2000:
+        raise SystemExit(f"纳指标普应分开判断 {nasdaq_done} {spx_open}")
     sample = trailing_drawdown_pct(
         [
             {"date": "2025-01-01", "close": 100},
@@ -1792,7 +1865,10 @@ def build_spx_block(picks: dict | None, peer_stats: dict[str, dict] | None) -> d
             "premium_label": plabel,
             "is_obviously_expensive": expensive,
             "is_nav_60_high": bool(primary.get("is_nav_60_high")),
+            "baseline_period": "month",
+            "monthly_target_cap": round(SPX_BASELINE * dc * pc, 2),
             "suggested_amount": round(SPX_BASELINE * dc * pc, 2),
+            "pace_note": "本月目标上限 = 每月基准 × 回撤系数 × 溢价系数。今天买多少还要扣本机当月已投；已投达到月基准且回撤<5%则今天不买。",
             "buy_target": buy_target,
             "suggest_sell_tactical": bool(primary.get("is_nav_60_high") and expensive),
             "peer_min_premium": primary.get("peer_min_premium"),
@@ -2137,6 +2213,10 @@ def build_payload(
     ]
     if buy_target["code"] != PRIMARY:
         parts.append(f"建议买{buy_target['code']}（同类更低溢价{buy_target['premium']:.2f}%）")
+    parts.append(
+        f"本月目标上限¥{amount:.0f}（每月基准{base:.0f}×回撤系数×溢价系数；"
+        "已投达到月基准且回撤<5%则今天不买，回撤≥5%才按差额加仓）"
+    )
     parts.append("净值近60日新高且明显贵→可卖战术仓5–8%" if suggest_sell else "暂不触发卖出")
 
     payload = {
@@ -2197,8 +2277,11 @@ def build_payload(
             "premium_coef": round(pc, 4),
             "premium_label": plabel,
             "is_obviously_expensive": is_expensive,
+            "baseline_period": "month",
+            "monthly_target_cap": round(amount, 2),
             "suggested_amount": round(amount, 2),
             "suggested_raw": round(amount, 2),
+            "pace_note": "本月目标上限 = 每月基准 × 回撤系数 × 溢价系数。今天买多少还要扣本机当月已投；已投达到月基准且回撤<5%则今天不买。",
             "buy_target": buy_target,
             "suggest_sell_tactical": suggest_sell,
             "sell_range_pct": [5, 8],
@@ -2259,7 +2342,7 @@ def build_payload(
         w.writerows(premium_rows)
     print(
         f"data.js ready | history={len(premium_rows)} | P={p_for_calc:.2f} P60={p60:.2f} "
-        f"| suggest=¥{amount:.0f} -> {buy_target['code']}"
+        f"| 本月目标上限=¥{amount:.0f} -> {buy_target['code']}"
     )
     return payload
 
@@ -2352,7 +2435,7 @@ def main() -> None:
     )
     b = payload["briefing"]
     print(
-        f"建议 ¥{b['suggested_amount']:.0f} 买入 {b['buy_target']['code']} "
+        f"本月目标上限 ¥{b['monthly_target_cap']:.0f} 参考买入 {b['buy_target']['code']} "
         f"| 卖战术仓={b['suggest_sell_tactical']} | warnings={warnings or '无'}"
     )
 
