@@ -78,6 +78,13 @@ PICK_MIN_TURNOVER = 50_000_000.0
 # 主代码比短名单里更便宜、成交够用的一只贵出这么多（百分点），就不要再买主代码。
 # premium_coef 的 expensive 同样算「明显贵」。差一个净值公布日不算这个条件。
 PICK_EXPENSIVE_GAP = 5.0
+# 综合分越低越好。溢价本身就是主项；其余是可改的权重和罚分。
+SCORE_TE_WEIGHT = 2.0
+SCORE_FEE_WEIGHT = 1.0
+SCORE_YTD_LAG_WEIGHT = 0.5
+SCORE_SIZE_MIN_CNY = 5e8
+SCORE_SIZE_PENALTY = 2.0
+SCORE_TURNOVER_PENALTY = 3.0
 # 买入标的没有 P60 时，常态溢价按 3%。只扣高出的部分，不因溢价便宜把回撤加大。
 NORMAL_PREMIUM_FALLBACK = 3.0
 # 纳指场所。和 index.html 的 VENUE_DEFAULTS 一致。页面上可以改每天金额和两个阈值。
@@ -485,8 +492,16 @@ def _self_check() -> None:
             {"code": "159501", "ref_premium_pct": 20.24, "fee_total_pct": 0.6, "aum_cny": 134e8, "turnover_cny": 1.5e8},
         ]
     )
-    if not nasdaq_today or nasdaq_today["code"] != "159632":
-        raise SystemExit(f"纳指短名单自检失败: {nasdaq_today}")
+    if not nasdaq_today or nasdaq_today["code"] != "159513":
+        raise SystemExit(f"纳指综合分应先看更低溢价，得到 {nasdaq_today}")
+    te_flip = choose_today(
+        [
+            {"code": "159513", "ref_premium_pct": 8.0, "tracking_error_pct": 5.0, "fee_total_pct": 0.8, "aum_cny": 20e8, "turnover_cny": 2e8, "ytd_nav_pct": 6.0},
+            {"code": "159632", "ref_premium_pct": 8.5, "tracking_error_pct": 1.0, "fee_total_pct": 0.8, "aum_cny": 20e8, "turnover_cny": 2e8, "ytd_nav_pct": 6.0},
+        ]
+    )
+    if not te_flip or te_flip["code"] != "159632" or "跟踪误差" not in (te_flip.get("pick_reason") or ""):
+        raise SystemExit(f"跟踪误差应能盖过一点溢价差: {te_flip}")
     sp_today = choose_today(
         [
             {"code": "159655", "ref_premium_pct": 7.91, "fee_total_pct": 0.75, "aum_cny": 42e8, "turnover_cny": 2e8},
@@ -494,8 +509,8 @@ def _self_check() -> None:
             {"code": "513500", "ref_premium_pct": 10.28, "fee_total_pct": 0.8, "aum_cny": 252e8, "turnover_cny": 3e8},
         ]
     )
-    if not sp_today or sp_today["code"] != "513650":
-        raise SystemExit(f"标普短名单自检失败: {sp_today}")
+    if not sp_today or sp_today["code"] != "159655":
+        raise SystemExit(f"标普综合分应先看更低溢价，得到 {sp_today}")
     spx_expect = [
         (0, 1.0),
         (4.9, 1.0),
@@ -1005,6 +1020,11 @@ def parse_qdiilens(html: str) -> tuple[list[dict], str | None, dict]:
                 "aum_cny": float(fund["aum_cny"]),
                 "aum_as_of": fund.get("aum_as_of"),
             }
+        peer_row = by_code.get(code) or spx_by_code.get(code)
+        if peer_row is not None:
+            mgmt_all, custody_all = _fee_pair(fund.get("fees") or [])
+            if mgmt_all is not None or custody_all is not None:
+                peer_row["fee_total_pct"] = round((mgmt_all or 0) + (custody_all or 0), 4)
         if code not in PICK_CODES:
             continue
         mgmt, custody = _fee_pair(fund.get("fees") or [])
@@ -1038,6 +1058,9 @@ def parse_qdiilens(html: str) -> tuple[list[dict], str | None, dict]:
         except json.JSONDecodeError:
             continue
         code = str(q.get("code") or "")
+        peer_row = by_code.get(code) or spx_by_code.get(code)
+        if peer_row is not None and q.get("turnover_cny") is not None:
+            peer_row["turnover_cny"] = float(q["turnover_cny"])
         if code not in funds and code not in PICK_CODES:
             continue
         slot = funds.setdefault(
@@ -1130,10 +1153,71 @@ def _load_saved_picks() -> dict | None:
     return picks if isinstance(picks, dict) and picks.get("groups") else None
 
 
-def choose_today(items: list[dict]) -> dict | None:
-    """价差约 2 个点以内时，在成交够用的里面偏向更低费率、再偏向更大规模。
+def _pick_nums(items: list[dict], key: str) -> list[float]:
+    out = []
+    for item in items:
+        value = item.get(key)
+        if value is None:
+            continue
+        try:
+            out.append(float(value))
+        except (TypeError, ValueError):
+            continue
+    return out
 
-    场外代码（例如 021000）不参加这个选择。主建议留在场内。
+
+def composite_score(item: dict, peers: list[dict]) -> float:
+    """越低越好。溢价权重最大，其次跟踪误差、费率差、净值收益落后和流动性罚分。
+
+    缺跟踪误差、费率或今年收益率时，那一项不加分，也不编数字。
+    """
+    score = float(item["ref_premium_pct"])
+    te = item.get("tracking_error_pct")
+    if te is not None:
+        score += SCORE_TE_WEIGHT * float(te)
+    fees = _pick_nums(peers, "fee_total_pct")
+    if item.get("fee_total_pct") is not None and fees:
+        score += SCORE_FEE_WEIGHT * (float(item["fee_total_pct"]) - min(fees))
+    ytds = _pick_nums(peers, "ytd_nav_pct")
+    if item.get("ytd_nav_pct") is not None and ytds:
+        lag = max(0.0, statistics.median(ytds) - float(item["ytd_nav_pct"]))
+        score += SCORE_YTD_LAG_WEIGHT * lag
+    aum = item.get("aum_cny")
+    if aum is not None and float(aum) < SCORE_SIZE_MIN_CNY:
+        score += SCORE_SIZE_PENALTY
+    turn = item.get("turnover_cny")
+    if turn is not None and float(turn) < PICK_MIN_TURNOVER:
+        score += SCORE_TURNOVER_PENALTY
+    return round(score, 4)
+
+
+def pick_reason(item: dict, peers: list[dict]) -> str:
+    """给今日优先一句短理由。只提这只相对同组占优的地方。"""
+    bits = []
+    prem = float(item["ref_premium_pct"])
+    floor = min(float(p["ref_premium_pct"]) for p in peers)
+    bits.append("溢价最低" if prem <= floor + 0.05 else f"溢价 {prem:.2f}%")
+    te = item.get("tracking_error_pct")
+    tes = _pick_nums(peers, "tracking_error_pct")
+    if te is not None and tes and float(te) <= min(tes) + 1e-9:
+        bits.append("跟踪误差小")
+    fees = _pick_nums(peers, "fee_total_pct")
+    if item.get("fee_total_pct") is not None and fees and float(item["fee_total_pct"]) <= min(fees) + 1e-9:
+        bits.append("费率更低")
+    ytds = _pick_nums(peers, "ytd_nav_pct")
+    if item.get("ytd_nav_pct") is not None and ytds:
+        if float(item["ytd_nav_pct"]) + 1e-9 >= statistics.median(ytds):
+            bits.append("净值收益没落后")
+    if len(bits) == 1:
+        bits.append("综合分更低")
+    return "且".join(bits[:3])
+
+
+def choose_today(items: list[dict]) -> dict | None:
+    """同指数场内基金按综合分选今日优先。场外代码不参加。
+
+    综合分 = 溢价 + 2×跟踪误差 + 1×费率差 + 0.5×净值收益落后中枢
+    + 规模不足 5 亿或成交额过低的罚分。分越低越好。
     """
     usable = []
     for item in items:
@@ -1141,24 +1225,21 @@ def choose_today(items: list[dict]) -> dict | None:
             continue
         if item.get("ref_premium_pct") is None:
             continue
-        turn = item.get("turnover_cny")
-        if turn is not None and turn < PICK_MIN_TURNOVER:
-            continue
         usable.append(item)
     if not usable:
         return None
-    floor = min(item["ref_premium_pct"] for item in usable)
-    band = [item for item in usable if item["ref_premium_pct"] <= floor + PICK_SPREAD]
-
-    def sort_key(item: dict) -> tuple:
-        fee = item.get("fee_total_pct")
-        return (
-            999.0 if fee is None else float(fee),
-            -(item.get("aum_cny") or 0),
-            item["ref_premium_pct"],
-        )
-
-    return min(band, key=sort_key)
+    ranked = sorted(
+        usable,
+        key=lambda it: (
+            composite_score(it, usable),
+            float(it["ref_premium_pct"]),
+            -(float(it.get("aum_cny") or 0)),
+        ),
+    )
+    best = ranked[0]
+    best["pick_score"] = round(composite_score(best, usable), 4)
+    best["pick_reason"] = pick_reason(best, usable)
+    return best
 
 
 def _yi(amount: float | None) -> str:
@@ -1169,18 +1250,9 @@ def _yi(amount: float | None) -> str:
 
 def _why(item: dict, today: dict, floor: float, median: float | None, anchor: str) -> str:
     gap = item["ref_premium_pct"] - floor
-    fee = item.get("fee_total_pct")
     if item["code"] == today["code"]:
-        parts = []
-        if gap <= 0.05:
-            parts.append("短名单里参考溢价最低")
-        else:
-            parts.append(f"与最低溢价只差 {gap:.2f} 个点")
-        turn = item.get("turnover_cny")
-        parts.append(f"成交约 {_yi(turn)}" if turn else "成交够用")
-        if fee is not None:
-            parts.append(f"管理+托管费 {fee:.2f}%")
-        return "今日优先：" + "，".join(parts) + "。"
+        reason = today.get("pick_reason") or item.get("pick_reason") or "综合分更低"
+        return "今日优先：" + reason + "。"
     if item["code"] == anchor and median is not None and item["ref_premium_pct"] > median + 1:
         return (
             f"溢价 {item['ref_premium_pct']:.2f}%，高于同类中枢约 {median:.2f}%。"
@@ -1260,7 +1332,7 @@ def build_picks(catalog: dict, tracking: dict[str, dict]) -> dict:
         "tracking_asof": max(te_dates) if te_dates else None,
         "aum_as_of": max(aum_dates) if aum_dates else None,
         "spread_pct": PICK_SPREAD,
-        "rule": "成交够用的前提下先看更低溢价；价差在约 2 个点内，再偏向更低的管理+托管费，然后是更大规模。净值日相差一个公布日不改变今日优先。",
+        "rule": "同一指数里按综合分选今日优先：溢价权重最大，其次是更低的跟踪误差、净值收益别明显落后、更低的管理+托管费，以及够用的规模和成交额。场外不参加。净值日相差一个公布日不改变今日优先。",
         "groups": groups,
     }
 
@@ -1272,11 +1344,30 @@ def fetch_qdiilens_bundle() -> tuple[list[dict], str | None, dict, list[dict]]:
         raise RuntimeError(f"QDII Lens 解析到的纳指 ETF 不足: {len(peers)}")
     spx_peers = list(catalog.get("peers_spx") or [])
     try:
-        tracking = fetch_tracking_errors()
+        te_codes = tuple(dict.fromkeys(
+            [p["code"] for p in peers]
+            + [p["code"] for p in spx_peers]
+            + list(PICK_CODES)
+            + [OTC_NASDAQ_CODE]
+        ))
+        tracking = fetch_tracking_errors(te_codes)
+        for row in list(peers) + list(spx_peers):
+            te = tracking.get(row["code"]) or {}
+            if te.get("tracking_error_pct") is not None:
+                row["tracking_error_pct"] = te["tracking_error_pct"]
+                row["tracking_asof"] = te.get("asof")
     except Exception as e:  # noqa: BLE001
         print("跟踪误差批次失败:", e)
         tracking = {}
     picks = build_picks(catalog, tracking)
+    picks["_tracking"] = {
+        code: {
+            "tracking_error_pct": te["tracking_error_pct"],
+            "tracking_asof": te.get("asof"),
+        }
+        for code, te in tracking.items()
+        if te.get("tracking_error_pct") is not None
+    }
     print(
         "QDII Lens peers:",
         len(peers),
@@ -1321,6 +1412,10 @@ def _load_peers_csv(path: Path | None = None) -> list[dict]:
                     "ytd_price_pct": num("ytd_price_pct"),
                     "ytd_price_base_date": (r.get("ytd_price_base_date") or "").strip() or None,
                     "ytd_price_asof": (r.get("ytd_price_asof") or "").strip() or None,
+                    "tracking_error_pct": num("tracking_error_pct"),
+                    "tracking_asof": (r.get("tracking_asof") or "").strip() or None,
+                    "fee_total_pct": num("fee_total_pct"),
+                    "turnover_cny": num("turnover_cny"),
                 }
             )
     return rows
@@ -1805,47 +1900,22 @@ def resolve_buy_target(
     cheap_reason: str,
     hold_reason: str,
 ) -> dict:
-    """贵的时候买入目标改到更便宜的短名单，不能仍写主代码。
-
-    成交够用、参考溢价更低的短名单名字优先。没有这样的名字时，才退到全体同类里更便宜的一只。
-    主代码没到贵的门槛，或者没有更便宜的可买对象，才买主代码。
-    场外代码不能成为买入目标。
-    """
+    """买入目标用同指数综合分，不单看最低溢价。场外代码不能成为买入目标。"""
+    del is_expensive, shortlist_reason
     if fallback and not is_on_exchange(str(fallback.get("code") or "")):
         fallback = None
     shortlist = [it for it in shortlist if is_on_exchange(str(it.get("code") or ""))]
-    usable: list[dict] = []
-    for item in shortlist:
-        if item.get("ref_premium_pct") is None:
-            continue
-        turn = item.get("turnover_cny")
-        if turn is not None and float(turn) < PICK_MIN_TURNOVER:
-            continue
-        usable.append(item)
-    cheaper = [
-        it
-        for it in usable
-        if it.get("code") != primary_code and float(it["ref_premium_pct"]) + 1e-9 < float(primary_premium)
-    ]
-    floor = min((float(it["ref_premium_pct"]) for it in cheaper), default=None)
-    gap = None if floor is None else float(primary_premium) - floor
-    clearly = bool(is_expensive) or (gap is not None and gap >= PICK_EXPENSIVE_GAP - 1e-9)
-    chosen = choose_today(cheaper) if clearly and cheaper else None
+    chosen = choose_today(shortlist)
     if chosen:
-        # 短名单自己已经避开主代码时，沿用「2 个点内比费率」这句。
-        # 主代码只是因为费率更低才落在 2 个点内时，改口说优先更便宜的一只。
-        natural = choose_today(usable)
-        reason = shortlist_reason if natural and natural.get("code") != primary_code else cheap_reason
         return {
             "code": chosen["code"],
             "name": chosen.get("name") or chosen["code"],
             "premium": chosen["ref_premium_pct"],
-            "reason": reason,
+            "reason": chosen.get("pick_reason") or (cheap_reason if chosen.get("code") != primary_code else hold_reason),
         }
     fb_prem = None if not fallback else fallback.get("ref_premium_pct")
     if (
-        clearly
-        and fallback
+        fallback
         and fallback.get("code")
         and fallback.get("code") != primary_code
         and fb_prem is not None
@@ -1916,8 +1986,8 @@ def _check_one_day_nav_lag_does_not_pick_expensive() -> None:
     group = aligned["groups"][0]
     if group["today_code"] == "159501":
         raise SystemExit(f"净值只差一天时今日优先不应是更贵的 159501: {group['today_code']}")
-    if group["today_code"] != "159632":
-        raise SystemExit(f"21% 对 13% 时应优先费率更低的便宜短名单，得到 {group['today_code']}")
+    if group["today_code"] != "513110":
+        raise SystemExit(f"综合分应落到溢价更低的 513110，得到 {group['today_code']}")
     for it in group["items"]:
         if it.get("nav_stale"):
             raise SystemExit(f"差一个公布日不应标净值陈旧: {it['code']} {it.get('nav_date')}")
@@ -1939,8 +2009,8 @@ def _check_one_day_nav_lag_does_not_pick_expensive() -> None:
     )
     if target["code"] == "159501":
         raise SystemExit(f"159501 明显贵且有更便宜短名单时买入目标不能是 159501: {target}")
-    if target["code"] != "159632":
-        raise SystemExit(f"买入目标应跟短名单今日优先一致: {target}")
+    if target["code"] != "513110":
+        raise SystemExit(f"买入目标应跟综合分今日优先一致: {target}")
 
     # 便宜的一只净值落后超过一个公布日：可以警告，但仍按溢价当今日优先。
     lagged = {
@@ -1981,10 +2051,10 @@ def _check_one_day_nav_lag_does_not_pick_expensive() -> None:
         cheap_reason="cheap",
         hold_reason="hold",
     )
-    if near["code"] == "159501" or near["reason"] != "cheap":
-        raise SystemExit(f"明显贵且有更便宜短名单时不能买 159501: {near}")
+    if near["code"] == "159501":
+        raise SystemExit(f"综合分更低时不能买 159501: {near}")
 
-    # 价差在约 2 个点内、且主代码并未贵出 5 个点、premium 也未判贵：仍可买主代码。
+    # 溢价只差 0.4、费率差 0.4 时，综合分仍偏向更低溢价，不再因为主代码没被判贵就留着。
     held = resolve_buy_target(
         primary_code=PRIMARY,
         primary_name="嘉实纳斯达克100",
@@ -1999,8 +2069,8 @@ def _check_one_day_nav_lag_does_not_pick_expensive() -> None:
         cheap_reason="cheap",
         hold_reason="hold",
     )
-    if held["code"] != "159501" or held["reason"] != "hold":
-        raise SystemExit(f"未到换仓门槛时应保持 159501: {held}")
+    if held["code"] != "513110":
+        raise SystemExit(f"综合分应改买溢价更低的 513110: {held}")
 
 
 def build_spx_block(picks: dict | None, peer_stats: dict[str, dict] | None) -> dict:
@@ -2381,6 +2451,11 @@ def build_payload(
                 "live_price": live.get("price"),
                 "live_asof": f"{live.get('date', '')} {live.get('time', '')}".strip() or None,
                 "is_primary": s["code"] == primary_code,
+                "fee_total_pct": s.get("fee_total_pct"),
+                "turnover_cny": s.get("turnover_cny"),
+                "tracking_error_pct": s.get("tracking_error_pct"),
+                "tracking_asof": s.get("tracking_asof"),
+                "ytd_nav_pct": s.get("ytd_nav_pct"),
             }
             if s.get("aum_cny") is not None:
                 row["aum_cny"] = round(float(s["aum_cny"]), 2)
@@ -2427,6 +2502,8 @@ def build_payload(
                 "live_asof": None,
                 "is_primary": False,
                 "note": "场外",
+                "tracking_error_pct": ((picks or {}).get("_tracking") or {}).get(OTC_NASDAQ_CODE, {}).get("tracking_error_pct"),
+                "tracking_asof": ((picks or {}).get("_tracking") or {}).get(OTC_NASDAQ_CODE, {}).get("tracking_asof"),
                 "ytd_nav_pct": otc_stats["ytd_nav_pct"],
                 "ytd_nav_base_date": otc_stats.get("ytd_nav_base_date"),
                 "ytd_nav_asof": otc_stats.get("ytd_nav_asof"),
@@ -2452,6 +2529,10 @@ def build_payload(
         "ytd_price_pct",
         "ytd_price_base_date",
         "ytd_price_asof",
+        "tracking_error_pct",
+        "tracking_asof",
+        "fee_total_pct",
+        "turnover_cny",
     ]
 
     def write_peer_csv(path: Path, rows: list[dict]) -> None:
@@ -2486,6 +2567,25 @@ def build_payload(
     nav_dates = {code: st["nav_date"] for code, st in (peer_stats or {}).items() if st.get("nav_date")}
     nav_dates[PRIMARY] = latest_nav_date
     picks = align_pick_nav_dates(picks, nav_dates)
+    tracking_left = (picks or {}).pop("_tracking", {}) if isinstance(picks, dict) else {}
+    if isinstance(picks, dict):
+        universes = {"nasdaq-100": peers_sorted, "sp-500": spx_sorted}
+        for group in picks.get("groups") or []:
+            universe = [
+                row for row in universes.get(group.get("id") or "", [])
+                if row.get("ref_premium_pct") is not None and is_on_exchange(str(row.get("code") or ""))
+            ]
+            best = choose_today(universe)
+            if not best:
+                continue
+            group["today_code"] = best["code"]
+            group["today_line"] = (
+                f"今日优先 {best['code']} {best.get('name') or ''} · {best.get('pick_reason') or '综合分更低'}"
+            )
+            for item in group.get("items") or []:
+                item["is_today"] = item.get("code") == best["code"]
+                if item["is_today"]:
+                    item["why"] = "今日优先：" + (best.get("pick_reason") or "综合分更低") + "。"
     iopv_dd = iopv_drawdown_pct(metrics.get("peak_nav"), live_primary.get("iopv") if use_live else None)
     dd_for_amount = iopv_dd if iopv_dd is not None else peak_dd
     # 溢价系数仍用原始 IOPV 回撤做深回撤下限。回撤系数改用扣溢价后的数。
