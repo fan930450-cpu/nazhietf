@@ -71,6 +71,22 @@
     return '';
   }
   function familyLabel(f) { return f === 'sp500' ? '标普500' : '纳指100'; }
+  function sumMonthBuys(trades, family, yyyymm) {
+    const month = String(yyyymm || '');
+    const fam = family === 'sp500' ? 'sp500' : 'nasdaq';
+    return (trades || []).reduce((sum, t) => {
+      if (!t || t.side !== 'buy') return sum;
+      const tf = t.family === 'sp500' ? 'sp500' : 'nasdaq';
+      if (tf !== fam) return sum;
+      if (String(t.date || '').slice(0, 7) !== month) return sum;
+      const amount = num(t.amount);
+      return sum + (amount > 0 ? amount : 0);
+    }, 0);
+  }
+  function monthBought(family, yyyymm) {
+    const month = yyyymm || shanghaiToday().slice(0, 7);
+    return sumMonthBuys(state && state.trades, family, month);
+  }
   function ytdSold(trades, year) {
     const y = String(year || '');
     return (trades || []).reduce((sum, t) => {
@@ -1057,7 +1073,7 @@
   }
   function prefillBuy() {
     const s = ctx && ctx.buySuggestion && ctx.buySuggestion();
-    if (!s || !(num(s.amount) > 0)) return setTradeMsg('计算器里还没有建议金额。');
+    if (!s || !(num(s.amount) > 0)) return setTradeMsg((s && s.emptyNote) || '计算器里还没有建议金额。');
     const keepBroker = readBroker('tradeAccount', 'tradeBrokerCustom');
     resetTradeForm();
     setBroker('tradeAccount', 'tradeBrokerCustom', keepBroker);
@@ -1081,7 +1097,7 @@
     document.getElementById('tradeUpdate').disabled = false;
     syncSide();
     document.getElementById('tradeForm').scrollIntoView({ behavior: 'smooth', block: 'center' });
-    setTradeMsg('已按今天的建议金额填入，还没有保存。请选券商，核对价格和溢价后再记一笔。');
+    setTradeMsg('已按今天可买的金额填入，还没有保存。请选券商，核对价格和溢价后再记一笔。');
   }
   function exportJson() {
     const payload = {
@@ -1261,6 +1277,28 @@
     return set;
   }
 
+  function selfCheckMonthBuys() {
+    const trades = [
+      { date: '2026-11-02', side: 'buy', family: 'nasdaq', amount: 1000 },
+      { date: '2026-11-03', side: 'buy', family: 'nasdaq', amount: 500.5 },
+      { date: '2026-11-03', side: 'sell', family: 'nasdaq', amount: 800 },
+      { date: '2026-10-31', side: 'buy', family: 'nasdaq', amount: 9000 },
+      { date: '2026-11-01', side: 'buy', family: 'sp500', amount: 2000 },
+      { date: '2026-11-04', side: 'buy', family: 'nasdaq', amount: 0 },
+      { date: '2026-11-04', side: 'buy', amount: 200 },
+      { date: '2026-11-05', side: 'buy', family: 'sp500', amount: 100 },
+    ];
+    const nasdaq = sumMonthBuys(trades, 'nasdaq', '2026-11');
+    const sp = sumMonthBuys(trades, 'sp500', '2026-11');
+    if (Math.abs(nasdaq - 1700.5) > 1e-6) throw new Error('纳指当月买入自检失败 ' + nasdaq);
+    if (Math.abs(sp - 2100) > 1e-6) throw new Error('标普当月买入自检失败 ' + sp);
+    if (sumMonthBuys(trades, 'nasdaq', '2026-10') !== 9000) throw new Error('上月买入不应算进本月');
+    if (sumMonthBuys(trades, 'sp500', '2026-11') === sumMonthBuys(trades, 'nasdaq', '2026-11')) {
+      throw new Error('纳指和标普不应并成一笔');
+    }
+  }
+  if (typeof module !== 'undefined' && module.exports) selfCheckMonthBuys();
+
   return {
     TRADES_KEY,
     HOLDINGS_KEY,
@@ -1272,6 +1310,8 @@
     insertCmsSeed,
     clampSell,
     ytdSold,
+    sumMonthBuys,
+    monthBought,
     computePlan,
     applyTradeToHoldings,
     deriveFields,
