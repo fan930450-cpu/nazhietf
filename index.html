@@ -70,6 +70,46 @@
   .hero-target.alt { background: rgba(255,176,32,.12); border-color: rgba(255,176,32,.4); color: var(--amber); }
   .hero-reason { margin-top: 14px; color: var(--muted); font-size: .92rem; line-height: 1.55; }
   .hero-reason strong { color: var(--text); font-weight: 600; }
+  .dd-line { margin: 10px 0 0; font-size: .95rem; line-height: 1.5; font-variant-numeric: tabular-nums; }
+  .dd-line strong { font-weight: 750; }
+  .dd-note, .otc-note {
+    margin: 8px 0 0; color: var(--muted); font-size: .84rem; line-height: 1.55;
+  }
+  .otc-note {
+    background: rgba(143,163,200,.08); border: 1px dashed var(--line);
+    border-radius: 12px; padding: 8px 12px;
+  }
+  .venue-banner {
+    position: relative; z-index: 1;
+    margin: 0 0 14px; padding: 12px 14px; border-radius: 14px;
+    background: rgba(255,176,32,.12); border: 1px solid rgba(255,176,32,.45);
+  }
+  .venue-banner.on {
+    background: rgba(61,220,151,.1); border-color: rgba(61,220,151,.4);
+  }
+  .venue-banner h2 { margin: 0 0 6px; font-size: 1.05rem; }
+  .venue-banner p { margin: 0; color: var(--text); font-size: .92rem; line-height: 1.5; }
+  .venue-edit { display: flex; flex-wrap: wrap; gap: 8px 12px; margin-top: 10px; }
+  .venue-edit label { color: var(--muted); font-size: .75rem; min-width: 8rem; flex: 1 1 8rem; }
+  .venue-edit input { margin-top: 4px; min-height: 40px; padding: 8px 10px; }
+  .swap-card {
+    background: var(--card); border: 1px solid rgba(167,139,250,.45);
+    border-radius: 14px; padding: 12px 14px;
+  }
+  .swap-card + .swap-card { margin-top: 10px; }
+  .swap-card h3 { margin: 0 0 6px; font-size: 1rem; line-height: 1.45; }
+  .swap-amt { font-size: 1.35rem; font-weight: 800; font-variant-numeric: tabular-nums; letter-spacing: -.02em; }
+  .tp-card {
+    background: var(--card); border: 1px solid rgba(255,176,32,.45);
+    border-radius: 14px; padding: 12px 14px;
+  }
+  .tp-card + .tp-card, .tp-muted + .tp-card, .tp-card + .tp-muted { margin-top: 10px; }
+  .tp-card h3, .tp-muted { margin: 0; font-size: .98rem; line-height: 1.5; font-weight: 650; }
+  .tp-muted {
+    color: var(--muted); background: rgba(143,163,200,.08);
+    border: 1px dashed var(--line); border-radius: 12px; padding: 10px 12px; font-weight: 500;
+  }
+  .tp-card .pick-intro { margin: 8px 0 0; }
   .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 14px; }
   @media (max-width: 800px) { .grid { grid-template-columns: 1fr 1fr; } }
   @media (max-width: 520px) { .grid { grid-template-columns: 1fr; } }
@@ -236,7 +276,7 @@
     .hero-target { max-width: 100%; }
     .card { padding: 14px 12px; }
     .sell-family .grid { grid-template-columns: 1fr; }
-    .kpi .k, .kpi .s, .hero-reason, .pick-intro, .live-note, footer { overflow-wrap: anywhere; }
+    .kpi .k, .kpi .s, .hero-reason, .pick-intro, .live-note, .dd-line, .dd-note, .otc-note, .swap-card h3, .tp-card h3, .tp-muted, .venue-banner p, footer { overflow-wrap: anywhere; }
     .scroll-hint { display: block; }
     .chart-box { height: 260px; }
     .live-bar button, .btn, details.advanced summary {
@@ -280,6 +320,21 @@
 
   <!-- HERO: monthly pace. Big number is today's top-up, not a fresh daily budget. -->
   <div class="hero" id="hero">
+    <div id="venueBanner" class="venue-banner">
+      <h2 id="venueTitle">场内 / 场外</h2>
+      <p id="venueReason">正在看场内最低溢价和 IOPV 回撤。</p>
+      <div class="venue-edit">
+        <label>场外每天（元）
+          <input id="venueDaily" type="number" min="0" step="10" value="160" />
+        </label>
+        <label>场内溢价高于 % 才考虑场外
+          <input id="venuePrem" type="number" step="0.1" value="10" />
+        </label>
+        <label>回撤达到 % 就改场内
+          <input id="venueDd" type="number" step="0.1" value="5" />
+        </label>
+      </div>
+    </div>
     <div class="hero-label" id="heroLabel">今日可补到本月目标</div>
     <div class="hero-amount-row">
       <div class="hero-amount" id="heroAmountWrap"><span class="yen">¥</span><span id="heroAmount">—</span></div>
@@ -287,6 +342,8 @@
     </div>
     <div id="heroStatus" class="hero-status" hidden></div>
     <div id="heroTarget" class="hero-target">建议标的加载中…</div>
+    <p class="dd-line" id="heroDdLine"></p>
+    <p class="dd-note" id="heroDdNote"></p>
     <div class="pill-row" id="heroPills"></div>
     <div class="hero-reason" id="heroReason"></div>
     <div class="grid" id="kpiGrid"></div>
@@ -302,11 +359,23 @@
       </div>
       <div id="spxStatus" class="hero-status" hidden></div>
       <div id="spxTarget" class="hero-target">标普标的加载中…</div>
+      <p class="dd-line" id="spxDdLine"></p>
+      <p class="dd-note" id="spxDdNote"></p>
       <div class="pill-row" id="spxPills"></div>
       <div class="hero-reason" id="spxReason"></div>
       <div class="grid" id="spxKpi"></div>
       <p class="pick-intro" id="spxDisclaimer" style="margin:12px 0 0">仅供个人记录辅助，非投资建议。卖出只按账上的标普持仓，不拿纳指市值来算这笔。</p>
     </div>
+  </section>
+
+  <section id="swapSection" hidden>
+    <h2>持仓互换 <span class="hint">只在这台浏览器有持仓、且溢价差够大时出现</span></h2>
+    <div id="swapCards"></div>
+  </section>
+
+  <section id="tpSection" hidden>
+    <h2>止盈 <span class="hint">按单只利润 · 纳指和标普分开 · 只看这台浏览器的持仓</span></h2>
+    <div id="tpCards"></div>
   </section>
 
   <section id="picksSection">
@@ -382,8 +451,9 @@
           溢价系数只轻度修正金额，买多少仍主要由回撤系数决定。相对自己的 P60 连续变化：比 P60 低 5 个点及以上为 1.15，持平为 1.00，高出 5 个点及以上为 0.85，中间线性。绝对软顶：P≥22% 时不超过 0.85，P≥18% 时不超过 0.90，P≥15% 时不超过 0.95。比最便宜同类贵 5 个点及以上时不超过 0.90。回撤够深时设下限，避免溢价把金额砍得太狠：距高点回撤 ≥15% 时系数不低于 0.95，≥10% 时不低于 0.90。这样长期高溢价不会被抬高的 P60 洗成中性，但也不再把系数一刀砍到 0.50。<br/>
           <strong>本月目标上限</strong> = 每月基准 × 回撤系数 × 溢价系数，<strong>没有 2 倍上限</strong>。这是本月上限，不是每天都要买的金额。深回撤时可以到每月基准的 13.33 倍，先看备用金。<br/>
           没投满每月基准时，今日可补 = max(0, 本月目标上限 − 本月已投)。本月已投默认是这台浏览器流水里、北京时间这个自然月的纳指买入合计，不减卖出；直接改数字就改成手填，可再点「改回流水合计」。<br/>
-          本月已投 ≥ 每月基准时，顶部写明「本月定投已完成（已投 ¥X / 基准 ¥Y）」。这时如果距近一年高点回撤不到 5%，提示「本月已完成，今天不用买」。回撤达到 5%（按今日盘中 IOPV；没有今日 IOPV 时用已公布净值）才按差额提示「回撤 N%，建议加仓 ¥Z」，Z = max(0, 每月基准 × 回撤系数 × 溢价系数 − 本月已投)。Z 已经是 0，就提示「当前回撤档位已加仓完，回撤更深再加」。回撤加深、上限变高之后，差额才会再出现。<br/>
-          159501 明显贵时，买入代码仍指向纳指短名单里更合适的一只。标普500不参与这个金额，用下面那张标普计算器（每月基准 2000，另一套回撤阶梯）。两边各自判断完成和加仓，不合并。卖出不进这个买入金额：触发时记录本按这一边的持仓市值给出人民币，单次约 6%，且不超过这一边本年剩余的 20%，卖后仍留至少 75% 的这一边峰值市值。纳指和标普不合并。<br/>
+          本月已投 ≥ 每月基准时，顶部写明「本月定投已完成（已投 ¥X / 基准 ¥Y）」。这时如果扣溢价后回撤不到 5%，提示「本月已完成，今天不用买」。扣溢价后回撤达到 5% 才按差额提示加仓，一笔买进同指数里溢价最低的场内 ETF，不拆成多天。扣溢价后回撤 = 今日 IOPV 回撤 − max(0, 场内买入标的溢价 − 其 P60)；没有 P60 时常态按 3%。页面同时写出原始回撤。Z 已经是 0，就提示「当前回撤档位已加仓完，回撤更深再加」。<br/>
+          纳指先看场所。场内最低溢价高于页面上的阈值（默认 10%），并且 IOPV 回撤低于另一阈值（默认 5%）时，是场外模式：只定投 021000，每天默认 160 元，本月目标是每天 × 30（默认 ¥4,800），不买场内。最低溢价不超过阈值，或回撤达到阈值，是场内模式：买溢价最低的场内 ETF，金额仍按每月基准、扣溢价后回撤和溢价系数。这三个数可以在顶部改。<br/>
+          有持仓时，止盈按单只利润分档（≥10% 卖这只的 10%，≥15% 再卖 10%，≥20% 再卖 5%，合计 25%）。分档写在 TP_TIERS。场内溢价 ≥15% 的优先；场内溢价低于 5% 或这只 IOPV 回撤 ≥10% 先不止盈。场外持仓按净值算利润，不看溢价，并提示持有满 7 天再赎回。纳指底仓把场内和场外算在一起，卖到只剩峰值的 75% 就停，本年也不超过 20%。卖出的钱留作回撤加仓备用金。<br/>
           盘中「今日溢价 P」和「距高点回撤」在页面打开且处于 A 股交易时段时，大约每 20 秒按公开行情重取。回撤跟着今日 IOPV 变。P60 和单日净值涨跌仍用定时快照。没有今日 IOPV 时，回撤退回已公布净值。
         </p>
       </details>
@@ -501,6 +571,13 @@
               <select id="holdFamily">
                 <option value="nasdaq">纳指100</option>
                 <option value="sp500">标普500</option>
+              </select>
+            </div>
+            <div>
+              <label for="holdVenue">场所</label>
+              <select id="holdVenue">
+                <option value="on">场内</option>
+                <option value="off">场外（按净值，如 021000）</option>
               </select>
             </div>
             <div>
@@ -687,10 +764,10 @@
     <h2>每日 / 定投日操作清单</h2>
     <div class="card">
       <ul class="checklist">
-        <li><span class="n">1</span><div>看顶部大数字和旁边的「本月目标 · 已投」。没投满每月基准时，大数字是<strong>今日可补到本月目标</strong>。纳指每月基准默认 3000，标普每月基准默认 2000，两笔分开。本月已投达到每月基准后：回撤不到 5% 会写「本月已完成，今天不用买」；回撤达到 5% 才突出「回撤 N%，建议加仓」。标普在下面单独一张卡片。交易日大约从 10:30（北京时间）起，页面会按小时更新到 14:20。</div></li>
+        <li><span class="n">1</span><div>先看顶部的<strong>场外模式 / 场内模式</strong>。场内最低溢价高于阈值（默认 10%）且 IOPV 回撤低于阈值（默认 5%）时，纳指只买场外 021000，每天默认 160 元，本月目标默认 ¥4,800。否则买溢价最低的场内 ETF，金额按每月基准和扣溢价后回撤。标普仍是下面那张卡片。</div></li>
         <li><span class="n">2</span><div>核对<strong>今日溢价 P</strong>与<strong>P60</strong>。159501 明显贵时，到「今日同类怎么选」里看纳指短名单的今日优先；标普500是另一条可选，不替换顶部金额。</div></li>
-        <li><span class="n">3</span><div>看<strong>距近一年最高净值的回撤（按今日盘中 IOPV）</strong>：这是回撤系数的输入，也决定本月投满基准之后还要不要加仓。回撤达到 5% 才进入加仓。旁边仍有已公布净值回撤。没有今日 IOPV 时用已公布数字，并标明滞后。较上月净值只作参照。</div></li>
-        <li><span class="n">4</span><div>若给出卖出金额：纳指和标普分开算。每一边大约是自己市值的 6%，不超过这一边本年剩余的 20%，卖完还要留下至少 75% 的这一边峰值市值。不要把两边合成一个底仓。</div></li>
+        <li><span class="n">3</span><div>看<strong>原始回撤</strong>和<strong>扣溢价后回撤</strong>。回撤系数和投满基准后的 5% 加仓线用扣溢价后的数。没有今日 IOPV 时用已公布数字，并标明滞后。较上月净值只作参照。</div></li>
+        <li><span class="n">4</span><div>有持仓才看止盈。场内按现价（含溢价），场外按净值。利润 ≥10% 卖这只的 10%，≥15% 再卖 10%，≥20% 再卖 5%，合计 25%。场内溢价 ≥15% 的先卖；溢价低于 5% 或 IOPV 回撤 ≥10% 先不止盈。场外不看溢价，但提示持有满 7 天再赎回。这一边卖到只剩峰值的 75% 就停。卖出的钱留作回撤加仓备用金。</div></li>
         <li><span class="n">5</span><div>数据在交易日大约每小时刷新一次（北京时间 <strong>10:20–14:20</strong>），不是实时行情；下单仍以券商 IOPV 为准。也可在仓库 Actions 里手动运行「刷新并部署日报」。不需要 Grok Bot。</div></li>
       </ul>
     </div>
@@ -760,15 +837,31 @@
     else if (done) mode = 'add';
     return { baseline: base, invested: spent, target, gap, gapYen, drawdown: dd, done, deep, mode };
   }
-  function paceCopy(pace) {
+  function paceCopy(pace, detail) {
     const meta = '本月目标 ¥' + fmtYen(pace.target) + ' · 已投 ¥' + fmtYen(pace.invested);
     const doneLine = '本月定投已完成（已投 ¥' + fmtYen(pace.invested) + ' / 基准 ¥' + fmtYen(pace.baseline) + '）';
     if (pace.mode === 'rest') {
-      return { label: '本月已完成，今天不用买', amount: 0, meta, status: doneLine, tone: 'done' };
+      const restLabel = detail && detail.offDay ? '本月场外目标已完成，今天不用买' : '本月已完成，今天不用买';
+      return { label: restLabel, amount: 0, meta, status: doneLine, tone: 'done' };
+    }
+    if (pace.mode === 'off') {
+      return {
+        label: '场外每天定投',
+        amount: pace.gapYen,
+        meta,
+        status: '',
+        tone: '',
+      };
     }
     if (pace.mode === 'add') {
+      const eff = pace.drawdown;
+      const raw = detail && detail.raw;
+      const both = raw != null && eff != null && Math.abs(Number(raw) - Number(eff)) >= 0.05;
+      const label = both
+        ? '回撤 ' + fmt(raw) + '%，扣溢价后 ' + fmt(eff) + '%，建议加仓 ¥' + fmtYen(pace.gapYen)
+        : '回撤 ' + fmt(eff == null ? raw : eff) + '%，建议加仓 ¥' + fmtYen(pace.gapYen);
       return {
-        label: '回撤 ' + fmt(pace.drawdown) + '%，建议加仓 ¥' + fmtYen(pace.gapYen),
+        label,
         amount: pace.gapYen,
         meta,
         status: doneLine,
@@ -780,8 +873,8 @@
     }
     return { label: '今日可补到本月目标：', amount: pace.gapYen, meta, status: '', tone: '' };
   }
-  function paintPace(which, pace) {
-    const view = paceCopy(pace);
+  function paintPace(which, pace, detail) {
+    const view = paceCopy(pace, detail);
     const ids = which === 'spx'
       ? { label: 'spxLabel', amount: 'spxAmount', wrap: 'spxAmountWrap', meta: 'spxMeta', status: 'spxStatus' }
       : { label: 'heroLabel', amount: 'heroAmount', wrap: 'heroAmountWrap', meta: 'heroMeta', status: 'heroStatus' };
@@ -804,6 +897,611 @@
       status.hidden = !view.status;
     }
     return view;
+  }
+
+  // 与 refresh.py 的 effective_drawdown / is_on_exchange 一致。
+  const NORMAL_PREMIUM_FALLBACK = 3;
+  const SWAP_PREMIUM_GAP = 8;
+  // 纳指场所。改默认值就改这里；页面顶部三个输入会覆盖每天金额和两个阈值。
+  const VENUE_DEFAULTS = {
+    code: '021000',
+    name: '华夏纳斯达克100ETF联接',
+    daily: 160,
+    monthDays: 30,
+    premiumCut: 10,
+    drawdownCut: 5,
+    holdDays: 7,
+  };
+  // 止盈分档。改 sell 就是「再卖这只的百分之几」。三档相加默认 25%，卖到这一边只剩峰值的 75% 就停。
+  const TP_TIERS = [
+    { profit: 10, sell: 0.10 },
+    { profit: 15, sell: 0.10 },
+    { profit: 20, sell: 0.05 },
+  ];
+  const VENUE_KEY = 'nazhietf.venue';
+  function venueNumber(raw, fallback) {
+    const n = Number(raw);
+    return Number.isFinite(n) ? n : fallback;
+  }
+  function venueSettings() {
+    const dailyEl = document.getElementById('venueDaily');
+    const premEl = document.getElementById('venuePrem');
+    const ddEl = document.getElementById('venueDd');
+    const daily = venueNumber(dailyEl && dailyEl.value, VENUE_DEFAULTS.daily);
+    const premiumCut = venueNumber(premEl && premEl.value, VENUE_DEFAULTS.premiumCut);
+    const drawdownCut = venueNumber(ddEl && ddEl.value, VENUE_DEFAULTS.drawdownCut);
+    return {
+      code: VENUE_DEFAULTS.code,
+      name: VENUE_DEFAULTS.name,
+      daily: Math.max(0, daily),
+      monthDays: VENUE_DEFAULTS.monthDays,
+      month: Math.max(0, daily) * VENUE_DEFAULTS.monthDays,
+      premiumCut,
+      drawdownCut,
+      holdDays: VENUE_DEFAULTS.holdDays,
+    };
+  }
+  function nasdaqVenueMode(prem, dd, premiumCut, drawdownCut) {
+    const premiumKnown = prem != null && Number.isFinite(Number(prem));
+    const ddKnown = dd != null && Number.isFinite(Number(dd));
+    if (premiumKnown && ddKnown && Number(prem) > premiumCut && Number(dd) < drawdownCut) return 'off';
+    return 'on';
+  }
+  function nasdaqVenue(rawDd) {
+    const cfg = venueSettings();
+    const floor = lowestOnExchange('nasdaq');
+    const prem = floor ? floor.premium : null;
+    const ddNum = Number(rawDd);
+    const dd = Number.isFinite(ddNum) ? ddNum : null;
+    const mode = nasdaqVenueMode(prem, dd, cfg.premiumCut, cfg.drawdownCut);
+    let reason = '场内模式：溢价或回撤还不齐，今天仍买场内溢价更低的 ETF。';
+    if (mode === 'off') {
+      reason = '场外模式：场内最低溢价 ' + fmt(prem) + '%（' + floor.code + ' ' + (floor.name || '') + '）高于 '
+        + fmt(cfg.premiumCut) + '%，且 IOPV 回撤 ' + fmt(dd) + '% 低于 ' + fmt(cfg.drawdownCut)
+        + '%。今天不买场内，只定投场外 ' + cfg.code + '，每天 ¥' + fmtYen(cfg.daily) + '，本月目标 ¥' + fmtYen(cfg.month) + '。';
+    } else if (prem != null && prem <= cfg.premiumCut) {
+      reason = '场内模式：场内最低溢价 ' + fmt(prem) + '%（' + floor.code + ' ' + (floor.name || '') + '）不超过 '
+        + fmt(cfg.premiumCut) + '%。今天买这只场内 ETF。';
+    } else if (dd != null && dd >= cfg.drawdownCut) {
+      reason = '场内模式：IOPV 回撤 ' + fmt(dd) + '% 已达到 ' + fmt(cfg.drawdownCut)
+        + '%。今天买场内溢价最低的' + (floor ? ' ' + floor.code + ' ' + (floor.name || '') : ' ETF') + '。';
+    }
+    return { mode, floor, prem, dd, reason, cfg };
+  }
+  function paintVenueBanner(venue) {
+    const box = document.getElementById('venueBanner');
+    const title = document.getElementById('venueTitle');
+    const reason = document.getElementById('venueReason');
+    if (box) box.className = 'venue-banner' + (venue && venue.mode === 'on' ? ' on' : '');
+    if (title) title.textContent = venue && venue.mode === 'off' ? '场外模式' : '场内模式';
+    if (reason) reason.textContent = venue ? venue.reason : '';
+  }
+  function isOnExchange(code) {
+    return /^(?:159\d{3}|5\d{5})$/.test(String(code || ''));
+  }
+  function effectiveDrawdown(iopvDd, currentPremium, normalPremium) {
+    const dd = Number(iopvDd);
+    if (!Number.isFinite(dd)) return null;
+    const normal = normalPremium == null || !Number.isFinite(Number(normalPremium))
+      ? NORMAL_PREMIUM_FALLBACK
+      : Number(normalPremium);
+    const cur = Number(currentPremium);
+    const excess = Number.isFinite(cur) ? Math.max(0, cur - normal) : 0;
+    return dd - excess;
+  }
+  function escText(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+    }[c]));
+  }
+  function p60Of(code) {
+    const pools = calculatorEtfs().concat(spxEtfs());
+    const etf = pools.find(e => e && e.code === code);
+    if (!etf || etf.p60 == null || !Number.isFinite(Number(etf.p60))) return null;
+    return Number(etf.p60);
+  }
+  function turnoverOf(code) {
+    const groups = (D.picks && D.picks.groups) || [];
+    for (let i = 0; i < groups.length; i++) {
+      const it = (groups[i].items || []).find(x => x.code === code);
+      if (it && it.turnover_cny != null && Number.isFinite(Number(it.turnover_cny))) return Number(it.turnover_cny);
+    }
+    return null;
+  }
+  function premiumNow(code) {
+    const q = liveMap[code];
+    if (q && Number.isFinite(Number(q.premium))) return Number(q.premium);
+    const snap = snapshotPremium(code);
+    if (snap != null && Number.isFinite(Number(snap))) return Number(snap);
+    const spx = spxEtfs().find(e => e.code === code);
+    if (spx && spx.p != null && Number.isFinite(Number(spx.p))) return Number(spx.p);
+    const etf = calculatorEtfs().find(e => e.code === code);
+    if (etf && etf.p != null && Number.isFinite(Number(etf.p))) return Number(etf.p);
+    return null;
+  }
+  function lowestOnExchange(family) {
+    const rows = family === 'sp500' ? (D.peers_spx || []) : (D.peers || []);
+    const extra = family === 'sp500' ? spxEtfs() : calculatorEtfs();
+    const seen = new Set();
+    let best = null;
+    function consider(row) {
+      if (!row || !row.code || seen.has(row.code) || !isOnExchange(row.code)) return;
+      seen.add(row.code);
+      const turn = row.turnover_cny != null ? Number(row.turnover_cny) : turnoverOf(row.code);
+      if (turn != null && Number.isFinite(turn) && turn < PICK_MIN_TURNOVER) return;
+      const prem = premiumNow(row.code);
+      if (prem == null) return;
+      if (!best || prem < best.premium) best = { code: row.code, name: row.name || row.code, premium: prem };
+    }
+    rows.forEach(consider);
+    extra.forEach(consider);
+    return best;
+  }
+  function asTarget(picked) {
+    if (!picked) return null;
+    if (picked.targetCode) {
+      return {
+        code: picked.targetCode,
+        name: picked.targetName || picked.targetCode,
+        prem: Number(picked.targetPrem),
+        note: picked.targetNote || '',
+        cheap: picked.cheap || null,
+      };
+    }
+    return {
+      code: picked.code,
+      name: picked.name || picked.code,
+      prem: Number(picked.prem),
+      note: picked.note || '',
+      cheap: null,
+    };
+  }
+  function forceOnExchange(target, family) {
+    if (target && isOnExchange(target.code)) return target;
+    const alt = lowestOnExchange(family);
+    if (!alt) return target;
+    return { code: alt.code, name: alt.name, prem: alt.premium, note: '主建议留在场内溢价更低的 ETF', cheap: target && target.cheap };
+  }
+  function normalFor(targetCode, primaryCode, primaryP60) {
+    if (targetCode === primaryCode && Number.isFinite(Number(primaryP60))) {
+      return { value: Number(primaryP60), fallback: false };
+    }
+    const stored = p60Of(targetCode);
+    if (stored != null) return { value: stored, fallback: false };
+    return { value: null, fallback: true };
+  }
+  function finishPlan(coefFn, peak, dayChg, premCoef, baseline, invested, target, normal) {
+    const eff = effectiveDrawdown(peak, target ? target.prem : null, normal ? normal.value : null);
+    const dd = coefFn(eff, dayChg);
+    const pace = dcaPace(baseline, invested, eff, dd.c, premCoef);
+    const rawNum = Number(peak);
+    const raw = Number.isFinite(rawNum) ? rawNum : null;
+    return {
+      target,
+      dd,
+      pace,
+      raw,
+      effective: eff,
+      normal: normal && !normal.fallback ? normal.value : NORMAL_PREMIUM_FALLBACK,
+      normalFallback: !normal || normal.fallback,
+      excess: raw != null && eff != null ? raw - eff : null,
+    };
+  }
+  function nasdaqHeroPlan(peak, dayChg, p, p60, peerMin, baseline, invested) {
+    const pr = premiumCoef(Number(p), Number(p60), Number(peerMin), Number(peak));
+    const venue = nasdaqVenue(peak);
+    let target;
+    if (venue.mode === 'off') {
+      target = {
+        code: venue.cfg.code,
+        name: venue.cfg.name,
+        prem: null,
+        note: '场外模式，不买场内',
+        cheap: venue.floor,
+      };
+    } else if (venue.floor) {
+      target = {
+        code: venue.floor.code,
+        name: venue.floor.name,
+        prem: venue.floor.premium,
+        note: '场内溢价最低',
+        cheap: venue.floor,
+      };
+    } else {
+      target = forceOnExchange(asTarget(suggestBuyTarget(Number(p), pr)), 'nasdaq');
+    }
+    const plan = finishPlan(drawdownCoef, peak, dayChg, pr.c, baseline, invested, target, normalFor(target.code, '159501', p60));
+    plan.pr = pr;
+    plan.venue = venue;
+    if (venue.mode === 'off') {
+      const month = venue.cfg.month;
+      const spent = Math.max(0, Number(invested) || 0);
+      const gap = Math.max(0, month - spent);
+      const today = Math.min(venue.cfg.daily, Math.round(gap));
+      const done = month > 0 && Math.round(spent) >= Math.round(month);
+      plan.offDay = true;
+      plan.pace = {
+        baseline: month,
+        invested: spent,
+        target: month,
+        gap,
+        gapYen: done ? 0 : today,
+        drawdown: Number.isFinite(Number(peak)) ? Number(peak) : null,
+        done,
+        deep: false,
+        mode: done ? 'rest' : 'off',
+      };
+    }
+    return plan;
+  }
+  function spxHeroPlan(peak, dayChg, p, p60, peerMin, baseline, invested) {
+    const pNum = Number(p);
+    const p60Num = Number(p60);
+    const pr = (!Number.isFinite(pNum) || !Number.isFinite(p60Num))
+      ? { c: 1, label: '数据不足', expensive: false }
+      : premiumCoef(pNum, p60Num, Number(peerMin), Number(peak));
+    let target = forceOnExchange(asTarget(spxSuggestTarget(pNum, pr)), 'sp500');
+    let plan = finishPlan(spxDrawdownCoef, peak, dayChg, pr.c, baseline, invested, target, normalFor(target.code, SPX_CODE, p60));
+    if (plan.pace.mode === 'add') {
+      const floor = lowestOnExchange('sp500');
+      if (floor) {
+        target = { code: floor.code, name: floor.name, prem: floor.premium, note: '同指数溢价最低，一次买入', cheap: floor };
+        plan = finishPlan(spxDrawdownCoef, peak, dayChg, pr.c, baseline, invested, target, normalFor(target.code, SPX_CODE, p60));
+      }
+    }
+    plan.pr = pr;
+    return plan;
+  }
+  function directEtfPlan(coefFn, peak, dayChg, p, p60, peerMin, baseline, invested, code, name, family) {
+    const pr = premiumCoef(Number(p), Number(p60), Number(peerMin), Number(peak));
+    let target = { code, name: name || code, prem: Number(p), note: '', cheap: null };
+    target = forceOnExchange(target, family);
+    const normal = Number.isFinite(Number(p60)) ? { value: Number(p60), fallback: false } : { value: null, fallback: true };
+    if (target.code !== code) {
+      const stored = normalFor(target.code, code, p60);
+      const plan = finishPlan(coefFn, peak, dayChg, pr.c, baseline, invested, target, stored);
+      plan.pr = pr;
+      return plan;
+    }
+    const plan = finishPlan(coefFn, peak, dayChg, pr.c, baseline, invested, target, normal);
+    plan.pr = pr;
+    return plan;
+  }
+  function ddExplain(plan) {
+    if (!plan || plan.raw == null) return '还没有回撤，暂时不能算扣溢价后的数。';
+    const code = plan.target ? plan.target.code : '';
+    const prem = plan.target ? plan.target.prem : null;
+    const normalTxt = plan.normalFallback ? '没有 P60，常态按 3%' : ('其 P60 ' + fmt(plan.normal) + '%');
+    return '扣溢价后回撤 = 今日 IOPV 回撤 − max(0, ' + code + ' 溢价 '
+      + fmt(prem) + '% − ' + normalTxt + ')。回撤系数和投满每月基准后的 5% 加仓线用这个数。';
+  }
+  function paintDrawdownExtras(which, plan) {
+    const prefix = which === 'spx' ? 'spx' : 'hero';
+    const line = document.getElementById(prefix + 'DdLine');
+    const note = document.getElementById(prefix + 'DdNote');
+    if (line) {
+      line.innerHTML = '原始回撤 <strong>' + fmt(plan.raw) + '%</strong> · 扣溢价后回撤 <strong>'
+        + fmt(plan.effective) + '%</strong>';
+    }
+    if (note) note.textContent = ddExplain(plan);
+  }
+  function swapHeadline(card) {
+    const gap = (Math.round(Number(card.gap) * 10) / 10).toFixed(1);
+    const peer = card.peerCode + (card.peerName ? ' ' + card.peerName : '');
+    return '可互换：卖 ' + card.code + ' 换 ' + peer + '，溢价差约 ' + gap + '%，指数敞口不变';
+  }
+  function takeProfitFraction(profit) {
+    if (!TP_TIERS.length || !(profit >= TP_TIERS[0].profit)) return null;
+    let frac = 0;
+    TP_TIERS.forEach(tier => {
+      if (profit >= tier.profit) frac += tier.sell;
+    });
+    return frac;
+  }
+  function fmtShareCount(n) {
+    if (n == null || !Number.isFinite(Number(n))) return '—';
+    const r = Math.round(Number(n) * 100) / 100;
+    if (Math.abs(r - Math.round(r)) < 0.005) return Math.round(r).toLocaleString('zh-CN');
+    return r.toLocaleString('zh-CN', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+  }
+  function iopvDrawdownFor(code, family) {
+    const etf = calculatorEtfs().find(e => e.code === code) || spxEtfs().find(e => e.code === code);
+    if (etf) {
+      const info = drawdownView(etf);
+      if (info && info.pct != null && Number.isFinite(Number(info.pct))) return Number(info.pct);
+    }
+    const primary = family === 'sp500' ? '513500' : '159501';
+    if (code !== primary) return iopvDrawdownFor(primary, family);
+    return null;
+  }
+  function holdingVenue(h) {
+    if (!h) return 'on';
+    if (h.venue === 'off' || h.venue === '场外') return 'off';
+    if (h.venue === 'on' || h.venue === '场内') return 'on';
+    return isOnExchange(h.code) ? 'on' : 'off';
+  }
+  function daysSinceDate(iso) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(iso || '')) return null;
+    const then = Date.parse(iso + 'T00:00:00+08:00');
+    if (!Number.isFinite(then)) return null;
+    return Math.floor((Date.now() - then) / 86400000);
+  }
+  function groupedHoldings(plan, onlyOnExchange) {
+    const groups = new Map();
+    (plan.valued || []).forEach(h => {
+      if (!h || !(h.shares > 0)) return;
+      const venue = holdingVenue(h);
+      if (onlyOnExchange && venue !== 'on') return;
+      if (venue === 'on' && !isOnExchange(h.code)) return;
+      const g = groups.get(h.code) || {
+        code: h.code, name: h.name || '', shares: 0, costAmt: 0, mv: 0, price: null, known: true, venue,
+      };
+      g.venue = venue;
+      g.shares += h.shares;
+      g.costAmt += h.shares * (Number(h.cost) || 0);
+      if (h.mv == null || !(h.price > 0)) g.known = false;
+      else {
+        g.mv += h.mv;
+        g.price = h.price;
+      }
+      if (!g.name && h.name) g.name = h.name;
+      groups.set(h.code, g);
+    });
+    return Array.from(groups.values());
+  }
+  function takeProfitHeadline(card) {
+    return '止盈：利润 ' + fmt(card.profit) + '%，建议卖 ' + fmtShareCount(card.shares) + ' 份 (≈¥'
+      + fmtYen(card.amount) + ')，卖后底仓 ' + fmt(card.afterPct) + '%';
+  }
+  function positionActions() {
+    const empty = { take: [], swaps: [], held: { nasdaq: false, sp500: false } };
+    if (!window.NazhiLedger || typeof NazhiLedger.scopedSell !== 'function' || typeof NazhiLedger.swapCap !== 'function') return empty;
+    const take = [];
+    const swaps = [];
+    const held = { nasdaq: false, sp500: false };
+    ['nasdaq', 'sp500'].forEach(family => {
+      let plan = null;
+      try { plan = NazhiLedger.scopedSell(family, false); } catch (err) { plan = null; }
+      if (!plan || !plan.hasHoldings) return;
+      held[family] = true;
+      let sold = plan.soldYTD;
+      let total = plan.totalMV;
+      const peak = plan.peakMV;
+      const rankedTp = groupedHoldings(plan, false).map(g => {
+        const off = g.venue === 'off';
+        const prem = off ? null : premiumNow(g.code);
+        const premKnown = prem != null && Number.isFinite(prem) ? prem : null;
+        const avg = g.shares > 0 ? g.costAmt / g.shares : null;
+        const profit = g.known && g.price > 0 && avg > 0 ? (g.price - avg) / avg * 100 : null;
+        const dd = off ? null : iopvDrawdownFor(g.code, family);
+        return Object.assign({}, g, { prem: premKnown, profit, dd, off });
+      }).filter(g => g.profit != null && g.profit >= 10)
+        .sort((a, b) => {
+          const ap = !a.off && a.prem != null && a.prem >= 15 ? 1 : 0;
+          const bp = !b.off && b.prem != null && b.prem >= 15 ? 1 : 0;
+          if (ap !== bp) return bp - ap;
+          return b.profit - a.profit;
+        });
+      rankedTp.forEach(g => {
+        const reasons = [];
+        if (!g.off && g.prem != null && g.prem < 5) reasons.push('溢价低于 5%');
+        if (!g.off && g.dd != null && g.dd >= 10) reasons.push('IOPV 回撤已到 ' + fmt(g.dd) + '%，达到 10%');
+        if (g.off && window.NazhiLedger && typeof NazhiLedger.latestBuyDate === 'function') {
+          const bought = NazhiLedger.latestBuyDate(g.code);
+          const age = daysSinceDate(bought);
+          const holdDays = venueSettings().holdDays;
+          if (age != null && age < holdDays) {
+            reasons.push('最近买入 ' + bought + '，未满 ' + holdDays + ' 天，赎回可能有手续费');
+          }
+        }
+        if (reasons.length) {
+          take.push({
+            family, code: g.code, name: g.name, profit: g.profit, prem: g.prem, off: g.off,
+            suppressed: true, amount: 0, shares: 0, afterPct: null,
+            reason: g.code + ' 利润 ' + fmt(g.profit) + '%，先不止盈：' + reasons.join('，') + '。'
+              + (g.off ? '场外按净值计算，不看溢价。' : '利润按现价相对成本，里面含着溢价。'),
+          });
+          return;
+        }
+        const frac = takeProfitFraction(g.profit);
+        const want = g.mv * frac;
+        const cap = NazhiLedger.swapCap(total, peak, sold, want);
+        const amount = cap.amount;
+        if (!(amount > 0)) {
+          take.push({
+            family, code: g.code, name: g.name, profit: g.profit, prem: g.prem,
+            suppressed: true, amount: 0, shares: 0, afterPct: peak > 0 ? (total / peak) * 100 : null,
+            reason: g.code + ' 利润 ' + fmt(g.profit) + '%，先不止盈：再卖会低于这一边峰值市值的 75%，或本年 20% 已用完。',
+          });
+          return;
+        }
+        const shares = g.price > 0 ? amount / g.price : 0;
+        sold += amount;
+        total = Math.max(0, total - amount);
+        const afterPct = peak > 0 ? (total / peak) * 100 : null;
+        take.push({
+          family, code: g.code, name: g.name, profit: g.profit, prem: g.prem, off: g.off,
+          suppressed: false, amount, shares, afterPct, frac, want,
+          headline: '',
+        });
+        take[take.length - 1].headline = takeProfitHeadline(take[take.length - 1]);
+      });
+      const peer = lowestOnExchange(family);
+      if (!peer) return;
+      const rankedSwap = groupedHoldings(plan, true).map(g => {
+        const prem = premiumNow(g.code);
+        const gap = prem == null ? null : prem - peer.premium;
+        return Object.assign({}, g, { prem, gap });
+      }).filter(g => g.code !== peer.code && g.gap != null && g.gap >= SWAP_PREMIUM_GAP - 1e-9)
+        .sort((a, b) => b.gap - a.gap || b.mv - a.mv);
+      rankedSwap.forEach(g => {
+        const cap = NazhiLedger.swapCap(total, peak, sold, g.known ? g.mv : 0);
+        const amount = cap.amount;
+        sold += amount;
+        total = Math.max(0, total - amount);
+        swaps.push({
+          family, code: g.code, name: g.name,
+          peerCode: peer.code, peerName: peer.name, gap: g.gap, amount,
+        });
+      });
+    });
+    return { take, swaps, held };
+  }
+  function paintSwapCards(cards) {
+    const section = document.getElementById('swapSection');
+    const root = document.getElementById('swapCards');
+    if (!section || !root) return;
+    if (!cards || !cards.length) {
+      section.hidden = true;
+      root.innerHTML = '';
+      return;
+    }
+    section.hidden = false;
+    root.innerHTML = cards.map(card => {
+      const side = card.family === 'sp500' ? '标普' : '纳指';
+      const amountLine = card.amount > 0
+        ? '建议互换约 ¥' + fmtYen(card.amount) + '。不超过这只的市值，并和止盈共用' + side + '的卖出额度：本年不超过峰值的 20%，卖后仍留至少 75%。'
+        : '这次按' + side + '卖出规则可换 ¥0：本年 20% 已用完，或再卖会低于该边峰值市值的 75%。';
+      return '<article class="swap-card"><h3>' + escText(swapHeadline(card)) + '</h3>'
+        + '<div class="swap-amt">¥' + fmtYen(card.amount) + '</div>'
+        + '<p class="pick-intro">' + escText(amountLine) + '仅供个人记录辅助，非投资建议。</p></article>';
+    }).join('');
+  }
+  function paintTakeProfit(cards) {
+    const section = document.getElementById('tpSection');
+    const root = document.getElementById('tpCards');
+    if (!section || !root) return;
+    if (!cards || !cards.length) {
+      section.hidden = true;
+      root.innerHTML = '';
+      return;
+    }
+    section.hidden = false;
+    root.innerHTML = cards.map(card => {
+      if (card.suppressed) {
+        return '<p class="tp-muted">' + escText(card.reason) + '</p>';
+      }
+      const topFrac = takeProfitFraction(TP_TIERS[TP_TIERS.length - 1].profit);
+      const band = card.frac + 1e-9 >= topFrac
+        ? '利润达到 ' + TP_TIERS[TP_TIERS.length - 1].profit + '%，合计约卖这只的 ' + Math.round(topFrac * 100) + '%。这一边卖到只剩峰值的 75% 就停。'
+        : '';
+      const priority = !card.off && card.prem != null && card.prem >= 15
+        ? '溢价 ' + fmt(card.prem) + '%，优先止盈。'
+        : '';
+      const capped = card.want != null && card.amount + 0.5 < card.want
+        ? '份数已按这一边（场内加场外）底仓 75% 和本年 20% 封顶。'
+        : '';
+      const basis = card.off
+        ? '场外按净值计算利润，不看溢价。赎回前确认持有满 ' + VENUE_DEFAULTS.holdDays + ' 天，避免赎回费。'
+        : '利润按现价相对成本，里面含着溢价。';
+      const extra = [priority, band, capped, basis, '留作回撤加仓备用金。', '仅供个人记录辅助，非投资建议。']
+        .filter(Boolean).join('');
+      return '<article class="tp-card"><h3>' + escText(card.headline) + '</h3>'
+        + '<p class="pick-intro">' + escText(extra) + '</p></article>';
+    }).join('');
+  }
+  function refreshPositionCards() {
+    let actions = { take: [], swaps: [], held: { nasdaq: false, sp500: false } };
+    try { actions = positionActions(); } catch (err) { actions = { take: [], swaps: [], held: { nasdaq: false, sp500: false } }; }
+    paintSwapCards(actions.swaps);
+    paintTakeProfit(actions.take);
+    return actions;
+  }
+  function describeSleeveSell(family, oldTrigger, actions) {
+    const side = family === 'sp500' ? '标普' : '纳指';
+    const rows = ((actions && actions.take) || []).filter(t => t.family === family);
+    const live = rows.filter(t => !t.suppressed && t.amount > 0);
+    const muted = rows.filter(t => t.suppressed);
+    const has = actions && actions.held && actions.held[family];
+    if (!has) {
+      if (oldTrigger) {
+        return {
+          sellText: '建议卖战术仓 5–8%',
+          sellClass: 'sell',
+          sellPhrase: side + '还没有持仓，近 60 日新高且明显贵 → 可卖 5–8%',
+          sellKpi: '是',
+          sellSub: '还没有持仓时只提示 5–8%。仅供个人记录辅助，非投资建议',
+          kpiTitle: '是否建议卖战术仓',
+        };
+      }
+      return {
+        sellText: '不卖战术仓',
+        sellClass: 'nosell',
+        sellPhrase: '暂不触发卖' + side + '战术仓',
+        sellKpi: '否',
+        sellSub: '未同时满足新高和明显贵。有持仓后改按止盈分档。',
+        kpiTitle: '是否建议卖战术仓',
+      };
+    }
+    if (live.length) {
+      const sum = live.reduce((s, t) => s + t.amount, 0);
+      return {
+        sellText: '止盈约 ¥' + fmtYen(sum),
+        sellClass: 'sell',
+        sellPhrase: live.map(t => t.headline).join('；'),
+        sellKpi: '¥' + fmtYen(sum),
+        sellSub: '按利润分档，已受' + side + '本年 20% 与底仓 75% 约束。留作回撤加仓备用金。仅供个人记录辅助，非投资建议',
+        kpiTitle: '是否建议止盈',
+      };
+    }
+    if (muted.length) {
+      return {
+        sellText: '先不止盈',
+        sellClass: 'nosell',
+        sellPhrase: muted[0].reason,
+        sellKpi: '先不卖',
+        sellSub: muted.map(t => t.reason).join(' '),
+        kpiTitle: '是否建议止盈',
+      };
+    }
+    return {
+      sellText: '利润未到 10%',
+      sellClass: 'nosell',
+      sellPhrase: '有' + side + '持仓，利润还没到 10%，不止盈',
+      sellKpi: '否',
+      sellSub: '止盈从单只利润 10% 起。溢价低于 5% 或 IOPV 回撤达到 10% 也会先不卖。',
+      kpiTitle: '是否建议止盈',
+    };
+  }
+  function selfCheckPremiumAdjust() {
+    const eff = effectiveDrawdown(8.7693, 12.5145, 9.3625);
+    const expect = 8.7693 - (12.5145 - 9.3625);
+    if (Math.abs(eff - expect) > 1e-9) throw new Error('扣溢价后回撤自检失败');
+    if (Math.abs(effectiveDrawdown(6, 7, 9) - 6) > 1e-9) throw new Error('低溢价不应加大回撤');
+    if (Math.abs(effectiveDrawdown(10, 8, null) - 5) > 1e-9) throw new Error('常态溢价缺失应按 3%');
+    if (!isOnExchange('159501') || !isOnExchange('513110') || isOnExchange('021000')) throw new Error('场内代码判断失败');
+    const rawC = drawdownCoef(8.7693, 0).c;
+    const effC = drawdownCoef(eff, 0).c;
+    if (!(effC < rawC)) throw new Error('回撤系数应改用扣溢价后回撤');
+    const shallow = effectiveDrawdown(6, 10, 6);
+    const rest = dcaPace(3000, 3000, shallow, drawdownCoef(shallow, 0).c, 1);
+    if (rest.mode !== 'rest') throw new Error('扣溢价后不到 5% 不应加仓');
+    const deep = effectiveDrawdown(10, 12, 9);
+    const add = dcaPace(3000, 3000, deep, drawdownCoef(deep, 0).c, 1);
+    const rawAdd = dcaPace(3000, 3000, 10, drawdownCoef(10, 0).c, 1);
+    if (add.mode !== 'add' || !(add.gapYen < rawAdd.gapYen)) throw new Error('加仓应按扣溢价后回撤缩小');
+    const headline = swapHeadline({ code: '159501', peerCode: '513110', peerName: '华泰柏瑞纳斯达克100', gap: 8.24 });
+    if (headline !== '可互换：卖 159501 换 513110 华泰柏瑞纳斯达克100，溢价差约 8.2%，指数敞口不变') {
+      throw new Error('互换文案自检失败 ' + headline);
+    }
+    if (window.NazhiLedger && NazhiLedger.swapCap) {
+      const cap = NazhiLedger.swapCap(100000, 100000, 0, 100000);
+      if (cap.amount !== 20000) throw new Error('互换额度应受本年 20% 约束');
+    }
+    if (takeProfitFraction(9.99) != null || takeProfitFraction(10) !== 0.10) throw new Error('利润 10% 应卖这只的 10%');
+    if (takeProfitFraction(14.99) !== 0.10 || takeProfitFraction(15) !== 0.20) throw new Error('利润 15% 应再卖 10%');
+    if (takeProfitFraction(19.99) !== 0.20 || takeProfitFraction(20) !== 0.25) throw new Error('利润 20% 应再卖 5%，合计 25%');
+    if (nasdaqVenueMode(11, 4, 10, 5) !== 'off') throw new Error('溢价高于 10% 且回撤低于 5% 应为场外模式');
+    if (nasdaqVenueMode(11, 5, 10, 5) !== 'on') throw new Error('回撤达到 5% 应为场内模式');
+    if (nasdaqVenueMode(10, 4, 10, 5) !== 'on') throw new Error('溢价不超过 10% 应为场内模式');
+    if (nasdaqVenueMode(null, 1, 10, 5) !== 'on') throw new Error('溢价缺失时不切场外');
+    if (VENUE_DEFAULTS.daily !== 160 || VENUE_DEFAULTS.daily * VENUE_DEFAULTS.monthDays !== 4800) {
+      throw new Error('场外默认应为每天 160、每月 4800');
+    }
+    const line = takeProfitHeadline({ profit: 12.5, shares: 500, amount: 1071, afterPct: 95 });
+    if (line.indexOf('止盈：利润 12.50%，建议卖 500 份 (≈¥') !== 0 || line.indexOf(')，卖后底仓 95.00%') < 0) {
+      throw new Error('止盈文案自检失败 ' + line);
+    }
   }
 
   // 与 refresh.py 的 _DD_ANCHORS / drawdown_coef 一致。不足 5% 为 1，超过 40% 封在 13.33。
@@ -890,7 +1588,7 @@
     return band[0] || null;
   }
   function chooseToday(items) {
-    const priced = (items || []).filter(it => it && it.ref_premium_pct != null && !Number.isNaN(Number(it.ref_premium_pct)));
+    const priced = (items || []).filter(it => it && isOnExchange(it.code) && it.ref_premium_pct != null && !Number.isNaN(Number(it.ref_premium_pct)));
     const liquid = priced.filter(it => it.turnover_cny == null || it.turnover_cny >= PICK_MIN_TURNOVER);
     return bandPick(liquid.length ? liquid : priced);
   }
@@ -898,7 +1596,7 @@
     const prem = Number(primaryPremium);
     if (Number.isNaN(prem)) return null;
     const liquid = (items || []).filter(it => {
-      if (!it || !it.code || it.ref_premium_pct == null || Number.isNaN(Number(it.ref_premium_pct))) return false;
+      if (!it || !it.code || !isOnExchange(it.code) || it.ref_premium_pct == null || Number.isNaN(Number(it.ref_premium_pct))) return false;
       return it.turnover_cny == null || it.turnover_cny >= PICK_MIN_TURNOVER;
     });
     const cheaper = liquid.filter(it => it.code !== primaryCode && Number(it.ref_premium_pct) < prem - 1e-9);
@@ -913,7 +1611,7 @@
   }
 
   function cheapestPeer() {
-    const peers = (D.peers || []).filter(p => p.code !== '159501' && p.ref_premium_pct != null);
+    const peers = (D.peers || []).filter(p => p.code !== '159501' && isOnExchange(p.code) && p.ref_premium_pct != null);
     peers.sort((a,b) => a.ref_premium_pct - b.ref_premium_pct);
     return peers[0] || null;
   }
@@ -965,64 +1663,52 @@
     const p60 = Number(document.getElementById('p60').value);
     const peerMin = Number(document.getElementById('peerMin').value);
     const invested = Number(document.getElementById('monthInvested').value) || 0;
-    const dd = drawdownCoef(peak, dayChg);
-    const pr = premiumCoef(p, p60, peerMin, peak);
-    const pace = dcaPace(baseline, invested, peak, dd.c, pr.c);
-    const view = paceCopy(pace);
-    const amount = view.amount;
     const selected = (document.getElementById('etfSelect') || {}).value || '159501';
-    if (selected === '159501') {
-      const t = suggestBuyTarget(p, pr);
-      return { amount, code: t.targetCode, name: t.targetName, premium: t.targetPrem, emptyNote: view.label };
-    }
     const etf = calculatorEtfs().find(e => e.code === selected);
-    return { amount, code: selected, name: etf ? etf.name : '', premium: p, emptyNote: view.label };
+    const plan = selected === '159501'
+      ? nasdaqHeroPlan(peak, dayChg, p, p60, peerMin, baseline, invested)
+      : directEtfPlan(drawdownCoef, peak, dayChg, p, p60, peerMin, baseline, invested, selected, etf ? etf.name : '', 'nasdaq');
+    const view = paceCopy(plan.pace, plan);
+    const target = plan.target || { code: selected, name: etf ? etf.name : '', prem: p };
+    return { amount: view.amount, code: target.code, name: target.name, premium: target.prem, emptyNote: view.label };
   }
 
   function paintHero(peak, dayChg, mom, p, p60, peerMin, navHigh, baseline, etf) {
-    const dd = drawdownCoef(peak, dayChg);
-    const pr = premiumCoef(p, p60, peerMin, peak);
     const invested = Number((document.getElementById('monthInvested') || {}).value) || 0;
-    const pace = dcaPace(baseline, invested, peak, dd.c, pr.c);
-    const view = paintPace('hero', pace);
-    const sell = navHigh && pr.expensive;
-    const target = suggestBuyTarget(p, pr);
+    const plan = nasdaqHeroPlan(peak, dayChg, p, p60, peerMin, baseline, invested);
+    const dd = plan.dd;
+    const pr = plan.pr;
+    const pace = plan.pace;
+    const view = paintPace('hero', pace, plan);
+    paintDrawdownExtras('hero', plan, view);
+    paintVenueBanner(plan.venue);
+    const target = plan.target || { code: '159501', name: '嘉实纳斯达克100', prem: p, note: '', cheap: null };
     const cheap = target.cheap;
-    const targetCode = target.targetCode, targetName = target.targetName, targetPrem = target.targetPrem, targetNote = target.targetNote;
+    const targetCode = target.code, targetName = target.name, targetPrem = target.prem, targetNote = target.note;
+    const sell = navHigh && pr.expensive;
     const spOn = spFamilyTriggered();
+    let heldNasdaq = false;
+    let heldSp = false;
+    try {
+      if (window.NazhiLedger && NazhiLedger.scopedSell) {
+        heldNasdaq = !!(NazhiLedger.scopedSell('nasdaq', false) || {}).hasHoldings;
+        heldSp = !!(NazhiLedger.scopedSell('sp500', false) || {}).hasHoldings;
+      }
+    } catch (err) { heldNasdaq = false; heldSp = false; }
     const families = [];
-    if (sell) families.push('nasdaq');
-    if (spOn) families.push('sp500');
-    let advice = null;
+    if (sell && !heldNasdaq) families.push('nasdaq');
+    if (spOn && !heldSp) families.push('sp500');
     if (window.NazhiLedger && typeof NazhiLedger.render === 'function') {
-      try { advice = NazhiLedger.render({ families, triggered: families.length > 0 }); }
-      catch (err) { advice = null; }
+      try { NazhiLedger.render({ families, triggered: families.length > 0 }); }
+      catch (err) { /* 记录本失败时仍显示金额 */ }
     }
-    const ledgerSell = sell && advice && advice.hasHoldings;
-    let sellText = '不卖战术仓';
-    let sellClass = 'nosell';
-    let sellPhrase = '暂不触发卖战术仓';
-    let sellKpi = '否';
-    let sellSub = '未同时满足新高+明显贵';
-    if (sell && !ledgerSell) {
-      sellText = '建议卖战术仓 5–8%';
-      sellClass = 'sell';
-      sellPhrase = '净值近60日新高且明显贵 → 可卖战术仓 5–8%';
-      sellKpi = '是';
-      sellSub = '还没有持仓时只提示 5–8%。仅供个人记录辅助，非投资建议';
-    } else if (ledgerSell && advice.amount > 0) {
-      sellText = '建议卖出约 ¥' + fmtYen(advice.amount) + (advice.code ? ' · ' + advice.code : '');
-      sellClass = 'sell';
-      sellPhrase = '建议卖出约 ¥' + fmtYen(advice.amount) + (advice.code ? '（优先 ' + advice.code + '）' : '');
-      sellKpi = '¥' + fmtYen(advice.amount);
-      sellSub = (advice.code ? '优先 ' + advice.code + ' · ' : '') + '约纳指市值 6%，受纳指本年 20% 与纳指底仓 75% 约束。仅供个人记录辅助，非投资建议';
-    } else if (ledgerSell) {
-      sellText = '已触发，额度或底仓不够';
-      sellClass = 'sell';
-      sellPhrase = '已触发卖出条件，但本年额度或底仓不够';
-      sellKpi = '不卖';
-      sellSub = '再卖会低于峰值市值的 75%，或本年 20% 已用完';
-    }
+    const actions = refreshPositionCards();
+    const story = describeSleeveSell('nasdaq', sell && !heldNasdaq, actions);
+    const sellText = story.sellText;
+    const sellClass = story.sellClass;
+    const sellPhrase = story.sellPhrase;
+    const sellKpi = story.sellKpi;
+    const sellSub = story.sellSub;
     const peakDate = (etf && etf.peak_date) || (D.primary && D.primary.peak_date) || '';
     const navDate = (etf && etf.nav_date) || (D.primary && D.primary.nav_date) || '';
     const momFrom = (etf && etf.mom_from_date) || (D.primary && D.primary.mom_from_date) || '';
@@ -1032,20 +1718,25 @@
       ? `按今日盘中 IOPV，高点${peakDate || '—'}`
       : `已公布净值，净值日${navDate || '—'}，滞后`;
     const reasonParts = [
-      `距近一年高点回撤${fmt(peak)}%（${ddHow}）→ 回撤系数 ${fmt(dd.c)}（${dd.label}）`,
+      `距近一年高点回撤${fmt(plan.raw)}%（${ddHow}），扣溢价后回撤${fmt(plan.effective)}% → 回撤系数 ${fmt(dd.c)}（${dd.label}）`,
       `溢价 ${fmt(p)}%（${pr.label}）→ 溢价系数 ${fmt(pr.c)}`,
       `较上月净值${mom >= 0 ? '+' : ''}${fmt(mom)}%（${momFrom}→${momTo}，只作参照）`,
     ];
-    if (targetCode !== '159501') reasonParts.push(`建议买 ${targetCode}（同类溢价约 ${fmt(targetPrem)}%）`);
+    if (plan.offDay) reasonParts.push('场外模式，今天不买场内，只定投 ' + targetCode);
+    else if (targetCode !== '159501') reasonParts.push(`建议买 ${targetCode}（场内溢价约 ${fmt(targetPrem)}%）`);
     else reasonParts.push('建议买 159501');
-    reasonParts.push('本月目标上限 ¥' + fmtYen(pace.target) + '（每月基准 × 回撤系数 × 溢价系数）');
+    reasonParts.push(plan.offDay
+      ? '本月场外目标 ¥' + fmtYen(pace.target) + '（每天 ¥' + fmtYen(plan.venue.cfg.daily) + ' × ' + plan.venue.cfg.monthDays + '）'
+      : '本月目标上限 ¥' + fmtYen(pace.target) + '（每月基准 × 回撤系数 × 溢价系数）');
     reasonParts.push(view.label);
     reasonParts.push(sellPhrase);
     const ht = document.getElementById('heroTarget');
-    ht.className = 'hero-target' + (targetCode !== '159501' ? ' alt' : '');
-    ht.innerHTML = targetCode !== '159501'
-      ? `建议买入 <strong>${targetCode}</strong> ${targetName} · 其参考溢价约 ${fmt(targetPrem)}%（${targetNote}）`
-      : `建议买入 <strong>159501</strong> 嘉实纳斯达克100 · 当前溢价约 ${fmt(p)}%`;
+    ht.className = 'hero-target' + (plan.offDay || targetCode !== '159501' ? ' alt' : '');
+    ht.innerHTML = plan.offDay
+      ? `建议买入 <strong>${targetCode}</strong> ${targetName} · 每天 ¥${fmtYen(plan.venue.cfg.daily)}，不买场内`
+      : (targetCode !== '159501'
+        ? `建议买入 <strong>${targetCode}</strong> ${targetName} · 场内溢价约 ${fmt(targetPrem)}%（${targetNote}）`
+        : `建议买入 <strong>159501</strong> 嘉实纳斯达克100 · 当前溢价约 ${fmt(p)}%`);
     document.getElementById('heroReason').innerHTML = '<strong>一句话理由：</strong>' + reasonParts.join('；');
     document.getElementById('heroPills').innerHTML = `
       <span class="badge ${pr.expensive ? 'exp' : (pr.label === '相对便宜' ? 'ok' : 'mid')}">溢价状态：${pr.label}</span>
@@ -1053,12 +1744,13 @@
       <span class="badge mid">回撤系数 ${fmt(dd.c)} · 溢价系数 ${fmt(pr.c)}</span>
     `;
     document.getElementById('kpiGrid').innerHTML = `
-      <div class="kpi"><div class="k">${ddView.source === 'iopv' ? '距近一年高点回撤（按今日盘中 IOPV）' : '距近一年高点回撤（已公布净值）'}</div><div class="v">${fmt(peak)}%</div><div class="s">${ddKpiSub(etf, peak)}</div></div>
+      <div class="kpi"><div class="k">${ddView.source === 'iopv' ? '距近一年高点回撤（按今日盘中 IOPV）' : '距近一年高点回撤（已公布净值）'}</div><div class="v">${fmt(plan.raw)}%</div><div class="s">${ddKpiSub(etf, plan.raw)}</div></div>
+      <div class="kpi"><div class="k">扣溢价后回撤</div><div class="v">${fmt(plan.effective)}%</div><div class="s">回撤系数和 5% 加仓线用这个数</div></div>
       <div class="kpi"><div class="k">今日溢价 P</div><div class="v">${fmt(p)}%</div><div class="s">相对 P60 ${fmt(p - p60)} 个百分点</div></div>
       <div class="kpi"><div class="k">近60日溢价中位数 P60</div><div class="v">${fmt(p60)}%</div><div class="s">净值折溢价滚动中位数</div></div>
       <div class="kpi"><div class="k">较上月净值（参照）</div><div class="v ${signCls(mom)}">${mom >= 0 ? '+' : ''}${fmt(mom)}%</div><div class="s">${momFrom} → ${momTo} · 不进回撤系数</div></div>
       <div class="kpi"><div class="k">溢价状态</div><div class="v">${pr.label}</div><div class="s">系数 ${fmt(pr.c)}</div></div>
-      <div class="kpi"><div class="k">是否建议卖战术仓</div><div class="v">${sellKpi}</div><div class="s">${sellSub}</div></div>
+      <div class="kpi"><div class="k">${story.kpiTitle}</div><div class="v">${sellKpi}</div><div class="s">${sellSub}</div></div>
       <div class="kpi"><div class="k">最便宜同类</div><div class="v">${cheap ? cheap.code : '—'}</div><div class="s">${cheap ? (cheap.name + ' · ' + fmt(cheap.ref_premium_pct) + '%') : ''}</div></div>
     `;
   }
@@ -1104,7 +1796,7 @@
   function spxCheapestOther(code) {
     let best = null;
     spxEtfs().forEach(e => {
-      if (!e || e.code === code) return;
+      if (!e || e.code === code || !isOnExchange(e.code)) return;
       const q = liveMap[e.code];
       const v = q ? q.premium : (e.p == null ? null : Number(e.p));
       if (v == null || Number.isNaN(v)) return;
@@ -1130,44 +1822,29 @@
   }
 
   function paintSpxHero(peak, dayChg, mom, p, p60, peerMin, navHigh, baseline, etf) {
-    const dd = spxDrawdownCoef(peak, dayChg);
-    const pr = (p == null || p60 == null || Number.isNaN(p) || Number.isNaN(p60))
-      ? { c: 1, label: '数据不足', expensive: false }
-      : premiumCoef(p, p60, peerMin, peak);
     const invested = Number((document.getElementById('spxMonthInvested') || {}).value) || 0;
-    const pace = dcaPace(baseline || 0, invested, peak, dd.c, pr.c);
-    const view = paintPace('spx', pace);
+    const plan = spxHeroPlan(peak, dayChg, p, p60, peerMin, baseline, invested);
+    const dd = plan.dd;
+    const pr = plan.pr;
+    const pace = plan.pace;
+    const view = paintPace('spx', pace, plan);
+    paintDrawdownExtras('spx', plan, view);
     const sell = !!navHigh && pr.expensive;
-    const target = spxSuggestTarget(p, pr);
-    let advice = null;
-    if (window.NazhiLedger && typeof NazhiLedger.scopedSell === 'function') {
-      try { advice = NazhiLedger.scopedSell('sp500', sell); } catch (err) { advice = null; }
+    const target = plan.target || { code: SPX_CODE, name: '博时标普500', prem: p, note: '' };
+    let heldSp = false;
+    try {
+      if (window.NazhiLedger && NazhiLedger.scopedSell) heldSp = !!(NazhiLedger.scopedSell('sp500', false) || {}).hasHoldings;
+    } catch (err) { heldSp = false; }
+    if (window.NazhiLedger && typeof NazhiLedger.render === 'function' && heldSp) {
+      try { NazhiLedger.render({ families: [], triggered: false }); } catch (err) { /* 仍显示金额 */ }
     }
-    const ledgerSell = sell && advice && advice.hasHoldings;
-    let sellText = '不卖战术仓';
-    let sellClass = 'nosell';
-    let sellPhrase = '暂不触发卖标普战术仓';
-    let sellKpi = '否';
-    let sellSub = '未同时满足标普净值近60日新高和溢价明显贵';
-    if (sell && !ledgerSell) {
-      sellText = '建议卖战术仓 5–8%';
-      sellClass = 'sell';
-      sellPhrase = '标普净值近60日新高且明显贵 → 可卖标普持仓的 5–8%';
-      sellKpi = '是';
-      sellSub = '还没有标普持仓时只提示 5–8%。仅供个人记录辅助，非投资建议';
-    } else if (ledgerSell && advice.amount > 0) {
-      sellText = '建议卖出约 ¥' + fmtYen(advice.amount) + (advice.code ? ' · ' + advice.code : '');
-      sellClass = 'sell';
-      sellPhrase = '建议卖出约 ¥' + fmtYen(advice.amount) + (advice.code ? '（优先 ' + advice.code + (advice.account ? ' · ' + advice.account : '') + '）' : '');
-      sellKpi = '¥' + fmtYen(advice.amount);
-      sellSub = '只按标普持仓市值的约 6%，受本年 20% 与底仓 75% 约束。仅供个人记录辅助，非投资建议';
-    } else if (ledgerSell) {
-      sellText = '已触发，额度或底仓不够';
-      sellClass = 'sell';
-      sellPhrase = '已触发卖出条件，但标普本年额度或底仓不够';
-      sellKpi = '不卖';
-      sellSub = '再卖会低于标普峰值市值的 75%，或本年 20% 已用完';
-    }
+    const actions = refreshPositionCards();
+    const story = describeSleeveSell('sp500', sell && !heldSp, actions);
+    const sellText = story.sellText;
+    const sellClass = story.sellClass;
+    const sellPhrase = story.sellPhrase;
+    const sellKpi = story.sellKpi;
+    const sellSub = story.sellSub;
     const peakDate = (etf && etf.peak_date) || '';
     const navDate = (etf && etf.nav_date) || '';
     const momFrom = (etf && etf.mom_from_date) || '';
@@ -1177,7 +1854,7 @@
       ? `按今日盘中 IOPV，高点${peakDate || '—'}`
       : `已公布净值，净值日${navDate || '—'}，滞后`;
     const reasonParts = [
-      `距近一年高点回撤${fmt(peak)}%（${ddHow}）→ 回撤系数 ${fmt(dd.c)}（${dd.label}）`,
+      `距近一年高点回撤${fmt(plan.raw)}%（${ddHow}），扣溢价后回撤${fmt(plan.effective)}% → 回撤系数 ${fmt(dd.c)}（${dd.label}）`,
       `溢价 ${fmt(p)}%（${pr.label}）→ 溢价系数 ${fmt(pr.c)}`,
       `较上月净值${mom == null || Number.isNaN(mom) ? '—' : ((mom >= 0 ? '+' : '') + fmt(mom) + '%')}（${momFrom || '—'}→${momTo || '—'}，只作参照）`,
     ];
@@ -1206,12 +1883,13 @@
     const kpi = document.getElementById('spxKpi');
     if (kpi) {
       kpi.innerHTML = `
-        <div class="kpi"><div class="k">${ddView.source === 'iopv' ? '距近一年高点回撤（按今日盘中 IOPV）' : '距近一年高点回撤（已公布净值）'}</div><div class="v">${fmt(peak)}%</div><div class="s">${ddKpiSub(etf, peak)}</div></div>
+        <div class="kpi"><div class="k">${ddView.source === 'iopv' ? '距近一年高点回撤（按今日盘中 IOPV）' : '距近一年高点回撤（已公布净值）'}</div><div class="v">${fmt(plan.raw)}%</div><div class="s">${ddKpiSub(etf, plan.raw)}</div></div>
+        <div class="kpi"><div class="k">扣溢价后回撤</div><div class="v">${fmt(plan.effective)}%</div><div class="s">回撤系数和 5% 加仓线用这个数</div></div>
         <div class="kpi"><div class="k">今日溢价 P</div><div class="v">${fmt(p)}%</div><div class="s">相对自己的 P60 ${p60 == null || Number.isNaN(p - p60) ? '—' : fmt(p - p60)} 个百分点</div></div>
         <div class="kpi"><div class="k">标普 P60</div><div class="v">${fmt(p60)}%</div><div class="s">这只标普近60日净值溢价中位数</div></div>
         <div class="kpi"><div class="k">较上月净值（参照）</div><div class="v ${mom == null || Number.isNaN(mom) ? '' : signCls(mom)}">${mom == null || Number.isNaN(mom) ? '—' : ((mom >= 0 ? '+' : '') + fmt(mom) + '%')}</div><div class="s">${momFrom || '—'} → ${momTo || '—'} · 不进回撤系数</div></div>
         <div class="kpi"><div class="k">溢价状态</div><div class="v">${pr.label}</div><div class="s">系数 ${fmt(pr.c)} · 只和标普同类比</div></div>
-        <div class="kpi"><div class="k">是否建议卖标普战术仓</div><div class="v">${sellKpi}</div><div class="s">${sellSub}</div></div>
+        <div class="kpi"><div class="k">${story.kpiTitle}</div><div class="v">${sellKpi}</div><div class="s">${sellSub}</div></div>
       `;
     }
   }
@@ -1251,17 +1929,20 @@
     const p60 = spxNum('spxP60');
     const peerMin = spxNum('spxPeerMin');
     const navHigh = Number(document.getElementById('spxNavHigh').value) === 1;
-    const dd = spxDrawdownCoef(peak, dayChg);
-    const pr = (p == null || p60 == null)
-      ? { c: 1, label: '数据不足', expensive: false }
-      : premiumCoef(p, p60, peerMin, peak);
     const invested = Number((document.getElementById('spxMonthInvested') || {}).value) || 0;
-    const pace = dcaPace(baseline, invested, peak, dd.c, pr.c);
-    const view = paceCopy(pace);
+    const selectedEarly = (document.getElementById('spxSelect') || {}).value || SPX_CODE;
+    const selectedEtf = spxEtfs().find(e => e.code === selectedEarly);
+    const plan = selectedEarly === SPX_CODE
+      ? spxHeroPlan(peak, dayChg, p, p60, peerMin, baseline, invested)
+      : directEtfPlan(spxDrawdownCoef, peak, dayChg, p, p60, peerMin, baseline, invested, selectedEarly, selectedEtf ? selectedEtf.name : '', 'sp500');
+    const dd = plan.dd;
+    const pr = plan.pr;
+    const pace = plan.pace;
+    const view = paceCopy(pace, plan);
     const out = document.getElementById('spxCalcOut');
     if (out) {
       out.innerHTML = `
-        <div class="kpi"><div class="k">回撤系数</div><div class="v">${fmt(dd.c)}</div><div class="s">${dd.label}</div></div>
+        <div class="kpi"><div class="k">回撤系数</div><div class="v">${fmt(dd.c)}</div><div class="s">${dd.label} · 按扣溢价后 ${fmt(plan.effective)}%</div></div>
         <div class="kpi"><div class="k">溢价系数</div><div class="v">${fmt(pr.c)}</div><div class="s">${pr.label}</div></div>
         <div class="kpi"><div class="k">本月目标上限</div><div class="v">¥${fmtYen(pace.target)}</div><div class="s">每月基准 × 回撤 × 溢价，40% 以后仍按斜率</div></div>
         <div class="kpi"><div class="k">${pace.mode === 'add' ? '建议加仓' : '今天这笔'}</div><div class="v">¥${fmtYen(view.amount)}</div><div class="s">${view.label}</div></div>
@@ -1272,6 +1953,8 @@
       const etf = spxEtfs().find(e => e.code === SPX_CODE);
       const mom = etf && etf.mom_pct != null ? Number(etf.mom_pct) : NaN;
       paintSpxHero(peak, dayChg, mom, p, p60, peerMin, navHigh, baseline, etf);
+    } else {
+      refreshPositionCards();
     }
   }
 
@@ -1330,15 +2013,20 @@
     const p60 = Number(document.getElementById('p60').value);
     const peerMin = Number(document.getElementById('peerMin').value);
     const navHigh = Number(document.getElementById('navHigh').value) === 1;
-    const dd = drawdownCoef(peak, dayChg);
-    const pr = premiumCoef(p, p60, peerMin, peak);
     const invested = Number(document.getElementById('monthInvested').value) || 0;
-    const pace = dcaPace(baseline, invested, peak, dd.c, pr.c);
-    const view = paceCopy(pace);
+    const selectedEarly = (document.getElementById('etfSelect') || {}).value || '159501';
+    const selectedEtf = (typeof calculatorEtfs === 'function' ? calculatorEtfs() : []).find(e => e.code === selectedEarly);
+    const plan = selectedEarly === '159501'
+      ? nasdaqHeroPlan(peak, dayChg, p, p60, peerMin, baseline, invested)
+      : directEtfPlan(drawdownCoef, peak, dayChg, p, p60, peerMin, baseline, invested, selectedEarly, selectedEtf ? selectedEtf.name : '', 'nasdaq');
+    const dd = plan.dd;
+    const pr = plan.pr;
+    const pace = plan.pace;
+    const view = paceCopy(pace, plan);
     const reserve = Number(document.getElementById('reserve').value) || 0;
     const left = reserve - view.amount;
     document.getElementById('calcOut').innerHTML = `
-      <div class="kpi"><div class="k">回撤系数</div><div class="v">${fmt(dd.c)}</div><div class="s">${dd.label}</div></div>
+      <div class="kpi"><div class="k">回撤系数</div><div class="v">${fmt(dd.c)}</div><div class="s">${dd.label} · 按扣溢价后 ${fmt(plan.effective)}%</div></div>
       <div class="kpi"><div class="k">溢价系数</div><div class="v">${fmt(pr.c)}</div><div class="s">${pr.label}</div></div>
       <div class="kpi"><div class="k">本月目标上限</div><div class="v">¥${fmtYen(pace.target)}</div><div class="s">每月基准 × 回撤 × 溢价，无 2 倍上限</div></div>
       <div class="kpi"><div class="k">${pace.mode === 'add' ? '建议加仓' : '今天这笔'}</div><div class="v">¥${fmtYen(view.amount)}</div><div class="s">${view.label}</div></div>
@@ -1356,6 +2044,8 @@
       const etf = (typeof calculatorEtfs === 'function' ? calculatorEtfs() : []).find(e => e.code === '159501');
       const mom = etf && etf.mom_pct != null ? Number(etf.mom_pct) : Number((D.briefing || {}).mom_pct);
       paintHero(peak, dayChg, mom, p, p60, peerMin, navHigh, baseline, etf);
+    } else {
+      refreshPositionCards();
     }
   }
 
@@ -1708,6 +2398,26 @@
   });
   const monthReset = document.getElementById('monthInvestedReset');
   if (monthReset) monthReset.addEventListener('click', () => clearInvestedManual('nasdaq'));
+  ['venueDaily', 'venuePrem', 'venueDd'].forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.addEventListener('input', () => {
+      try {
+        localStorage.setItem(VENUE_KEY, JSON.stringify({
+          daily: document.getElementById('venueDaily').value,
+          premiumCut: document.getElementById('venuePrem').value,
+          drawdownCut: document.getElementById('venueDd').value,
+        }));
+      } catch (e) { /* 隐私模式不保存 */ }
+      recompute();
+    });
+  });
+  try {
+    const savedVenue = JSON.parse(localStorage.getItem(VENUE_KEY) || '{}');
+    if (savedVenue && savedVenue.daily != null) document.getElementById('venueDaily').value = savedVenue.daily;
+    if (savedVenue && savedVenue.premiumCut != null) document.getElementById('venuePrem').value = savedVenue.premiumCut;
+    if (savedVenue && savedVenue.drawdownCut != null) document.getElementById('venueDd').value = savedVenue.drawdownCut;
+  } catch (e) { /* 沿用默认 160 / 10 / 5 */ }
   etfSelect.addEventListener('change', () => applyEtf(etfSelect.value));
   if (spxSelect) {
     ['spxBaseline','spxPeakDd','spxDayChg','spxPToday','spxP60','spxPeerMin','spxNavHigh','spxMonthInvested'].forEach(id => {
@@ -1817,8 +2527,10 @@
     return (code.charAt(0) === '5' || code.charAt(0) === '6' ? 'sh' : 'sz') + code;
   }
   function snapshotPremium(code) {
-    const peer = (D.peers || []).find(p => p.code === code);
+    const peer = (D.peers || []).find(p => p.code === code) || (D.peers_spx || []).find(p => p.code === code);
     if (peer && peer.ref_premium_pct != null) return peer.ref_premium_pct;
+    const spx = spxEtfs().find(e => e.code === code);
+    if (spx && spx.p != null) return spx.p;
     const etf = calculatorEtfs().find(e => e.code === code);
     if (etf && etf.p != null) return etf.p;
     const groups = (D.picks && D.picks.groups) || [];
@@ -2090,6 +2802,7 @@
     refreshLiveQuotes().then(startLivePoll);
   });
 
+  selfCheckPremiumAdjust();
   recompute();
   if (document.getElementById('spxBaseline')) recomputeSpx();
   renderPicks();

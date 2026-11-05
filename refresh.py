@@ -78,6 +78,14 @@ PICK_MIN_TURNOVER = 50_000_000.0
 # 主代码比短名单里更便宜、成交够用的一只贵出这么多（百分点），就不要再买主代码。
 # premium_coef 的 expensive 同样算「明显贵」。差一个净值公布日不算这个条件。
 PICK_EXPENSIVE_GAP = 5.0
+# 买入标的没有 P60 时，常态溢价按 3%。只扣高出的部分，不因溢价便宜把回撤加大。
+NORMAL_PREMIUM_FALLBACK = 3.0
+# 纳指场所。和 index.html 的 VENUE_DEFAULTS 一致。页面上可以改每天金额和两个阈值。
+OTC_NASDAQ_CODE = "021000"
+OTC_DAILY_YEN = 160
+OTC_MONTH_DAYS = 30
+VENUE_PREMIUM_CUT = 10.0
+VENUE_DRAWDOWN_CUT = 5.0
 
 UA = {
     "User-Agent": (
@@ -180,6 +188,45 @@ def _fill_missing_aum(rows: list[dict]) -> None:
                 continue
             row["aum_cny"] = got["aum_cny"]
             row["aum_as_of"] = got["aum_as_of"]
+
+
+def nasdaq_venue_mode(
+    lowest_on_exchange_premium: float | None,
+    iopv_drawdown: float | None,
+    premium_cut: float = VENUE_PREMIUM_CUT,
+    drawdown_cut: float = VENUE_DRAWDOWN_CUT,
+) -> str:
+    """场外模式：场内最低溢价高于阈值，且 IOPV 回撤低于阈值。否则场内。
+
+    缺溢价或缺回撤时留在场内，避免没数据时改去只买 021000。
+    """
+    if lowest_on_exchange_premium is None or iopv_drawdown is None:
+        return "on"
+    if lowest_on_exchange_premium > premium_cut and iopv_drawdown < drawdown_cut:
+        return "off"
+    return "on"
+
+
+def is_on_exchange(code: str) -> bool:
+    """场内 ETF。深市 159xxx、沪市 5xxxxx。021000 这类场外联接不是。"""
+    return re.fullmatch(r"(?:159\d{3}|5\d{5})", str(code or "")) is not None
+
+
+def effective_drawdown(
+    iopv_dd: float | None,
+    current_premium: float | None,
+    normal_premium: float | None,
+) -> float | None:
+    """扣溢价后回撤 = IOPV 回撤 − max(0, 买入标的溢价 − 其常态溢价)。
+
+    常态溢价用这只在溢价系数里已经用的 P60；没有则按 3%。
+    溢价不高于常态时不加减。回撤系数和投满每月基准后的 5% 加仓线用这个数。
+    """
+    if iopv_dd is None:
+        return None
+    normal = NORMAL_PREMIUM_FALLBACK if normal_premium is None else float(normal_premium)
+    excess = 0.0 if current_premium is None else max(0.0, float(current_premium) - normal)
+    return float(iopv_dd) - excess
 
 
 def drawdown_coef(dd: float | None, day_chg: float | None = None) -> tuple[float, str]:
@@ -478,6 +525,70 @@ def _self_check() -> None:
         raise SystemExit(f"标普单日急跌加分自检失败 got={got} {label}")
     if abs(spx_drawdown_coef(10, -2.99)[0] - 5.0) > 1e-9:
         raise SystemExit("标普未满 3% 的单日跌不应加分")
+    # 扣溢价后回撤。8.7693 − max(0, 12.5145 − 9.3625) = 5.6173。
+    sample_eff = effective_drawdown(8.7693, 12.5145, 9.3625)
+    if sample_eff is None or abs(sample_eff - (8.7693 - (12.5145 - 9.3625))) > 1e-9:
+        raise SystemExit(f"扣溢价后回撤自检失败 {sample_eff}")
+    if abs(effective_drawdown(6.0, 7.0, 9.0) - 6.0) > 1e-9:
+        raise SystemExit("溢价低于常态时不应加大回撤")
+    if abs(effective_drawdown(10.0, 8.0, None) - 5.0) > 1e-9:
+        raise SystemExit("没有 P60 时常态溢价应按 3%")
+    if effective_drawdown(None, 10.0, 5.0) is not None:
+        raise SystemExit("没有 IOPV 回撤时扣溢价后回撤应为空")
+    if not is_on_exchange("159501") or not is_on_exchange("513500") or is_on_exchange("021000"):
+        raise SystemExit("场内代码判断失败")
+    if nasdaq_venue_mode(11, 4) != "off":
+        raise SystemExit("溢价高于 10% 且回撤低于 5% 应为场外模式")
+    if nasdaq_venue_mode(11, 5) != "on" or nasdaq_venue_mode(10, 4) != "on":
+        raise SystemExit("回撤达到 5% 或溢价不超过 10% 应为场内模式")
+    if nasdaq_venue_mode(None, 1) != "on" or nasdaq_venue_mode(12, None) != "on":
+        raise SystemExit("溢价或回撤缺失时不应切场外")
+    if OTC_DAILY_YEN * OTC_MONTH_DAYS != 4800:
+        raise SystemExit("场外默认每月目标应为 4800")
+    raw_coef, _raw_label = drawdown_coef(8.7693)
+    eff_coef, _eff_label = drawdown_coef(sample_eff)
+    if not (eff_coef < raw_coef):
+        raise SystemExit(f"回撤系数应改用扣溢价后回撤 raw={raw_coef} eff={eff_coef}")
+    # 原始回撤 6% 已到加仓线，扣掉 4 个点溢价后只剩 2%，投满基准后今天不买。
+    shallow = effective_drawdown(6.0, 10.0, 6.0)
+    shallow_pace = dca_pace(3000, 3000, shallow, drawdown_coef(shallow)[0], 1)
+    if shallow is None or shallow >= 5 or shallow_pace["mode"] != "rest":
+        raise SystemExit(f"扣溢价后不到 5% 不应加仓 {shallow} {shallow_pace}")
+    deeper = effective_drawdown(10.0, 12.0, 9.0)
+    deeper_coef, _deeper_label = drawdown_coef(deeper)
+    deeper_pace = dca_pace(3000, 3000, deeper, deeper_coef, 1)
+    raw_add = dca_pace(3000, 3000, 10.0, drawdown_coef(10.0)[0], 1)
+    if deeper_pace["mode"] != "add" or deeper_pace["gap_yen"] >= raw_add["gap_yen"]:
+        raise SystemExit(f"加仓应按扣溢价后回撤缩小 {deeper_pace} {raw_add}")
+    # 没投满每月基准时，今天仍补差额，但差额里的回撤系数已经是扣溢价后的。
+    topup = dca_pace(3000, 0, sample_eff, eff_coef, 1)
+    raw_topup = dca_pace(3000, 0, 8.7693, raw_coef, 1)
+    if topup["mode"] != "topup" or topup["gap_yen"] >= raw_topup["gap_yen"]:
+        raise SystemExit(f"未投满时也应按扣溢价后回撤缩小本月上限 {topup} {raw_topup}")
+    otc_today = choose_today(
+        [
+            {"code": "021000", "ref_premium_pct": 1.0, "fee_total_pct": 0.2, "aum_cny": 50e8, "turnover_cny": 9e8},
+            {"code": "159632", "ref_premium_pct": 12.5, "fee_total_pct": 0.8, "aum_cny": 10e8, "turnover_cny": 4e8},
+        ]
+    )
+    if not otc_today or otc_today["code"] != "159632":
+        raise SystemExit(f"场外不能成为今日优先: {otc_today}")
+    otc_target = resolve_buy_target(
+        primary_code=PRIMARY,
+        primary_name="嘉实纳斯达克100",
+        primary_premium=20.0,
+        is_expensive=True,
+        shortlist=[
+            {"code": "021000", "name": "场外联接", "ref_premium_pct": 1.0, "fee_total_pct": 0.2, "aum_cny": 50e8, "turnover_cny": 9e8},
+            {"code": "159632", "name": "华安纳斯达克100", "ref_premium_pct": 12.5, "fee_total_pct": 0.8, "aum_cny": 10e8, "turnover_cny": 4e8},
+        ],
+        fallback={"code": "021000", "name": "场外联接", "ref_premium_pct": 1.0},
+        shortlist_reason="short",
+        cheap_reason="cheap",
+        hold_reason="hold",
+    )
+    if otc_target["code"] != "159632":
+        raise SystemExit(f"买入目标应留在场内: {otc_target}")
 
     def _pace(baseline: float, invested: float, dd: float | None, dd_c: float, pr_c: float, mode: str, gap: int) -> None:
         got = dca_pace(baseline, invested, dd, dd_c, pr_c)
@@ -978,9 +1089,14 @@ def _load_saved_picks() -> dict | None:
 
 
 def choose_today(items: list[dict]) -> dict | None:
-    """价差约 2 个点以内时，在成交够用的里面偏向更低费率、再偏向更大规模。"""
+    """价差约 2 个点以内时，在成交够用的里面偏向更低费率、再偏向更大规模。
+
+    场外代码（例如 021000）不参加这个选择。主建议留在场内。
+    """
     usable = []
     for item in items:
+        if not is_on_exchange(str(item.get("code") or "")):
+            continue
         if item.get("ref_premium_pct") is None:
             continue
         turn = item.get("turnover_cny")
@@ -1592,7 +1708,11 @@ def resolve_buy_target(
 
     成交够用、参考溢价更低的短名单名字优先。没有这样的名字时，才退到全体同类里更便宜的一只。
     主代码没到贵的门槛，或者没有更便宜的可买对象，才买主代码。
+    场外代码不能成为买入目标。
     """
+    if fallback and not is_on_exchange(str(fallback.get("code") or "")):
+        fallback = None
+    shortlist = [it for it in shortlist if is_on_exchange(str(it.get("code") or ""))]
     usable: list[dict] = []
     for item in shortlist:
         if item.get("ref_premium_pct") is None:
@@ -1831,7 +1951,6 @@ def build_spx_block(picks: dict | None, peer_stats: dict[str, dict] | None) -> d
         and primary.get("p60") is not None
         and primary.get("peak_dd_pct") is not None
     ):
-        dc, dlabel = spx_drawdown_coef(primary["peak_dd_pct"], primary.get("day_chg_pct"))
         pc, plabel, expensive = premium_coef(
             float(primary["p"]),
             float(primary["p60"]),
@@ -1849,6 +1968,13 @@ def build_spx_block(picks: dict | None, peer_stats: dict[str, dict] | None) -> d
             cheap_reason="513500明显贵，优先同类更便宜",
             hold_reason="标普主标的",
         )
+        target_row = next((e for e in etfs if e["code"] == buy_target["code"]), None)
+        target_p60 = None if not target_row else target_row.get("p60")
+        if buy_target["code"] == SPX_PRIMARY:
+            target_p60 = primary.get("p60")
+        raw_dd = primary["peak_dd_pct"]
+        eff_dd = effective_drawdown(raw_dd, buy_target.get("premium"), target_p60)
+        dc, dlabel = spx_drawdown_coef(eff_dd, primary.get("day_chg_pct"))
         briefing = {
             "baseline": SPX_BASELINE,
             "code": SPX_PRIMARY,
@@ -1861,6 +1987,7 @@ def build_spx_block(picks: dict | None, peer_stats: dict[str, dict] | None) -> d
             "mom_pct": primary.get("mom_pct"),
             "drawdown_coef": round(dc, 4),
             "drawdown_label": dlabel,
+            "peak_dd_effective_pct": None if eff_dd is None else round(eff_dd, 4),
             "premium_coef": round(pc, 4),
             "premium_label": plabel,
             "is_obviously_expensive": expensive,
@@ -1868,7 +1995,7 @@ def build_spx_block(picks: dict | None, peer_stats: dict[str, dict] | None) -> d
             "baseline_period": "month",
             "monthly_target_cap": round(SPX_BASELINE * dc * pc, 2),
             "suggested_amount": round(SPX_BASELINE * dc * pc, 2),
-            "pace_note": "本月目标上限 = 每月基准 × 回撤系数 × 溢价系数。今天买多少还要扣本机当月已投；已投达到月基准且回撤<5%则今天不买。",
+            "pace_note": "本月目标上限 = 每月基准 × 回撤系数 × 溢价系数。回撤系数和投满每月基准后的 5% 加仓线用扣溢价后回撤。今天买多少还要扣本机当月已投。",
             "buy_target": buy_target,
             "suggest_sell_tactical": bool(primary.get("is_nav_60_high") and expensive),
             "peer_min_premium": primary.get("peer_min_premium"),
@@ -2153,7 +2280,10 @@ def build_payload(
     write_peer_csv(DATA / "peers_latest.csv", peers_sorted)
     write_peer_csv(DATA / "peers_spx_latest.csv", spx_sorted)
 
-    peer_others = [p for p in peers_sorted if p["code"] != PRIMARY and p["ref_premium_pct"] is not None]
+    peer_others = [
+        p for p in peers_sorted
+        if p["code"] != PRIMARY and p["ref_premium_pct"] is not None and is_on_exchange(p["code"])
+    ]
     peer_min_fund = peer_others[0] if peer_others else None
     peer_min = peer_min_fund["ref_premium_pct"] if peer_min_fund else None
 
@@ -2174,10 +2304,8 @@ def build_payload(
     picks = align_pick_nav_dates(picks, nav_dates)
     iopv_dd = iopv_drawdown_pct(metrics.get("peak_nav"), live_primary.get("iopv") if use_live else None)
     dd_for_amount = iopv_dd if iopv_dd is not None else peak_dd
-    dc, dlabel = drawdown_coef(dd_for_amount, day_chg)
+    # 溢价系数仍用原始 IOPV 回撤做深回撤下限。回撤系数改用扣溢价后的数。
     pc, plabel, is_expensive = premium_coef(p_for_calc, p60, peer_min, dd_for_amount)
-    base = DEFAULT_BASELINE
-    amount = base * dc * pc
     suggest_sell = bool(is_nav_60_high and is_expensive)
     buy_target = resolve_buy_target(
         primary_code=PRIMARY,
@@ -2190,15 +2318,21 @@ def build_payload(
         cheap_reason="159501明显贵，优先同类更便宜",
         hold_reason="主仓代码或溢价未到换仓阈值",
     )
+    target_p60 = p60 if buy_target["code"] == PRIMARY else (peer_stats or {}).get(buy_target["code"], {}).get("p60")
+    eff_dd = effective_drawdown(dd_for_amount, buy_target.get("premium"), target_p60)
+    dc, dlabel = drawdown_coef(eff_dd, day_chg)
+    base = DEFAULT_BASELINE
+    amount = base * dc * pc
+    eff_bit = "扣溢价后回撤缺失" if eff_dd is None else f"扣溢价后回撤{eff_dd:.2f}%"
     parts = [
         (
             (
-                f"距近一年高点回撤{dd_for_amount:.2f}%（按今日盘中IOPV，高点{metrics['peak_date']}；已公布净值回撤{peak_dd:.2f}%）"
-                f"→回撤系数{dc:.2f}（{dlabel}）"
+                f"距近一年高点回撤{dd_for_amount:.2f}%（按今日盘中IOPV，高点{metrics['peak_date']}；已公布净值回撤{peak_dd:.2f}%），"
+                f"{eff_bit}→回撤系数{dc:.2f}（{dlabel}）"
                 if iopv_dd is not None and peak_dd is not None
                 else (
-                    f"距近一年高点回撤{peak_dd:.2f}%（已公布净值，高点{metrics['peak_date']}→净值日{latest_nav_date}）"
-                    f"→回撤系数{dc:.2f}（{dlabel}）"
+                    f"距近一年高点回撤{peak_dd:.2f}%（已公布净值，高点{metrics['peak_date']}→净值日{latest_nav_date}），"
+                    f"{eff_bit}→回撤系数{dc:.2f}（{dlabel}）"
                     if peak_dd is not None
                     else "近一年高点回撤缺失"
                 )
@@ -2215,7 +2349,7 @@ def build_payload(
         parts.append(f"建议买{buy_target['code']}（同类更低溢价{buy_target['premium']:.2f}%）")
     parts.append(
         f"本月目标上限¥{amount:.0f}（每月基准{base:.0f}×回撤系数×溢价系数；"
-        "已投达到月基准且回撤<5%则今天不买，回撤≥5%才按差额加仓）"
+        "回撤系数和投满月基准后的5%加仓线用扣溢价后回撤）"
     )
     parts.append("净值近60日新高且明显贵→可卖战术仓5–8%" if suggest_sell else "暂不触发卖出")
 
@@ -2274,6 +2408,7 @@ def build_payload(
             "day_chg_pct": day_chg,
             "drawdown_coef": round(dc, 4),
             "drawdown_label": dlabel,
+            "peak_dd_effective_pct": None if eff_dd is None else round(eff_dd, 4),
             "premium_coef": round(pc, 4),
             "premium_label": plabel,
             "is_obviously_expensive": is_expensive,
@@ -2281,7 +2416,7 @@ def build_payload(
             "monthly_target_cap": round(amount, 2),
             "suggested_amount": round(amount, 2),
             "suggested_raw": round(amount, 2),
-            "pace_note": "本月目标上限 = 每月基准 × 回撤系数 × 溢价系数。今天买多少还要扣本机当月已投；已投达到月基准且回撤<5%则今天不买。",
+            "pace_note": "本月目标上限 = 每月基准 × 回撤系数 × 溢价系数。回撤系数和投满每月基准后的 5% 加仓线用扣溢价后回撤。今天买多少还要扣本机当月已投。",
             "buy_target": buy_target,
             "suggest_sell_tactical": suggest_sell,
             "sell_range_pct": [5, 8],

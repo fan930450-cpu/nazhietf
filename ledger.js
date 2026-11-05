@@ -17,6 +17,17 @@
 
   const NASDAQ_CODES = ['159501', '159513', '159632', '159659', '159660', '159696', '159941', '513100', '513110', '513300', '513390', '513870'];
   const SP_CODES = ['159655', '513500', '513650'];
+  const OTC_CODE = '021000';
+  const OTC_NAME = '华夏纳斯达克100ETF联接';
+  function isOnExchangeCode(code) {
+    return /^(?:159\d{3}|5\d{5})$/.test(String(code || ''));
+  }
+  function venueOfRow(row) {
+    if (!row) return 'on';
+    if (row.venue === 'off' || row.venue === '场外') return 'off';
+    if (row.venue === 'on' || row.venue === '场内') return 'on';
+    return isOnExchangeCode(row.code) ? 'on' : 'off';
+  }
   const NAMES = {
     '159501': '嘉实纳斯达克100',
     '159513': '大成纳斯达克100',
@@ -33,6 +44,7 @@
     '513500': '博时标普500',
     '159655': '华夏标普500',
     '513650': '南方标普500',
+    '021000': '华夏纳斯达克100ETF联接',
   };
 
   function num(v) {
@@ -87,6 +99,12 @@
     const month = yyyymm || shanghaiToday().slice(0, 7);
     return sumMonthBuys(state && state.trades, family, month);
   }
+  function latestBuyDate(code) {
+    const rows = (state && state.trades || []).filter((t) => t && t.side === 'buy' && String(t.code || '') === String(code || '') && t.date);
+    if (!rows.length) return '';
+    rows.sort((a, b) => String(b.date).localeCompare(String(a.date)));
+    return String(rows[0].date || '');
+  }
   function ytdSold(trades, year) {
     const y = String(year || '');
     return (trades || []).reduce((sum, t) => {
@@ -95,6 +113,21 @@
       const amount = num(t.amount);
       return sum + (amount > 0 ? amount : 0);
     }, 0);
+  }
+  function swapCap(totalMV, peakMV, soldYTD, holdingMV) {
+    // 互换不降低指数敞口，所以不用战术仓那一刀 6%。
+    // 仍受同一套底仓和本年额度约束：卖后至少留峰值的 75%，本年卖出不超过峰值的 20%。
+    const probe = clampSell(totalMV, peakMV, soldYTD);
+    const held = Math.max(0, num(holdingMV) || 0);
+    const raw = Math.min(held, probe.annualRoom, probe.coreRoom);
+    return {
+      totalMV: probe.totalMV,
+      peakMV: probe.peakMV,
+      soldYTD: probe.soldYTD,
+      annualRoom: probe.annualRoom,
+      coreRoom: probe.coreRoom,
+      amount: Math.floor(raw + 1e-9),
+    };
   }
   function clampSell(totalMV, peakMV, soldYTD) {
     const total = Math.max(0, num(totalMV) || 0);
@@ -364,6 +397,7 @@
       shares,
       cost: cost != null && cost >= 0 ? cost : 0,
       snapshotPrice: num(h.snapshotPrice),
+      venue: venueOfRow(h),
       note: String(h.note || '').slice(0, 200),
       seed: !!h.seed,
     };
@@ -502,6 +536,7 @@
         family: family || (prev && prev.family) || familyOfCode(code, data) || 'nasdaq',
       });
     }
+    add(OTC_CODE, OTC_NAME, 'nasdaq');
     NASDAQ_CODES.forEach((c) => add(c, NAMES[c], 'nasdaq'));
     SP_CODES.forEach((c) => add(c, NAMES[c], 'sp500'));
     (data.peers || []).forEach((p) => add(p.code, p.name, 'nasdaq'));
@@ -514,11 +549,15 @@
     });
     return Array.from(map.values()).sort((a, b) => (a.family < b.family ? -1 : a.family > b.family ? 1 : 0) || a.code.localeCompare(b.code));
   }
-  function quoteOf(code, snapshotPrice) {
+  function quoteOf(code, snapshotPrice, row) {
     const data = (ctx && ctx.data) || {};
+    if (venueOfRow(row || { code, venue: isOnExchangeCode(code) ? 'on' : 'off' }) === 'off') {
+      const nav = num(snapshotPrice);
+      return { price: nav > 0 ? nav : null, premium: null, source: nav > 0 ? '净值' : '—' };
+    }
     const live = ctx && ctx.liveMap && ctx.liveMap[code];
     if (live && num(live.price) > 0) return { price: num(live.price), premium: num(live.premium), source: '行情' };
-    const peer = (data.peers || []).find((p) => p.code === code);
+    const peer = (data.peers || []).concat(data.peers_spx || []).find((p) => p.code === code);
     if (peer) {
       const price = peer.live_price != null ? num(peer.live_price) : num(peer.close);
       if (price > 0) return { price, premium: num(peer.ref_premium_pct), source: '快照' };
@@ -541,7 +580,7 @@
       year,
       families: (view && view.families) || [],
       triggered: !!(view && view.triggered),
-      quote: (row) => quoteOf(row.code, row.snapshotPrice),
+      quote: (row) => quoteOf(row.code, row.snapshotPrice, row),
     });
   }
   function maybeRaisePeak(plan) {
@@ -601,22 +640,11 @@
   function quotaBlock(title, plan) {
     if (!plan) return '';
     const peakWhen = plan.peakAsOf ? `（记于 ${esc(plan.peakAsOf)}）` : '';
-    let head = '<p>现在不卖。要同时满足这一边的净值近 60 日新高和溢价明显贵。</p>';
+    let head = '<p>有持仓时，卖不卖看止盈：单只利润达到 10% / 15% / 20% 才建议卖这只的一部分。溢价低于 5%，或这只 IOPV 回撤达到 10%，先不止盈。没有持仓时，仍只在净值近 60 日新高且溢价明显贵时提示 5–8%。</p>';
     if (plan.triggered && !plan.hasHoldings) {
       head = '<p>条件已经满足，但还没有这一边的持仓，所以只提示卖该品种市值的 5–8%，不算人民币。</p>';
-    } else if (plan.triggered && plan.missingPrices > 0 && !(plan.totalMV > 0)) {
-      head = '<p>条件已经满足，但这一边的持仓缺少现价，算不出市值。</p>';
-    } else if (plan.triggered && !(plan.amount > 0)) {
-      head = `<p>已触发，但再卖就会低于这一边峰值的 75%，或本年 20% 已经用完。本次被「${bindingText(plan.binding)}」卡住。</p>`;
-    } else if (plan.triggered && !plan.code && !plan.name) {
-      head = `<div class="sell-amt">¥${fmtMoney(plan.amount)}</div><p>金额只按这一边的市值估算，账上没有可指定的代码。</p>`;
-    } else if (plan.triggered) {
-      const bits = (plan.allocation || []).map((a) => `${esc(a.broker || a.account || '未填券商')}约 ¥${fmtMoney(a.sellMV)}（约 ${fmtShares(a.sellShares)} 份，现价 ${fmtPx(a.price)}）`).join('；');
-      const one = plan.allocation && plan.allocation.length === 1;
-      const fit = one ? '这一笔没有超出该券商这一只的市值。' : '同一代码按市值从大到小分到各券商。';
-      head = `<div class="sell-amt">¥${fmtMoney(plan.amount)}</div>
-        <p>优先 <strong>${esc(plan.code || '（代码空）')} ${esc(plan.name || '')}</strong>${plan.premium == null ? '' : `，溢价 ${fmtPrem(plan.premium)}`}。${bits}。${fit}</p>
-        <p>取数：这一边市值 × 6% = ¥${fmtMoney(plan.tactical)}；本年还可卖 ¥${fmtMoney(plan.annualRoom)}；为留下 75% 底仓最多卖 ¥${fmtMoney(plan.coreRoom)}。本次被「${bindingText(plan.binding)}」卡住。卖后剩余约 ¥${fmtMoney(plan.afterMV)}，为这一边峰值的 ${plan.afterPct.toFixed(2)}%。</p>`;
+    } else if (plan.hasHoldings) {
+      head = '<p>有持仓。具体卖多少在「止盈」：利润 ≥10% 卖这只的 10%，≥15% 再卖 10%，≥20% 再卖 5%，合计 25%。卖到这一边只剩峰值的 75% 就停，也不能超过下面的本年剩余额度。卖出的钱留作回撤加仓备用金。</p>';
     }
     const jump = plan.peakRejected ? '<p>这次市值比已记录峰值高出 25% 以上，没有自动抬峰值。</p>' : '';
     return `<div class="sell-family">
@@ -624,7 +652,7 @@
       ${head}
       ${jump}
       <div class="grid">
-        <div class="kpi"><div class="k">这一边市值</div><div class="v">¥${fmtMoney(plan.totalMV)}</div><div class="s">单次约 6%，¥${fmtMoney(plan.bandLo)}–¥${fmtMoney(plan.bandHi)}</div></div>
+        <div class="kpi"><div class="k">这一边市值</div><div class="v">¥${fmtMoney(plan.totalMV)}</div><div class="s">止盈按单只利润分档，不按固定 6%</div></div>
         <div class="kpi"><div class="k">本年已卖</div><div class="v">¥${fmtMoney(plan.soldYTD)}</div><div class="s">占这一边峰值 ${plan.soldPct.toFixed(2)}% · 上限 20%</div></div>
         <div class="kpi"><div class="k">剩余可卖</div><div class="v">¥${fmtMoney(plan.annualRoom)}</div><div class="s">峰值 × 20% − 本年已卖</div></div>
         <div class="kpi"><div class="k">底仓线</div><div class="v">¥${fmtMoney(plan.coreLine)}</div><div class="s">峰值 ¥${fmtMoney(plan.peakMV)} 的 75%${peakWhen} · 当前 ${plan.mvPctOfPeak.toFixed(2)}%</div></div>
@@ -633,7 +661,7 @@
   }
   function sellSplitHtml(nasdaq, sp500) {
     return `<h3>卖出额度</h3>
-      <p>纳指底仓和标普底仓分开算，不把两边合成一个底仓。每一边都是：卖后至少留下该边峰值市值的 75%，本年卖出不超过该边峰值的 20%，单次大约是该边市值的 6%。仅供个人记录辅助，非投资建议。</p>
+      <p>纳指底仓和标普底仓分开算，不把两边合成一个底仓。有持仓时按止盈分档卖，没有持仓时近 60 日新高且明显贵仍只提示 5–8%。每一边卖后至少留下峰值市值的 75%，本年卖出不超过峰值的 20%。仅供个人记录辅助，非投资建议。</p>
       <div class="sell-split">
         ${quotaBlock('纳指底仓', nasdaq)}
         ${quotaBlock('标普底仓', sp500)}
@@ -693,7 +721,7 @@
       const rows = sortHoldings(plan.valued.filter((h) => h.shares > 0 || h.note || h.code));
       body.innerHTML = rows.length ? rows.map((h) => `<tr>
         <td>${esc(brokerOf(h) || '未填')}</td>
-        <td>${familyLabel(h.family)}</td>
+        <td>${familyLabel(h.family)}${venueOfRow(h) === 'off' ? ' · 场外' : ''}</td>
         <td><strong>${esc(h.code || '—')}</strong></td>
         <td>${esc(h.name || '')}${h.note ? `<span class="sub cell-wrap">${esc(h.note)}</span>` : ''}</td>
         <td class="num">${fmtShares(h.shares)}</td>
@@ -985,6 +1013,7 @@
       shares: num(val('holdShares')),
       cost: num(val('holdCost')),
       snapshotPrice: num(val('holdSnap')),
+      venue: val('holdVenue') === 'off' ? 'off' : 'on',
       note: val('holdNote').trim().slice(0, 200),
       seed: false,
     };
@@ -1054,6 +1083,8 @@
     editingHoldId = h.id;
     setBroker('holdAccount', 'holdBrokerCustom', brokerOf(h));
     document.getElementById('holdFamily').value = h.family === 'sp500' ? 'sp500' : 'nasdaq';
+    const venueEl = document.getElementById('holdVenue');
+    if (venueEl) venueEl.value = venueOfRow(h) === 'off' ? 'off' : 'on';
     setCode('holdCode', 'holdCodeCustom', h.code || '');
     const name = document.getElementById('holdName');
     name.value = h.name || '';
@@ -1177,6 +1208,20 @@
     document.getElementById('holdCode').addEventListener('change', () => {
       onCodePick('holdCode', 'holdCodeCustom', 'holdFamily', 'holdName');
     });
+    const holdVenue = document.getElementById('holdVenue');
+    if (holdVenue) {
+      holdVenue.addEventListener('change', () => {
+        if (holdVenue.value !== 'off') return;
+        setCode('holdCode', 'holdCodeCustom', OTC_CODE);
+        const name = document.getElementById('holdName');
+        if (name && !name.value) {
+          name.value = OTC_NAME;
+          name.dataset.auto = '1';
+        }
+        const snap = document.getElementById('holdSnap');
+        if (snap) snap.placeholder = '填净值';
+      });
+    }
     document.getElementById('tradePrefill').addEventListener('click', prefillBuy);
     document.getElementById('tradeCancel').addEventListener('click', () => { resetTradeForm(); setTradeMsg(''); });
     document.getElementById('holdCancel').addEventListener('click', () => { resetHoldForm(); setHoldMsg(''); });
@@ -1230,7 +1275,7 @@
     const year = shanghaiToday().slice(0, 4);
     const rows = (state.rows || []).filter((r) => r.family === family);
     const trades = (state.trades || []).filter((t) => (t.family || '') === family);
-    const quote = (row) => quoteOf(row.code, row.snapshotPrice);
+    const quote = (row) => quoteOf(row.code, row.snapshotPrice, row);
     const run = (peaks) => computePlan({
       rows,
       trades,
@@ -1296,6 +1341,14 @@
     if (sumMonthBuys(trades, 'sp500', '2026-11') === sumMonthBuys(trades, 'nasdaq', '2026-11')) {
       throw new Error('纳指和标普不应并成一笔');
     }
+    const full = swapCap(100000, 100000, 0, 100000);
+    if (full.amount !== 20000) throw new Error('互换额度应受本年 20% 约束 ' + full.amount);
+    const small = swapCap(100000, 100000, 0, 8000);
+    if (small.amount !== 8000) throw new Error('互换不应超过这只的市值 ' + small.amount);
+    const spent = swapCap(100000, 100000, 20000, 50000);
+    if (spent.amount !== 0) throw new Error('本年 20% 用完后不应再换 ' + spent.amount);
+    const core = swapCap(80000, 100000, 0, 80000);
+    if (core.amount !== 5000) throw new Error('互换应留下峰值的 75% ' + core.amount);
   }
   if (typeof module !== 'undefined' && module.exports) selfCheckMonthBuys();
 
@@ -1309,9 +1362,11 @@
     applyBrokerSwap,
     insertCmsSeed,
     clampSell,
+    swapCap,
     ytdSold,
     sumMonthBuys,
     monthBought,
+    latestBuyDate,
     computePlan,
     applyTradeToHoldings,
     deriveFields,
