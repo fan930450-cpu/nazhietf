@@ -537,6 +537,30 @@ def _self_check() -> None:
         raise SystemExit("没有 IOPV 回撤时扣溢价后回撤应为空")
     if not is_on_exchange("159501") or not is_on_exchange("513500") or is_on_exchange("021000"):
         raise SystemExit("场内代码判断失败")
+    ytd_rows = [
+        {"date": "2025-12-30", "nav": 1.0},
+        {"date": "2025-12-31", "nav": 1.1},
+        {"date": "2026-01-02", "nav": 1.2},
+        {"date": "2026-11-03", "nav": 1.21},
+    ]
+    ytd = ytd_pct(ytd_rows, "date", "nav")
+    if not ytd or ytd["base_date"] != "2025-12-31" or abs(ytd["pct"] - 10.0) > 1e-9 or ytd["asof"] != "2026-11-03":
+        raise SystemExit(f"今年收益率应相对 2025-12-31: {ytd}")
+    ytd_gap = ytd_pct(
+        [{"date": "2025-12-30", "nav": 2.0}, {"date": "2026-01-05", "nav": 2.2}],
+        "date",
+        "nav",
+    )
+    if not ytd_gap or ytd_gap["base_date"] != "2025-12-30" or abs(ytd_gap["pct"] - 10.0) > 1e-9:
+        raise SystemExit(f"没有 12-31 时应退到上年最后一个净值日: {ytd_gap}")
+    if ytd_pct([{"date": "2026-01-05", "nav": 1.0}, {"date": "2026-06-01", "nav": 1.1}], "date", "nav") is not None:
+        raise SystemExit("没有上年净值时不应编今年收益率")
+    price_ytd = ytd_fields(
+        ytd_rows,
+        [{"day": "2025-12-31", "close": 1.5}, {"day": "2026-11-03", "close": 1.65}],
+    )
+    if abs(price_ytd["ytd_nav_pct"] - 10.0) > 1e-9 or abs(price_ytd["ytd_price_pct"] - 10.0) > 1e-9:
+        raise SystemExit(f"净值与场内价格今年收益率应分开: {price_ytd}")
     if nasdaq_venue_mode(11, 4) != "off":
         raise SystemExit("溢价高于 10% 且回撤低于 5% 应为场外模式")
     if nasdaq_venue_mode(11, 5) != "on" or nasdaq_venue_mode(10, 4) != "on":
@@ -631,6 +655,24 @@ def _self_check() -> None:
         raise SystemExit(f"滚动高点当日应为 0: {sample}")
     if abs(sample["2026-01-01"] - (-25.0)) > 1e-9:
         raise SystemExit(f"365 天滚动回撤自检失败: {sample}")
+    long_pts = [
+        {"date": "2021-01-04", "close": 200},
+        {"date": "2024-12-02", "close": 100},
+        {"date": "2025-06-02", "close": 110},
+    ]
+    short_dd = trailing_drawdown_pct(long_pts, 365)
+    wide_dd = trailing_drawdown_pct(long_pts, US_RANGE_5Y_DAYS)
+    if abs(short_dd["2025-06-02"]) > 1e-9:
+        raise SystemExit(f"一年窗口不应看见 2020 年高点: {short_dd}")
+    if abs(wide_dd["2025-06-02"] - (110 / 200 - 1) * 100) > 1e-6:
+        raise SystemExit(f"五年窗口应相对可得历史高点: {wide_dd}")
+    weekly = _downsample_us_rows(
+        [{"date": f"2024-01-{day:02d}", "qqq": day} for day in range(1, 22)]
+        + [{"date": f"2024-06-{day:02d}", "qqq": day} for day in range(1, 11)],
+        daily_tail=10,
+    )
+    if weekly[-1]["date"] != "2024-06-10" or weekly[0]["date"] != "2024-01-07" or len(weekly) != 13:
+        raise SystemExit(f"周抽稀应留下每周最后一天和最近日线: {[(r['date']) for r in weekly]}")
     sample_fields = [""] * 83
     sample_fields[1] = "纳指ETF嘉实"
     sample_fields[3] = "2.119"
@@ -1272,6 +1314,13 @@ def _load_peers_csv(path: Path | None = None) -> list[dict]:
                     "nav_premium_pct": num("nav_premium_pct"),
                     "aum_cny": num("aum_cny"),
                     "aum_as_of": (r.get("aum_as_of") or "").strip() or None,
+                    "note": (r.get("note") or "").strip() or None,
+                    "ytd_nav_pct": num("ytd_nav_pct"),
+                    "ytd_nav_base_date": (r.get("ytd_nav_base_date") or "").strip() or None,
+                    "ytd_nav_asof": (r.get("ytd_nav_asof") or "").strip() or None,
+                    "ytd_price_pct": num("ytd_price_pct"),
+                    "ytd_price_base_date": (r.get("ytd_price_base_date") or "").strip() or None,
+                    "ytd_price_asof": (r.get("ytd_price_asof") or "").strip() or None,
                 }
             )
     return rows
@@ -1439,6 +1488,7 @@ def etf_calc_stats(code: str) -> dict:
         raise RuntimeError(f"溢价样本不足 {len(premium_rows)}")
     stats = nav_metrics(nav_rows)
     stats["p60"] = round(statistics.median([r["premium_pct"] for r in premium_rows[-60:]]), 4)
+    stats.update(ytd_fields(nav_rows, closes))
     return stats
 
 
@@ -1462,6 +1512,57 @@ def fetch_peer_calc_stats(codes: list[str]) -> dict[str, dict]:
         for code, stats in pool.map(one, codes):
             if stats and stats.get("peak_dd_pct") is not None and stats.get("p60") is not None:
                 out[code] = stats
+    return out
+
+
+def ytd_pct(rows: list[dict], date_key: str, value_key: str) -> dict | None:
+    """今年收益率 = 最新值 ÷ 上一年最后一个值 − 1。
+
+    基期是最新日期所在年份的 1 月 1 日之前最近一条，通常就是上年最后一个交易日
+    （例如 2025-12-31，没有这一天就用更早的最后一个净值日）。用净值，不用行情价。
+    """
+    ordered = [r for r in rows if r.get(date_key) and r.get(value_key) not in (None, "")]
+    if len(ordered) < 2:
+        return None
+    ordered.sort(key=lambda r: r[date_key])
+    latest = ordered[-1]
+    latest_date = str(latest[date_key])
+    if len(latest_date) < 4 or not latest_date[:4].isdigit():
+        return None
+    cutoff = f"{latest_date[:4]}-01-01"
+    base = None
+    for row in reversed(ordered):
+        if str(row[date_key]) < cutoff:
+            base = row
+            break
+    if base is None:
+        return None
+    latest_value = float(latest[value_key])
+    base_value = float(base[value_key])
+    if latest_value <= 0 or base_value <= 0:
+        return None
+    return {
+        "pct": round((latest_value / base_value - 1.0) * 100.0, 4),
+        "base_date": str(base[date_key]),
+        "asof": latest_date,
+    }
+
+
+def ytd_fields(nav_rows: list[dict], closes: list[dict] | None = None) -> dict:
+    """净值今年收益率，以及能取到收盘价时的场内价格今年收益率。"""
+    out: dict = {}
+    nav = ytd_pct(nav_rows, "date", "nav")
+    if nav:
+        out["ytd_nav_pct"] = nav["pct"]
+        out["ytd_nav_base_date"] = nav["base_date"]
+        out["ytd_nav_asof"] = nav["asof"]
+    if closes:
+        price_rows = [{"date": c.get("day") or c.get("date"), "nav": c.get("close")} for c in closes]
+        price = ytd_pct(price_rows, "date", "nav")
+        if price:
+            out["ytd_price_pct"] = price["pct"]
+            out["ytd_price_base_date"] = price["base_date"]
+            out["ytd_price_asof"] = price["asof"]
     return out
 
 
@@ -2009,6 +2110,10 @@ def build_spx_block(picks: dict | None, peer_stats: dict[str, dict] | None) -> d
 
 
 US_PEAK_WINDOW_DAYS = 365
+US_RANGE_3Y_DAYS = 365 * 3
+US_RANGE_5Y_DAYS = 365 * 5
+# 近一年图要在窗口之前再留约一年高点，所以最近这一段保持日线。
+US_DAILY_TAIL = 560
 US_YAHOO = {
     "qqq": "QQQ",
     "spy": "SPY",
@@ -2016,7 +2121,7 @@ US_YAHOO = {
 }
 
 
-def _yahoo_daily(symbol: str, range_: str = "2y") -> list[dict]:
+def _yahoo_daily(symbol: str, range_: str = "5y") -> list[dict]:
     """Yahoo chart API v8 日线。日期用 UTC，避免北京时间把美股交易日拨到下一天。"""
     url = (
         "https://query1.finance.yahoo.com/v8/finance/chart/"
@@ -2069,8 +2174,9 @@ def _cboe_vix() -> list[dict]:
         except ValueError:
             continue
     rows.sort(key=lambda r: r["date"])
-    if len(rows) > 600:
-        rows = rows[-600:]
+    # 近 5 年大约 1300 个交易日，多留一点。
+    if len(rows) > 1600:
+        rows = rows[-1600:]
     return rows
 
 
@@ -2100,6 +2206,24 @@ def trailing_drawdown_pct(points: list[dict], window_days: int = US_PEAK_WINDOW_
     return out
 
 
+def _downsample_us_rows(rows: list[dict], daily_tail: int = US_DAILY_TAIL) -> list[dict]:
+    """最近一段保持日线。更早的按周留最后一个交易日，给近 3 年 / 近 5 年用。"""
+    if len(rows) <= daily_tail:
+        return rows
+    head, tail = rows[:-daily_tail], rows[-daily_tail:]
+    weekly: list[dict] = []
+    bucket: tuple[int, int] | None = None
+    for row in head:
+        iso = datetime.strptime(row["date"], "%Y-%m-%d").isocalendar()
+        week = (iso[0], iso[1])
+        if bucket != week:
+            weekly.append(row)
+            bucket = week
+        else:
+            weekly[-1] = row
+    return weekly + tail
+
+
 def _load_saved_us() -> dict | None:
     path = DATA / "dashboard_payload.json"
     if not path.exists():
@@ -2115,7 +2239,10 @@ def _load_saved_us() -> dict | None:
 
 
 def fetch_us_block() -> tuple[dict, list[str]]:
-    """QQQ、SPY、VIX 约两年日线。回撤按近 365 天滚动高点预先算好。"""
+    """QQQ、SPY、VIX 约五年日线。近 1 年回撤仍按 365 天滚动高点。
+
+    近 3 年、近 5 年另算更长的滚动高点。存盘时最近一段留日线，更早按周抽稀。
+    """
     warnings: list[str] = []
     series: dict[str, list[dict]] = {}
     sources: dict[str, str] = {}
@@ -2155,6 +2282,16 @@ def fetch_us_block() -> tuple[dict, list[str]]:
             "rows": [],
         }, warnings
     dd = {key: trailing_drawdown_pct(rows) for key, rows in series.items() if key != "vix"}
+    dd_3y = {
+        key: trailing_drawdown_pct(rows, US_RANGE_3Y_DAYS)
+        for key, rows in series.items()
+        if key != "vix"
+    }
+    dd_5y = {
+        key: trailing_drawdown_pct(rows, US_RANGE_5Y_DAYS)
+        for key, rows in series.items()
+        if key != "vix"
+    }
     by_date: dict[str, dict] = {}
     for key, rows in series.items():
         for row in rows:
@@ -2162,12 +2299,13 @@ def fetch_us_block() -> tuple[dict, list[str]]:
             item[key] = round(float(row["close"]), 4)
             if key in dd:
                 item[key + "_dd"] = dd[key][row["date"]]
-    rows_out = [by_date[d] for d in sorted(by_date)]
-    # 图上的「近一年」需要窗口起点之前还有一年高点，所以多留一段。
-    if len(rows_out) > 560:
-        rows_out = rows_out[-560:]
+                item[key + "_dd_3y"] = dd_3y[key][row["date"]]
+                item[key + "_dd_5y"] = dd_5y[key][row["date"]]
+    rows_out = _downsample_us_rows([by_date[d] for d in sorted(by_date)])
     block = {
         "peak_window_days": US_PEAK_WINDOW_DAYS,
+        "peak_window_3y_days": US_RANGE_3Y_DAYS,
+        "peak_window_5y_days": US_RANGE_5Y_DAYS,
         "peak_window_label": "近 365 天滚动最高收盘价",
         "sources": sources,
         "warnings": warnings,
@@ -2200,6 +2338,7 @@ def build_payload(
         latest_close_date = official[-1]["day"]
         latest_close = float(official[-1]["close"])
     else:
+        official = []
         latest_close_date = premium_rows[-1]["date"]
         latest_close = float(premium_rows[-1]["close"])
 
@@ -2247,6 +2386,8 @@ def build_payload(
                 row["aum_cny"] = round(float(s["aum_cny"]), 2)
                 if s.get("aum_as_of"):
                     row["aum_as_of"] = s["aum_as_of"]
+            if s.get("note"):
+                row["note"] = s["note"]
             out.append(row)
         out.sort(key=lambda x: (x["ref_premium_pct"] is None, x["ref_premium_pct"] if x["ref_premium_pct"] is not None else 999))
         return out
@@ -2255,6 +2396,42 @@ def build_payload(
     spx_sorted = materialize(spx_static or [], SPX_PRIMARY)
     if not any(p["code"] == PRIMARY for p in peers_sorted):
         raise RuntimeError("同类列表缺少 159501")
+
+    def stamp_ytd(rows: list[dict], primary_code: str | None, primary_fields: dict | None) -> None:
+        for row in rows:
+            src = primary_fields if primary_code and row["code"] == primary_code else (peer_stats or {}).get(row["code"]) or {}
+            for key in (
+                "ytd_nav_pct",
+                "ytd_nav_base_date",
+                "ytd_nav_asof",
+                "ytd_price_pct",
+                "ytd_price_base_date",
+                "ytd_price_asof",
+            ):
+                if src.get(key) is not None:
+                    row[key] = src[key]
+
+    stamp_ytd(peers_sorted, PRIMARY, ytd_fields(nav_sorted, official))
+    stamp_ytd(spx_sorted, None, None)
+    otc_stats = (peer_stats or {}).get(OTC_NASDAQ_CODE) or {}
+    if otc_stats.get("ytd_nav_pct") is not None and not any(p["code"] == OTC_NASDAQ_CODE for p in peers_sorted):
+        peers_sorted.append(
+            {
+                "code": OTC_NASDAQ_CODE,
+                "name": "华夏纳斯达克100ETF联接",
+                "close": None,
+                "iopv": None,
+                "ref_premium_pct": None,
+                "nav_premium_pct": None,
+                "live_price": None,
+                "live_asof": None,
+                "is_primary": False,
+                "note": "场外",
+                "ytd_nav_pct": otc_stats["ytd_nav_pct"],
+                "ytd_nav_base_date": otc_stats.get("ytd_nav_base_date"),
+                "ytd_nav_asof": otc_stats.get("ytd_nav_asof"),
+            }
+        )
 
     peer_fields = [
         "code",
@@ -2268,6 +2445,13 @@ def build_payload(
         "is_primary",
         "aum_cny",
         "aum_as_of",
+        "note",
+        "ytd_nav_pct",
+        "ytd_nav_base_date",
+        "ytd_nav_asof",
+        "ytd_price_pct",
+        "ytd_price_base_date",
+        "ytd_price_asof",
     ]
 
     def write_peer_csv(path: Path, rows: list[dict]) -> None:
@@ -2544,6 +2728,13 @@ def main() -> None:
     spot = fetch_spot(codes)
     peer_codes = [c for c in dict.fromkeys([*codes, *PICK_CODES]) if c != PRIMARY]
     peer_stats = fetch_peer_calc_stats(peer_codes)
+    try:
+        otc_nav = fetch_pingzhong_nav(OTC_NASDAQ_CODE)
+        peer_stats[OTC_NASDAQ_CODE] = ytd_fields(otc_nav)
+        print("021000 净值今年收益率", peer_stats[OTC_NASDAQ_CODE])
+    except Exception as e:  # noqa: BLE001
+        print("021000 净值失败", e)
+        warnings.append("场外 021000 的今年收益率没有取到")
     missing = [c for c in peer_codes if c not in peer_stats and c in {p["code"] for p in peers}]
     if missing:
         warnings.append("部分同类缺少近一年高点回撤或 P60：" + "、".join(missing))
