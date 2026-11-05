@@ -287,8 +287,8 @@
     .btn.tiny { min-height: 40px; padding: 8px 12px; font-size: .85rem; }
     .form-actions, .ledger-actions:not(#usRanges) { flex-direction: column; align-items: stretch; }
     .form-actions .btn, .ledger-actions:not(#usRanges) .btn { width: 100%; text-align: center; }
-    #usRanges { display: flex; flex-wrap: wrap; gap: 8px; }
-    #usRanges .btn { flex: 1 1 calc(33.33% - 8px); width: auto; min-height: 44px; padding: 10px 6px; }
+    #usRanges, #pxRanges { display: flex; flex-wrap: wrap; gap: 8px; }
+    #usRanges .btn, #pxRanges .btn { flex: 1 1 calc(50% - 8px); width: auto; min-height: 44px; padding: 10px 6px; }
     .chk { align-items: center; }
     .chk input { width: 1.25rem; height: 1.25rem; margin-top: 0; flex: none; }
     input[type=number], input[type=text], input[type=date], select { min-height: 44px; }
@@ -789,6 +789,24 @@
         <svg class="fallback-chart" id="usSvg" style="display:none" viewBox="0 0 1000 320" preserveAspectRatio="none"></svg>
       </div>
       <p class="pick-src" id="usCaption"></p>
+    </div>
+  </section>
+
+  <section id="pxSection">
+    <h2>美股收盘价 <span class="hint">QQQ 左轴 · SPY 右轴 · 和上面同一份日线</span></h2>
+    <div class="card">
+      <div class="ledger-actions" id="pxRanges">
+        <button type="button" class="btn primary" data-px-range="31">近一个月</button>
+        <button type="button" class="btn" data-px-range="183">近半年</button>
+        <button type="button" class="btn" data-px-range="365">近1年</button>
+        <button type="button" class="btn" data-px-range="1825">近5年</button>
+      </div>
+      <div class="grid" id="pxChips" style="margin-top:12px"></div>
+      <div class="chart-box" style="margin-top:12px">
+        <canvas id="pxChart"></canvas>
+        <svg class="fallback-chart" id="pxSvg" style="display:none" viewBox="0 0 1000 320" preserveAspectRatio="none"></svg>
+      </div>
+      <p class="pick-src" id="pxCaption"></p>
     </div>
   </section>
 
@@ -3193,9 +3211,137 @@
     });
     paintUs(initialUsRange());
   }
+  const PX_RANGES = { 31: '近一个月', 183: '近半年', 365: '近1年', 1825: '近5年' };
+  let pxChart = null;
+  function pxPoint(rows, key, fromEnd) {
+    const list = fromEnd ? rows.slice().reverse() : rows;
+    for (let i = 0; i < list.length; i++) {
+      const v = list[i][key];
+      if (v != null && !Number.isNaN(Number(v))) return list[i];
+    }
+    return null;
+  }
+  function paintPx(days) {
+    document.querySelectorAll('#pxRanges button').forEach(btn => {
+      btn.classList.toggle('primary', Number(btn.dataset.pxRange) === days);
+    });
+    const rows = usRows(days);
+    const caption = document.getElementById('pxCaption');
+    const chips = document.getElementById('pxChips');
+    const latestQ = pxPoint((D.us && D.us.rows) || [], 'qqq', true);
+    const latestS = pxPoint((D.us && D.us.rows) || [], 'spy', true);
+    const firstQ = pxPoint(rows, 'qqq', false);
+    const lastQ = pxPoint(rows, 'qqq', true);
+    const firstS = pxPoint(rows, 'spy', false);
+    const lastS = pxPoint(rows, 'spy', true);
+    const chg = (first, last) => {
+      if (!first || !last || !(Number(first) > 0)) return null;
+      return (Number(last) / Number(first) - 1) * 100;
+    };
+    const qChg = chg(firstQ && firstQ.qqq, lastQ && lastQ.qqq);
+    const sChg = chg(firstS && firstS.spy, lastS && lastS.spy);
+    const fmtPx = (n) => n == null ? '—' : Number(n).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const fmtChg = (n) => n == null ? '—' : (n > 0 ? '+' : '') + Number(n).toFixed(2) + '%';
+    if (caption) {
+      caption.textContent = rows.length
+        ? '收盘价和上面的回撤图用同一份 Yahoo 日线。近 5 年里更早的点是每周一个，最近一段仍是每个交易日。区间涨跌 = 这段窗口里最后一次收盘 ÷ 最早一次收盘 − 1。QQQ 用左轴，SPY 用右轴。仅供个人记录辅助，非投资建议。'
+        : '还没有 QQQ / SPY 收盘价。仅供个人记录辅助，非投资建议。';
+    }
+    const chip = (k, v1, s1) => `<div class="kpi"><div class="k">${k}</div><div class="v">${v1}</div><div class="s">${s1}</div></div>`;
+    if (chips) {
+      chips.innerHTML = [
+        chip('QQQ 最新收盘', latestQ ? fmtPx(latestQ.qqq) : '—', (latestQ ? latestQ.date : '—') + ' · ' + PX_RANGES[days] + ' ' + fmtChg(qChg)),
+        chip('SPY 最新收盘', latestS ? fmtPx(latestS.spy) : '—', (latestS ? latestS.date : '—') + ' · ' + PX_RANGES[days] + ' ' + fmtChg(sChg)),
+      ].join('');
+    }
+    const labels = rows.map(r => r.date);
+    const q = rows.map(r => r.qqq == null ? null : r.qqq);
+    const s = rows.map(r => r.spy == null ? null : r.spy);
+    const canvas = document.getElementById('pxChart');
+    const svg = document.getElementById('pxSvg');
+    if (!rows.length || (!q.some(v => v != null) && !s.some(v => v != null))) {
+      if (canvas) canvas.style.display = 'none';
+      if (svg) {
+        svg.style.display = 'block';
+        svg.innerHTML = '<text x="24" y="40" fill="#8fa3c8" font-size="14">暂无收盘价</text>';
+      }
+      return;
+    }
+    if (typeof Chart === 'undefined') {
+      if (canvas) canvas.style.display = 'none';
+      if (svg) {
+        svg.style.display = 'block';
+        const W = 1000, H = 320, pad = 36;
+        const qVals = q.filter(v => v != null).map(Number);
+        const sVals = s.filter(v => v != null).map(Number);
+        const minQ = Math.min.apply(null, qVals);
+        const maxQ = Math.max.apply(null, qVals);
+        const minS = Math.min.apply(null, sVals);
+        const maxS = Math.max.apply(null, sVals);
+        const x = (i) => pad + (W - 2 * pad) * (i / Math.max(1, rows.length - 1));
+        const yQ = (v) => H - pad - (H - 2 * pad) * ((v - minQ) / Math.max(0.01, maxQ - minQ));
+        const yS = (v) => H - pad - (H - 2 * pad) * ((v - minS) / Math.max(0.01, maxS - minS));
+        const path = (arr, yFn) => {
+          let d = '';
+          let started = false;
+          arr.forEach((v, i) => {
+            if (v == null) { started = false; return; }
+            d += (started ? 'L' : 'M') + x(i).toFixed(1) + ',' + yFn(v).toFixed(1);
+            started = true;
+          });
+          return d;
+        };
+        svg.innerHTML = `
+          <rect width="100%" height="100%" fill="#151f36"/>
+          <path d="${path(q, yQ)}" fill="none" stroke="#5b8cff" stroke-width="1.6"/>
+          <path d="${path(s, yS)}" fill="none" stroke="#3ddc97" stroke-width="1.6"/>
+          <text x="${pad}" y="18" fill="#8fa3c8" font-size="12">SVG 备用图 · 左轴 QQQ · 右轴 SPY</text>
+        `;
+      }
+      return;
+    }
+    if (canvas) canvas.style.display = 'block';
+    if (svg) svg.style.display = 'none';
+    if (pxChart) { pxChart.destroy(); pxChart = null; }
+    pxChart = new Chart(canvas.getContext('2d'), {
+      type: 'line',
+      data: {
+        labels,
+        datasets: [
+          { label: 'QQQ 收盘', data: q, borderColor: '#5b8cff', borderWidth: 1.6, pointRadius: 0, tension: 0.12, yAxisID: 'y', spanGaps: true },
+          { label: 'SPY 收盘', data: s, borderColor: '#3ddc97', borderWidth: 1.6, pointRadius: 0, tension: 0.12, yAxisID: 'y1', spanGaps: true },
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        interaction: { mode: 'index', intersect: false },
+        plugins: {
+          legend: { labels: { color: '#8fa3c8', boxWidth: 12 } },
+          tooltip: { callbacks: { label: (c) => `${c.dataset.label}: ${Number(c.raw).toFixed(2)}` } }
+        },
+        scales: {
+          x: { ticks: { color: '#8fa3c8', maxTicksLimit: axisTickLimit() }, grid: { color: 'rgba(42,58,92,.5)' } },
+          y: { position: 'left', ticks: { color: '#5b8cff' }, grid: { color: 'rgba(42,58,92,.5)' } },
+          y1: { position: 'right', ticks: { color: '#3ddc97' }, grid: { drawOnChartArea: false } }
+        }
+      }
+    });
+  }
+  const pxRanges = document.getElementById('pxRanges');
+  if (pxRanges) {
+    pxRanges.addEventListener('click', (ev) => {
+      const btn = ev.target.closest('[data-px-range]');
+      if (!btn) return;
+      const days = Number(btn.dataset.pxRange);
+      if (!PX_RANGES[days]) return;
+      paintPx(days);
+    });
+    paintPx(31);
+  }
   window.addEventListener('resize', () => {
     const n = axisTickLimit();
-    [premChart, usChart].forEach(ch => {
+    [premChart, usChart, pxChart].forEach(ch => {
       if (!ch || !ch.options.scales.x) return;
       if (ch.options.scales.x.ticks.maxTicksLimit === n) return;
       ch.options.scales.x.ticks.maxTicksLimit = n;
