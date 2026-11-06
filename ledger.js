@@ -693,11 +693,27 @@
       });
     }).join('');
   }
-  function card(title, roll) {
-    const pnl = roll.pnl == null ? '现价不全' : `浮盈亏 ${roll.pnl > 0 ? '+' : ''}${fmtMoney(roll.pnl)}（${fmtPct(roll.pnlPct)}）`;
-    return `<div class="kpi"><div class="k">${title}</div><div class="v">¥${fmtMoney(roll.mv)}</div><div class="s">成本 ¥${fmtMoney(roll.cost)} · ${pnl}</div></div>`;
+  function pnlTone(pnl) {
+    if (pnl == null || !Number.isFinite(Number(pnl))) return '';
+    if (pnl > 0.005) return 'up';
+    if (pnl < -0.005) return 'down';
+    return 'flat';
   }
-  function sortHoldings(list) {
+  function card(title, roll, kind) {
+    const tone = pnlTone(roll.pnl);
+    const pnl = roll.pnl == null
+      ? '现价不全'
+      : `浮盈亏 <span class="${tone}">${roll.pnl > 0 ? '+' : ''}${fmtMoney(roll.pnl)}（${fmtPct(roll.pnlPct)}）</span>`;
+    const cls = 'kpi holding-card' + (kind ? ' holding-' + kind : ' holding-broker');
+    return `<div class="${cls}"><div class="k">${esc(title)}</div><div class="v">¥${fmtMoney(roll.mv)}</div><div class="s">成本 ¥${fmtMoney(roll.cost)} · ${pnl}</div></div>`;
+  }
+  function brokerLabel(h) { return brokerOf(h) || '未填'; }
+  function typeLabel(h) {
+    return familyLabel(h.family) + (venueOfRow(h) === 'off' ? ' · 场外' : '');
+  }
+  let holdingSort = { key: '', dir: 'asc' };
+  let paintedPlan = null;
+  function defaultHoldingOrder(list) {
     const fam = { nasdaq: 0, sp500: 1 };
     const acc = { '平安证券': 0, '银河证券': 1, '招商证券': 2 };
     return list.slice().sort((a, b) => {
@@ -709,19 +725,58 @@
         || aBroker.localeCompare(bBroker, 'zh');
     });
   }
+  function sortHoldings(list) {
+    const base = defaultHoldingOrder(list);
+    if (!holdingSort.key) return base;
+    const dir = holdingSort.dir === 'desc' ? -1 : 1;
+    return base.map((h, i) => ({ h, i })).sort((a, b) => {
+      let cmp = 0;
+      if (holdingSort.key === 'pnl') {
+        const an = a.h.pnl == null || !Number.isFinite(Number(a.h.pnl));
+        const bn = b.h.pnl == null || !Number.isFinite(Number(b.h.pnl));
+        if (an || bn) return an === bn ? a.i - b.i : (an ? 1 : -1);
+        cmp = Number(a.h.pnl) - Number(b.h.pnl);
+      } else {
+        const av = holdingSort.key === 'type' ? typeLabel(a.h) : brokerLabel(a.h);
+        const bv = holdingSort.key === 'type' ? typeLabel(b.h) : brokerLabel(b.h);
+        cmp = av.localeCompare(bv, 'zh');
+      }
+      return cmp === 0 ? a.i - b.i : cmp * dir;
+    }).map((x) => x.h);
+  }
+  function paintSortHeaders() {
+    const body = document.getElementById('holdingBody');
+    const table = body && body.closest('table');
+    if (!table) return;
+    table.querySelectorAll('button[data-sort]').forEach((btn) => {
+      const th = btn.closest('th');
+      if (!th) return;
+      const active = holdingSort.key === btn.getAttribute('data-sort');
+      th.setAttribute('aria-sort', active ? (holdingSort.dir === 'desc' ? 'descending' : 'ascending') : 'none');
+    });
+  }
   function paint(plan) {
+    paintedPlan = plan;
     const cards = document.getElementById('holdingCards');
     if (cards) {
-      cards.innerHTML = card('纳指100', plan.byFamily.nasdaq) + card('标普500', plan.byFamily.sp500) + card('全部', plan.byFamily.all);
+      cards.innerHTML = card('纳指100', plan.byFamily.nasdaq, 'nasdaq')
+        + card('标普500', plan.byFamily.sp500, 'spx')
+        + card('持仓汇总', plan.byFamily.all, 'total');
     }
     const brokers = document.getElementById('holdingBrokers');
-    if (brokers) brokers.innerHTML = brokerCards(plan.valued);
+    const brokerLabelEl = document.getElementById('holdingBrokerLabel');
+    if (brokers) {
+      const html = brokerCards(plan.valued);
+      brokers.innerHTML = html;
+      if (brokerLabelEl) brokerLabelEl.hidden = !html;
+    }
+    paintSortHeaders();
     const body = document.getElementById('holdingBody');
     if (body) {
       const rows = sortHoldings(plan.valued.filter((h) => h.shares > 0 || h.note || h.code));
       body.innerHTML = rows.length ? rows.map((h) => `<tr>
-        <td>${esc(brokerOf(h) || '未填')}</td>
-        <td>${familyLabel(h.family)}${venueOfRow(h) === 'off' ? ' · 场外' : ''}</td>
+        <td>${esc(brokerLabel(h))}</td>
+        <td>${esc(typeLabel(h))}</td>
         <td><strong>${esc(h.code || '—')}</strong></td>
         <td>${esc(h.name || '')}${h.note ? `<span class="sub cell-wrap">${esc(h.note)}</span>` : ''}</td>
         <td class="num">${fmtShares(h.shares)}</td>
@@ -1242,6 +1297,16 @@
       refresh();
     });
     document.getElementById('ledgerSection').addEventListener('click', (ev) => {
+      const sortBtn = ev.target.closest('button[data-sort]');
+      if (sortBtn && sortBtn.closest('thead')) {
+        const key = sortBtn.getAttribute('data-sort');
+        if (key === 'broker' || key === 'type' || key === 'pnl') {
+          if (holdingSort.key === key) holdingSort.dir = holdingSort.dir === 'asc' ? 'desc' : 'asc';
+          else { holdingSort.key = key; holdingSort.dir = 'asc'; }
+          if (paintedPlan) paint(paintedPlan);
+        }
+        return;
+      }
       const btn = ev.target.closest('[data-act]');
       if (!btn || !document.getElementById('ledgerSection').contains(btn)) return;
       const id = btn.getAttribute('data-id');
