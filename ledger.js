@@ -660,12 +660,24 @@
     </div>`;
   }
   function sellSplitHtml(nasdaq, sp500) {
-    return `<h3>卖出额度</h3>
-      <p>纳指底仓和标普底仓分开算，不把两边合成一个底仓。有持仓时按止盈分档卖，没有持仓时近 60 日新高且明显贵仍只提示 5–8%。每一边卖后至少留下峰值市值的 75%，本年卖出不超过峰值的 20%。仅供个人记录辅助，非投资建议。</p>
-      <div class="sell-split">
-        ${quotaBlock('纳指底仓', nasdaq)}
-        ${quotaBlock('标普底仓', sp500)}
-      </div>`;
+    const panel = document.getElementById('sellPanel');
+    const prev = panel && panel.querySelector('details.sell-fold');
+    const open = !!(prev && prev.open);
+    const room = (plan, name) => name + '剩余可卖 ¥' + fmtMoney(plan && plan.annualRoom);
+    const summary = room(nasdaq, '纳指') + ' · ' + room(sp500, '标普');
+    return `<details class="fold sell-fold"${open ? ' open' : ''}>
+      <summary class="fold-summary">
+        <span class="fold-title">卖出额度 <span class="hint">${summary}</span></span>
+        <span class="fold-chevron" aria-hidden="true"></span>
+      </summary>
+      <div class="fold-body">
+        <p>纳指底仓和标普底仓分开算，不把两边合成一个底仓。有持仓时按止盈分档卖，没有持仓时近 60 日新高且明显贵仍只提示 5–8%。每一边卖后至少留下峰值市值的 75%，本年卖出不超过峰值的 20%。仅供个人记录辅助，非投资建议。</p>
+        <div class="sell-split">
+          ${quotaBlock('纳指底仓', nasdaq)}
+          ${quotaBlock('标普底仓', sp500)}
+        </div>
+      </div>
+    </details>`;
   }
   function brokerCards(list) {
     const map = new Map();
