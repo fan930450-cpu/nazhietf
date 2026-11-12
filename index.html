@@ -258,6 +258,54 @@
   @media (max-width: 800px) { .sell-split { grid-template-columns: 1fr; } }
   .sell-family { background: rgba(255,255,255,.03); border: 1px solid var(--line); border-radius: 14px; padding: 12px; }
   .sell-family h3 { margin: 0 0 6px; font-size: .95rem; }
+  .fold-summary {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    min-height: 44px; padding: 6px 2px; cursor: pointer; list-style: none;
+  }
+  .fold-summary::-webkit-details-marker { display: none; }
+  .fold-summary::marker { content: ''; }
+  .fold-summary h2 { margin: 0; flex: 1 1 auto; }
+  .fold-summary:focus-visible { outline: 2px solid rgba(91,140,255,.7); outline-offset: 2px; border-radius: 10px; }
+  .fold-chevron {
+    flex: none; width: 44px; height: 44px; display: inline-flex; align-items: center; justify-content: center;
+    border-radius: 12px; border: 1px solid var(--line); background: rgba(255,255,255,.04);
+    color: var(--text); font-size: 1.05rem; line-height: 1;
+  }
+  .fold-chevron::before { content: '▸'; }
+  .fold[open] > .fold-summary .fold-chevron::before { content: '▾'; }
+  .fold > .card { margin-top: 8px; }
+  .sell-box:has(.sell-fold) { padding: 4px 8px 8px; }
+  .sell-fold .fold-summary { padding: 4px 4px; }
+  .sell-fold .fold-title { display: flex; flex-direction: column; gap: 2px; min-width: 0; font-weight: 700; line-height: 1.35; }
+  .sell-fold .fold-title .hint { font-weight: 500; color: var(--muted); font-size: .78rem; }
+  .sell-fold .fold-body { padding: 2px 6px 8px; }
+  .kpi.dd-feature {
+    grid-column: 1 / -1;
+    padding: 16px 16px 14px;
+    background: linear-gradient(160deg, rgba(255,176,32,.2), rgba(16,24,42,.78));
+    border-color: rgba(255,196,92,.7);
+  }
+  .kpi.dd-feature .dd-num {
+    font-size: clamp(2.6rem, 10vw, 3.8rem); font-weight: 800; line-height: .95;
+    letter-spacing: -.03em; font-variant-numeric: tabular-nums; color: #ffe3a3;
+  }
+  .kpi.dd-feature .k { margin: 8px 0 0; font-size: .78rem; color: #f6ead2; font-weight: 600; }
+  .kpi.dd-feature .s { color: #d5deee; }
+  .kpi.dd-feature.dd-d1 {
+    background: linear-gradient(160deg, rgba(255,160,32,.32), rgba(24,18,12,.82));
+    border-color: rgba(255,176,32,.9);
+  }
+  .kpi.dd-feature.dd-d1 .dd-num { color: #ffc14d; }
+  .kpi.dd-feature.dd-d2 {
+    background: linear-gradient(160deg, rgba(255,107,64,.36), rgba(32,14,12,.86));
+    border-color: rgba(255,130,90,.95);
+  }
+  .kpi.dd-feature.dd-d2 .dd-num { color: #ffc2b0; }
+  .kpi.dd-feature.dd-d3 {
+    background: linear-gradient(160deg, rgba(255,80,96,.42), rgba(36,10,14,.9));
+    border-color: rgba(255,107,122,.95);
+  }
+  .kpi.dd-feature.dd-d3 .dd-num { color: #ffd5d9; }
   .sell-family .sell-amt { font-size: 1.45rem; }
   .sell-family .grid { grid-template-columns: 1fr 1fr; }
   .btn { background: var(--bg2); color: var(--text); border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px; cursor: pointer; font: inherit; }
@@ -660,7 +708,11 @@
 
 
   <section id="calcSection">
-    <h2>定投计算器 <span class="hint">已用最新数据预填；一般只需改「每月基准」</span></h2>
+    <details class="fold">
+      <summary class="fold-summary">
+        <h2>定投计算器 <span class="hint">已用最新数据预填；一般只需改「每月基准」</span></h2>
+        <span class="fold-chevron" aria-hidden="true"></span>
+      </summary>
     <div class="card">
       <div class="form-row" style="grid-template-columns:1fr;margin-bottom:12px">
         <div>
@@ -733,10 +785,15 @@
       <div class="calc-out" id="calcOut"></div>
       <p class="field-hint" id="reserveOut" style="font-size:.8rem;color:var(--muted);line-height:1.5;margin:10px 0 0"></p>
     </div>
+    </details>
   </section>
 
   <section id="spxCalcSection">
-    <h2>标普500定投计算器 <span class="hint">每月基准 2000 · 回撤阶梯和纳指不同 · P60 只用标普</span></h2>
+    <details class="fold">
+      <summary class="fold-summary">
+        <h2>标普500定投计算器 <span class="hint">每月基准 2000 · 回撤阶梯和纳指不同 · P60 只用标普</span></h2>
+        <span class="fold-chevron" aria-hidden="true"></span>
+      </summary>
     <div class="card">
       <div class="form-row" style="grid-template-columns:1fr;margin-bottom:12px">
         <div>
@@ -798,6 +855,7 @@
       </details>
       <div class="calc-out" id="spxCalcOut"></div>
     </div>
+    </details>
   </section>
 
   <section id="picksSection">
@@ -1903,7 +1961,7 @@
       <span class="badge mid">回撤系数 ${fmt(dd.c)} · 溢价系数 ${fmt(pr.c)}</span>
     `;
     document.getElementById('kpiGrid').innerHTML = `
-      <div class="kpi"><div class="k">${ddView.source === 'iopv' ? '距近一年高点回撤（按今日盘中 IOPV）' : '距近一年高点回撤（已公布净值）'}</div><div class="v">${fmt(plan.raw)}%</div><div class="s">${ddKpiSub(etf, plan.raw)}</div></div>
+      ${ddFeatureHtml(ddView.source === 'iopv' ? '距近一年高点回撤（按今日盘中 IOPV）' : '距近一年高点回撤（已公布净值）', plan.raw, ddKpiSub(etf, plan.raw))}
       <div class="kpi"><div class="k">扣溢价后回撤</div><div class="v">${fmt(plan.effective)}%</div><div class="s">回撤系数和 5% 加仓线用这个数</div></div>
       <div class="kpi"><div class="k">今日溢价 P</div><div class="v">${fmt(p)}%</div><div class="s">相对 P60 ${fmt(p - p60)} 个百分点</div></div>
       <div class="kpi"><div class="k">近60日溢价中位数 P60</div><div class="v">${fmt(p60)}%</div><div class="s">净值折溢价滚动中位数</div></div>
@@ -2042,7 +2100,7 @@
     const kpi = document.getElementById('spxKpi');
     if (kpi) {
       kpi.innerHTML = `
-        <div class="kpi"><div class="k">${ddView.source === 'iopv' ? '距近一年高点回撤（按今日盘中 IOPV）' : '距近一年高点回撤（已公布净值）'}</div><div class="v">${fmt(plan.raw)}%</div><div class="s">${ddKpiSub(etf, plan.raw)}</div></div>
+        ${ddFeatureHtml(ddView.source === 'iopv' ? '距近一年高点回撤（按今日盘中 IOPV）' : '距近一年高点回撤（已公布净值）', plan.raw, ddKpiSub(etf, plan.raw))}
         <div class="kpi"><div class="k">扣溢价后回撤</div><div class="v">${fmt(plan.effective)}%</div><div class="s">回撤系数和 5% 加仓线用这个数</div></div>
         <div class="kpi"><div class="k">今日溢价 P</div><div class="v">${fmt(p)}%</div><div class="s">相对自己的 P60 ${p60 == null || Number.isNaN(p - p60) ? '—' : fmt(p - p60)} 个百分点</div></div>
         <div class="kpi"><div class="k">标普 P60</div><div class="v">${fmt(p60)}%</div><div class="s">这只标普近60日净值溢价中位数</div></div>
@@ -2311,6 +2369,16 @@
       return `口径：距近一年最高净值回撤（按今日盘中 IOPV）。IOPV ${fmt(info.fresh.iopv, 4)}（${when}），高点净值 ${info.peakNav == null ? '—' : fmt(info.peakNav, 4)}（${peakDate}）。已公布净值回撤 ${pub}（净值日 ${navDate}）。${stale}`;
     }
     return `没有今日盘中 IOPV，回撤暂用已公布净值 ${pub}（净值日 ${navDate}，高点 ${peakDate}）。这个数字滞后 1–2 天，不是今天的估计净值。${stale}`;
+  }
+  function ddDepth(raw) {
+    const n = Number(raw);
+    if (!Number.isFinite(n) || n < 5) return 'd0';
+    if (n < 10) return 'd1';
+    if (n < 20) return 'd2';
+    return 'd3';
+  }
+  function ddFeatureHtml(label, raw, sub) {
+    return `<div class="kpi dd-feature dd-${ddDepth(raw)}"><div class="dd-num">${fmt(raw)}%</div><div class="k">${label}</div><div class="s">${sub}</div></div>`;
   }
   function ddKpiSub(etf, inputPct) {
     const info = drawdownView(etf);
