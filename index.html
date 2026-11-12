@@ -284,6 +284,9 @@
   .table-scroll th, .table-scroll td { white-space: nowrap; vertical-align: middle; }
   .scroll-hint { display: none; margin: 0 0 6px; color: var(--muted); font-size: .75rem; }
   .section-nav { display: none; }
+  @media (prefers-reduced-motion: no-preference) {
+    html { scroll-behavior: smooth; }
+  }
   canvas, svg.fallback-chart { max-width: 100%; }
   [hidden] { display: none !important; }
   @media (max-width: 840px) {
@@ -308,7 +311,7 @@
       flex: 0 0 auto;
       display: inline-flex;
       align-items: center;
-      min-height: 40px;
+      min-height: 44px;
       padding: 8px 12px;
       border-radius: 999px;
       border: 1px solid var(--line);
@@ -318,7 +321,7 @@
       font-size: .85rem;
       white-space: nowrap;
     }
-    section, .hero { scroll-margin-top: 72px; }
+    section, .hero, #holdingsSummary { scroll-margin-top: 76px; }
     header.top { align-items: flex-start; }
     header.top h1 { font-size: 1.15rem; line-height: 1.35; }
     header.top .meta { flex: 1 1 100%; line-height: 1.45; overflow-wrap: anywhere; }
@@ -355,7 +358,7 @@
     <a href="#usSection">美股</a>
     <a href="#hero">本月金额</a>
     <a href="#spxSection">标普</a>
-    <a href="#ledgerSection">记录本</a>
+    <a href="#holdingsSummary">持仓汇总</a>
     <a href="#calcSection">计算器</a>
     <a href="#picksSection">怎么选</a>
   </nav>
@@ -476,7 +479,7 @@
       <div id="ledgerSeedNote" class="note-banner" hidden></div>
       <div id="sellPanel" class="sell-box" aria-live="polite">卖出额度计算中…</div>
 
-      <h3 class="ledger-h">持仓汇总 <span class="hint">卖出额度按纳指 / 标普合计 · 下面再按券商看</span></h3>
+      <h3 class="ledger-h" id="holdingsSummary">持仓汇总 <span class="hint">卖出额度按纳指 / 标普合计 · 下面再按券商看</span></h3>
       <div class="grid holdings-index" id="holdingCards"></div>
       <p class="holdings-broker-label" id="holdingBrokerLabel" hidden>按券商</p>
       <div class="grid holdings-brokers" id="holdingBrokers"></div>
