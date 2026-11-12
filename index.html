@@ -236,6 +236,7 @@
   tr.today-row { background: rgba(61,220,151,.07); }
   td.why { color: var(--muted); font-size: .8rem; line-height: 1.45; }
   td.why .cell-wrap { width: 16rem; max-width: 70vw; white-space: normal; }
+  #peerBody td.why, #peerBodySpx td.why { white-space: normal; }
   .sub.cell-wrap { width: 9.5rem; max-width: 46vw; }
   td .sub, th .sub { display: block; color: var(--muted); font-size: .72rem; font-weight: 500; margin-top: 2px; }
   .live-bar { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; justify-content: space-between; margin: 0 0 8px; color: var(--muted); font-size: .82rem; }
@@ -351,14 +352,53 @@
 <noscript><p style="padding:16px">请启用 JavaScript 以查看定投建议。本页不需要登录，也不需要 Grok Bot。</p></noscript>
 <div class="wrap">
   <nav class="section-nav" aria-label="章节">
+    <a href="#usSection">美股</a>
     <a href="#hero">本月金额</a>
     <a href="#spxSection">标普</a>
-    <a href="#picksSection">怎么选</a>
-    <a href="#calcSection">计算器</a>
     <a href="#ledgerSection">记录本</a>
-    <a href="#peerCompare">同类</a>
-    <a href="#usSection">美股</a>
+    <a href="#calcSection">计算器</a>
+    <a href="#picksSection">怎么选</a>
   </nav>
+
+  <section id="usSection">
+    <h2>美股回撤与恐慌指数 <span class="hint">QQQ 对应纳指 · SPY 对应标普 · VIX 用右轴</span></h2>
+    <div class="card">
+      <div class="ledger-actions" id="usRanges">
+        <button type="button" class="btn primary" data-us-range="31">近一个月</button>
+        <button type="button" class="btn" data-us-range="183">近半年</button>
+        <button type="button" class="btn" data-us-range="365">近一年</button>
+        <button type="button" class="btn" data-us-range="1095">近3年</button>
+        <button type="button" class="btn" data-us-range="1825">近5年</button>
+      </div>
+      <div class="grid" id="usChips" style="margin-top:12px"></div>
+      <div class="chart-box" style="margin-top:12px">
+        <canvas id="usChart"></canvas>
+        <svg class="fallback-chart" id="usSvg" style="display:none" viewBox="0 0 1000 320" preserveAspectRatio="none"></svg>
+      </div>
+      <p class="pick-src" id="usCaption"></p>
+    </div>
+  </section>
+
+
+  <section id="pxSection">
+    <h2>美股收盘价 <span class="hint">QQQ 左轴 · SPY 右轴 · 和上面同一份日线</span></h2>
+    <div class="card">
+      <div class="ledger-actions" id="pxRanges">
+        <button type="button" class="btn primary" data-px-range="31">近一个月</button>
+        <button type="button" class="btn" data-px-range="183">近半年</button>
+        <button type="button" class="btn" data-px-range="365">近1年</button>
+        <button type="button" class="btn" data-px-range="1825">近5年</button>
+        <button type="button" class="btn" data-px-range="3650">近10年</button>
+      </div>
+      <div class="grid" id="pxChips" style="margin-top:12px"></div>
+      <div class="chart-box" style="margin-top:12px">
+        <canvas id="pxChart"></canvas>
+        <svg class="fallback-chart" id="pxSvg" style="display:none" viewBox="0 0 1000 320" preserveAspectRatio="none"></svg>
+      </div>
+      <p class="pick-src" id="pxCaption"></p>
+    </div>
+  </section>
+
   <header class="top">
     <h1>纳指定投日报 · 159501</h1>
     <div class="meta" id="asofMeta">数据加载中…</div>
@@ -427,155 +467,6 @@
   <section id="tpSection" hidden>
     <h2>止盈 <span class="hint">按单只利润 · 纳指和标普分开 · 只看这台浏览器的持仓</span></h2>
     <div id="tpCards"></div>
-  </section>
-
-  <section id="picksSection">
-    <h2>今日同类怎么选 <span class="hint">先纳指100，再标普500 · 不改顶部的本月金额</span></h2>
-    <div class="card">
-      <p class="pick-intro">纳指顶部按 159501 的每月基准、回撤和溢价算出本月目标上限，再扣掉本月已投。标普金额在上面的标普卡片，按 513500 和标普自己的每月基准，两笔互不替换。这里只回答今天买哪只：成交够用时先看更低溢价；价差在约 1–2 个点内，再偏向更低的管理+托管费和更大规模。净值日相差一个公布日不影响今天买哪只。落后超过一个公布日的会标明，不拿它的回撤和已更新的基金比。</p>
-      <div id="picksRoot">短名单加载中…</div>
-    </div>
-  </section>
-
-  <section id="calcSection">
-    <h2>定投计算器 <span class="hint">已用最新数据预填；一般只需改「每月基准」</span></h2>
-    <div class="card">
-      <div class="form-row" style="grid-template-columns:1fr;margin-bottom:12px">
-        <div>
-          <label for="etfSelect">选择 ETF</label>
-          <select id="etfSelect"></select>
-          <div class="field-hint" style="font-size:.75rem;color:var(--muted);margin-top:.35rem;line-height:1.45">回撤系数默认用今日盘中 IOPV 相对近一年最高公布净值，不是等明天的净值日。买多少主要由这个回撤决定。没有今日 IOPV 时退回已公布净值，并标明滞后。</div>
-        </div>
-      </div>
-      <div class="form-row">
-        <div>
-          <label for="baseline">每月基准（元）</label>
-          <input id="baseline" type="number" min="0" step="100" value="3000" />
-          <div class="field-hint" style="font-size:.75rem;color:var(--muted);margin-top:.35rem;line-height:1.45">这是每个自然月的基准，不是每天要买的金额。本月目标上限 = 每月基准 × 回撤系数 × 溢价系数。</div>
-        </div>
-        <div>
-          <label for="peakDd">距近一年最高净值回撤 %（按今日盘中 IOPV）</label>
-          <input id="peakDd" type="number" min="0" step="0.01" />
-          <div class="field-hint" id="peakHint" style="font-size:.75rem;color:var(--muted);margin-top:.35rem;line-height:1.45">口径：最新净值相对近一年内最高净值。这是回撤系数的输入，不是较上月同一天。</div>
-        </div>
-        <div>
-          <label for="dayChg">前一净值日涨跌 %</label>
-          <input id="dayChg" type="number" step="0.01" />
-          <div class="field-hint" id="dayHint" style="font-size:.75rem;color:var(--muted);margin-top:.35rem;line-height:1.45">相对前一个净值日。跌幅达到 3%，回撤系数当天 +0.5。</div>
-        </div>
-        <div>
-          <label for="pToday">今日溢价 P %（可改）</label>
-          <input id="pToday" type="number" step="0.01" />
-        </div>
-        <div>
-          <label for="p60">近60日溢价中位数 P60 %（可改）</label>
-          <input id="p60" type="number" step="0.01" />
-        </div>
-        <div>
-          <label for="peerMin">最便宜同类溢价 %（可改）</label>
-          <input id="peerMin" type="number" step="0.01" />
-        </div>
-        <div>
-          <label for="navHigh">净值是否近60日新高（1=是 0=否）</label>
-          <input id="navHigh" type="number" min="0" max="1" step="1" />
-        </div>
-      </div>
-      <p class="field-hint" id="momRef" style="font-size:.8rem;color:var(--muted);line-height:1.5;margin:10px 0 0">较上月净值（参照，不进系数）：—</p>
-      <div class="form-row" style="margin-top:12px">
-        <div>
-          <label for="monthInvested">本月已投（元）</label>
-          <input id="monthInvested" type="number" min="0" step="0.01" value="0" />
-          <div class="field-hint" id="monthInvestedHint" style="font-size:.75rem;color:var(--muted);margin-top:.35rem;line-height:1.45">已按本机流水合计当月纳指买入（北京时间自然月，不含卖出）。公开页面没有你的流水时这里是 0。改数字后本月改用手填。</div>
-          <button type="button" class="btn tiny" id="monthInvestedReset" style="margin-top:8px">改回流水合计</button>
-        </div>
-        <div>
-          <label for="reserve">备用金（元）</label>
-          <input id="reserve" type="number" min="0" step="100" value="0" />
-          <div class="field-hint" style="font-size:.75rem;color:var(--muted);margin-top:.35rem;line-height:1.45">深回撤时本月目标上限可能到每月基准的 13.33 倍。这是本月上限，不是每天都买这么多。先看备用金还够不够。</div>
-        </div>
-      </div>
-      <details class="advanced">
-        <summary>系数规则说明</summary>
-        <p style="font-size:.85rem;line-height:1.55;margin:.6rem 0 0">
-          <strong>回撤口径</strong>：交易时段默认用「今日盘中 IOPV ÷ 近一年最高公布净值 − 1」的下跌幅度（取正数）。高点仍是已公布净值历史里的近一年高点。已公布净值回撤另显示，方便对照滞后。没有今日 IOPV 时，输入退回已公布净值回撤。<strong>较上月净值</strong>只作参照，不进系数。<br/>
-          回撤系数，相邻锚点之间线性：&lt;5%→1.0；5%→1.67；10%→3.33；15%→6.67；20%→8.33；25%→10.0；30%→11.67；40%→13.33；&gt;40% 仍为 13.33。例如 7.5% 约为 2.5，12.5% 约为 5.0。最新净值日相对前一净值日下跌 ≥3%，在这个系数上再 +0.5。<br/>
-          溢价系数只轻度修正金额，买多少仍主要由回撤系数决定。相对自己的 P60 连续变化：比 P60 低 5 个点及以上为 1.15，持平为 1.00，高出 5 个点及以上为 0.85，中间线性。绝对软顶：P≥22% 时不超过 0.85，P≥18% 时不超过 0.90，P≥15% 时不超过 0.95。比最便宜同类贵 5 个点及以上时不超过 0.90。回撤够深时设下限，避免溢价把金额砍得太狠：距高点回撤 ≥15% 时系数不低于 0.95，≥10% 时不低于 0.90。这样长期高溢价不会被抬高的 P60 洗成中性，但也不再把系数一刀砍到 0.50。<br/>
-          <strong>本月目标上限</strong> = 每月基准 × 回撤系数 × 溢价系数，<strong>没有 2 倍上限</strong>。这是本月上限，不是每天都要买的金额。深回撤时可以到每月基准的 13.33 倍，先看备用金。<br/>
-          没投满每月基准时，今日可补 = max(0, 本月目标上限 − 本月已投)。本月已投默认是这台浏览器流水里、北京时间这个自然月的纳指买入合计，不减卖出；直接改数字就改成手填，可再点「改回流水合计」。<br/>
-          本月已投 ≥ 每月基准时，顶部写明「本月定投已完成（已投 ¥X / 基准 ¥Y）」。这时如果扣溢价后回撤不到 5%，提示「本月已完成，今天不用买」。扣溢价后回撤达到 5% 才按差额提示加仓，一笔买进同指数里溢价最低的场内 ETF，不拆成多天。扣溢价后回撤 = 今日 IOPV 回撤 − max(0, 场内买入标的溢价 − 其 P60)；没有 P60 时常态按 3%。页面同时写出原始回撤。Z 已经是 0，就提示「当前回撤档位已加仓完，回撤更深再加」。<br/>
-          纳指先看场所。场内最低溢价高于页面上的阈值（默认 10%），并且 IOPV 回撤低于另一阈值（默认 5%）时，是场外模式：只定投 021000，每天默认 160 元，本月目标是每天 × 30（默认 ¥4,800），不买场内。最低溢价不超过阈值，或回撤达到阈值，是场内模式：买溢价最低的场内 ETF，金额仍按每月基准、扣溢价后回撤和溢价系数。这三个数可以在顶部改。<br/>
-          有持仓时，止盈按单只利润分档（≥10% 卖这只的 10%，≥15% 再卖 10%，≥20% 再卖 5%，合计 25%）。分档写在 TP_TIERS。场内溢价 ≥15% 的优先；场内溢价低于 5% 或这只 IOPV 回撤 ≥10% 先不止盈。场外持仓按净值算利润，不看溢价，并提示持有满 7 天再赎回。纳指底仓把场内和场外算在一起，卖到只剩峰值的 75% 就停，本年也不超过 20%。卖出的钱留作回撤加仓备用金。<br/>
-          盘中「今日溢价 P」和「距高点回撤」在页面打开且处于 A 股交易时段时，大约每 20 秒按公开行情重取。回撤跟着今日 IOPV 变。P60 和单日净值涨跌仍用定时快照。没有今日 IOPV 时，回撤退回已公布净值。
-        </p>
-      </details>
-      <div class="calc-out" id="calcOut"></div>
-      <p class="field-hint" id="reserveOut" style="font-size:.8rem;color:var(--muted);line-height:1.5;margin:10px 0 0"></p>
-    </div>
-  </section>
-
-  <section id="spxCalcSection">
-    <h2>标普500定投计算器 <span class="hint">每月基准 2000 · 回撤阶梯和纳指不同 · P60 只用标普</span></h2>
-    <div class="card">
-      <div class="form-row" style="grid-template-columns:1fr;margin-bottom:12px">
-        <div>
-          <label for="spxSelect">选择标普500 ETF</label>
-          <select id="spxSelect"></select>
-          <div class="field-hint" style="font-size:.75rem;color:var(--muted);margin-top:.35rem;line-height:1.45">买多少默认按这只标普 ETF 的今日盘中 IOPV，相对它自己近一年最高公布净值。没有今日 IOPV 时退回已公布净值。溢价系数只用标普自己的 P 和 P60。</div>
-        </div>
-      </div>
-      <div class="form-row">
-        <div>
-          <label for="spxBaseline">每月基准（元）</label>
-          <input id="spxBaseline" type="number" min="0" step="100" value="2000" />
-          <div class="field-hint" style="font-size:.75rem;color:var(--muted);margin-top:.35rem;line-height:1.45">标普自己的每月基准，默认 2000，不和纳指的 3000 合并。</div>
-        </div>
-        <div>
-          <label for="spxPeakDd">距近一年最高净值回撤 %（按今日盘中 IOPV）</label>
-          <input id="spxPeakDd" type="number" min="0" step="0.01" />
-          <div class="field-hint" id="spxPeakHint" style="font-size:.75rem;color:var(--muted);margin-top:.35rem;line-height:1.45">口径：这只标普 ETF 的最新净值相对近一年内最高净值。</div>
-        </div>
-        <div>
-          <label for="spxDayChg">前一净值日涨跌 %</label>
-          <input id="spxDayChg" type="number" step="0.01" />
-          <div class="field-hint" id="spxDayHint" style="font-size:.75rem;color:var(--muted);margin-top:.35rem;line-height:1.45">跌幅达到 3%，回撤系数当天 +0.5。</div>
-        </div>
-        <div>
-          <label for="spxPToday">今日溢价 P %（可改）</label>
-          <input id="spxPToday" type="number" step="0.01" />
-        </div>
-        <div>
-          <label for="spxP60">近60日溢价中位数 P60 %（可改）</label>
-          <input id="spxP60" type="number" step="0.01" />
-        </div>
-        <div>
-          <label for="spxPeerMin">最便宜标普同类溢价 %（可改）</label>
-          <input id="spxPeerMin" type="number" step="0.01" />
-        </div>
-        <div>
-          <label for="spxNavHigh">净值是否近60日新高（1=是 0=否）</label>
-          <input id="spxNavHigh" type="number" min="0" max="1" step="1" />
-        </div>
-      </div>
-      <p class="field-hint" id="spxMom" style="font-size:.8rem;color:var(--muted);line-height:1.5;margin:10px 0 0">较上月净值（参照，不进系数）：—</p>
-      <div class="form-row" style="margin-top:12px">
-        <div>
-          <label for="spxMonthInvested">本月已投（元）</label>
-          <input id="spxMonthInvested" type="number" min="0" step="0.01" value="0" />
-          <div class="field-hint" id="spxMonthInvestedHint" style="font-size:.75rem;color:var(--muted);margin-top:.35rem;line-height:1.45">已按本机流水合计当月标普买入（北京时间自然月，不含卖出）。公开页面没有你的流水时这里是 0。改数字后本月改用手填。</div>
-          <button type="button" class="btn tiny" id="spxMonthInvestedReset" style="margin-top:8px">改回流水合计</button>
-        </div>
-      </div>
-      <details class="advanced">
-        <summary>标普系数规则</summary>
-        <p style="font-size:.85rem;line-height:1.55;margin:.6rem 0 0">
-          每月基准默认 <strong>2000</strong> 元。<strong>本月目标上限</strong> = 每月基准 × 回撤系数 × 溢价系数。这是本月上限，不是每天一笔。回撤默认用今日盘中 IOPV 相对近一年最高公布净值；没有今日 IOPV 时用已公布净值，并标明滞后。回撤不足 5% 时系数为 1，上限就是每月基准再乘溢价系数。从 5% 起，系数为回撤百分点 ÷ 2，上限大约是回撤百分点 × 1000：5%→2.5（上限 ¥5000），10%→5（¥10000），15%→7.5（¥15000），20%→10（¥20000），25%→12.5（¥25000），30%→15（¥30000），35%→17.5（¥35000），40%→20（¥40000）。中间线性，例如 7.5%→3.75（上限 ¥7500）。比 40% 更深仍按同一斜率，<strong>不封顶</strong>。前一净值日跌幅 ≥3%，系数再 +0.5。<br/>
-          溢价系数和纳指同一套轻度修正（大约 0.85–1.15，高溢价软顶，深回撤有下限），但 P、P60、最便宜同类都只取标普500短名单。513500 明显贵时，买入代码改到标普短名单里更合适的一只。<br/>
-          没投满每月基准时，今日可补 = max(0, 本月目标上限 − 本月已投标普)。已投 ≥ 每月基准后：回撤不到 5% 提示今天不用买；回撤 ≥5% 才建议加仓差额；差额为 0 则这一档已经加完，等回撤更深。和纳指分开算，卖出不从已投里扣。<br/>
-          卖出只在这只净值处于近 60 日新高且溢价明显贵时触发，金额只按标普持仓：大约标普市值的 6%，且不超过标普本年剩余的 20% 额度，卖后仍留下至少 75% 的标普峰值市值。仅供个人记录辅助，非投资建议。
-        </p>
-      </details>
-      <div class="calc-out" id="spxCalcOut"></div>
-    </div>
   </section>
 
   <section id="ledgerSection">
@@ -764,6 +655,182 @@
     </div>
   </section>
 
+
+  <section id="calcSection">
+    <h2>定投计算器 <span class="hint">已用最新数据预填；一般只需改「每月基准」</span></h2>
+    <div class="card">
+      <div class="form-row" style="grid-template-columns:1fr;margin-bottom:12px">
+        <div>
+          <label for="etfSelect">选择 ETF</label>
+          <select id="etfSelect"></select>
+          <div class="field-hint" style="font-size:.75rem;color:var(--muted);margin-top:.35rem;line-height:1.45">回撤系数默认用今日盘中 IOPV 相对近一年最高公布净值，不是等明天的净值日。买多少主要由这个回撤决定。没有今日 IOPV 时退回已公布净值，并标明滞后。</div>
+        </div>
+      </div>
+      <div class="form-row">
+        <div>
+          <label for="baseline">每月基准（元）</label>
+          <input id="baseline" type="number" min="0" step="100" value="3000" />
+          <div class="field-hint" style="font-size:.75rem;color:var(--muted);margin-top:.35rem;line-height:1.45">这是每个自然月的基准，不是每天要买的金额。本月目标上限 = 每月基准 × 回撤系数 × 溢价系数。</div>
+        </div>
+        <div>
+          <label for="peakDd">距近一年最高净值回撤 %（按今日盘中 IOPV）</label>
+          <input id="peakDd" type="number" min="0" step="0.01" />
+          <div class="field-hint" id="peakHint" style="font-size:.75rem;color:var(--muted);margin-top:.35rem;line-height:1.45">口径：最新净值相对近一年内最高净值。这是回撤系数的输入，不是较上月同一天。</div>
+        </div>
+        <div>
+          <label for="dayChg">前一净值日涨跌 %</label>
+          <input id="dayChg" type="number" step="0.01" />
+          <div class="field-hint" id="dayHint" style="font-size:.75rem;color:var(--muted);margin-top:.35rem;line-height:1.45">相对前一个净值日。跌幅达到 3%，回撤系数当天 +0.5。</div>
+        </div>
+        <div>
+          <label for="pToday">今日溢价 P %（可改）</label>
+          <input id="pToday" type="number" step="0.01" />
+        </div>
+        <div>
+          <label for="p60">近60日溢价中位数 P60 %（可改）</label>
+          <input id="p60" type="number" step="0.01" />
+        </div>
+        <div>
+          <label for="peerMin">最便宜同类溢价 %（可改）</label>
+          <input id="peerMin" type="number" step="0.01" />
+        </div>
+        <div>
+          <label for="navHigh">净值是否近60日新高（1=是 0=否）</label>
+          <input id="navHigh" type="number" min="0" max="1" step="1" />
+        </div>
+      </div>
+      <p class="field-hint" id="momRef" style="font-size:.8rem;color:var(--muted);line-height:1.5;margin:10px 0 0">较上月净值（参照，不进系数）：—</p>
+      <div class="form-row" style="margin-top:12px">
+        <div>
+          <label for="monthInvested">本月已投（元）</label>
+          <input id="monthInvested" type="number" min="0" step="0.01" value="0" />
+          <div class="field-hint" id="monthInvestedHint" style="font-size:.75rem;color:var(--muted);margin-top:.35rem;line-height:1.45">已按本机流水合计当月纳指买入（北京时间自然月，不含卖出）。公开页面没有你的流水时这里是 0。改数字后本月改用手填。</div>
+          <button type="button" class="btn tiny" id="monthInvestedReset" style="margin-top:8px">改回流水合计</button>
+        </div>
+        <div>
+          <label for="reserve">备用金（元）</label>
+          <input id="reserve" type="number" min="0" step="100" value="0" />
+          <div class="field-hint" style="font-size:.75rem;color:var(--muted);margin-top:.35rem;line-height:1.45">深回撤时本月目标上限可能到每月基准的 13.33 倍。这是本月上限，不是每天都买这么多。先看备用金还够不够。</div>
+        </div>
+      </div>
+      <details class="advanced">
+        <summary>系数规则说明</summary>
+        <p style="font-size:.85rem;line-height:1.55;margin:.6rem 0 0">
+          <strong>回撤口径</strong>：交易时段默认用「今日盘中 IOPV ÷ 近一年最高公布净值 − 1」的下跌幅度（取正数）。高点仍是已公布净值历史里的近一年高点。已公布净值回撤另显示，方便对照滞后。没有今日 IOPV 时，输入退回已公布净值回撤。<strong>较上月净值</strong>只作参照，不进系数。<br/>
+          回撤系数，相邻锚点之间线性：&lt;5%→1.0；5%→1.67；10%→3.33；15%→6.67；20%→8.33；25%→10.0；30%→11.67；40%→13.33；&gt;40% 仍为 13.33。例如 7.5% 约为 2.5，12.5% 约为 5.0。最新净值日相对前一净值日下跌 ≥3%，在这个系数上再 +0.5。<br/>
+          溢价系数只轻度修正金额，买多少仍主要由回撤系数决定。相对自己的 P60 连续变化：比 P60 低 5 个点及以上为 1.15，持平为 1.00，高出 5 个点及以上为 0.85，中间线性。绝对软顶：P≥22% 时不超过 0.85，P≥18% 时不超过 0.90，P≥15% 时不超过 0.95。比最便宜同类贵 5 个点及以上时不超过 0.90。回撤够深时设下限，避免溢价把金额砍得太狠：距高点回撤 ≥15% 时系数不低于 0.95，≥10% 时不低于 0.90。这样长期高溢价不会被抬高的 P60 洗成中性，但也不再把系数一刀砍到 0.50。<br/>
+          <strong>本月目标上限</strong> = 每月基准 × 回撤系数 × 溢价系数，<strong>没有 2 倍上限</strong>。这是本月上限，不是每天都要买的金额。深回撤时可以到每月基准的 13.33 倍，先看备用金。<br/>
+          没投满每月基准时，今日可补 = max(0, 本月目标上限 − 本月已投)。本月已投默认是这台浏览器流水里、北京时间这个自然月的纳指买入合计，不减卖出；直接改数字就改成手填，可再点「改回流水合计」。<br/>
+          本月已投 ≥ 每月基准时，顶部写明「本月定投已完成（已投 ¥X / 基准 ¥Y）」。这时如果扣溢价后回撤不到 5%，提示「本月已完成，今天不用买」。扣溢价后回撤达到 5% 才按差额提示加仓，一笔买进同指数里溢价最低的场内 ETF，不拆成多天。扣溢价后回撤 = 今日 IOPV 回撤 − max(0, 场内买入标的溢价 − 其 P60)；没有 P60 时常态按 3%。页面同时写出原始回撤。Z 已经是 0，就提示「当前回撤档位已加仓完，回撤更深再加」。<br/>
+          纳指先看场所。场内最低溢价高于页面上的阈值（默认 10%），并且 IOPV 回撤低于另一阈值（默认 5%）时，是场外模式：只定投 021000，每天默认 160 元，本月目标是每天 × 30（默认 ¥4,800），不买场内。最低溢价不超过阈值，或回撤达到阈值，是场内模式：买溢价最低的场内 ETF，金额仍按每月基准、扣溢价后回撤和溢价系数。这三个数可以在顶部改。<br/>
+          有持仓时，止盈按单只利润分档（≥10% 卖这只的 10%，≥15% 再卖 10%，≥20% 再卖 5%，合计 25%）。分档写在 TP_TIERS。场内溢价 ≥15% 的优先；场内溢价低于 5% 或这只 IOPV 回撤 ≥10% 先不止盈。场外持仓按净值算利润，不看溢价，并提示持有满 7 天再赎回。纳指底仓把场内和场外算在一起，卖到只剩峰值的 75% 就停，本年也不超过 20%。卖出的钱留作回撤加仓备用金。<br/>
+          盘中「今日溢价 P」和「距高点回撤」在页面打开且处于 A 股交易时段时，大约每 20 秒按公开行情重取。回撤跟着今日 IOPV 变。P60 和单日净值涨跌仍用定时快照。没有今日 IOPV 时，回撤退回已公布净值。
+        </p>
+      </details>
+      <div class="calc-out" id="calcOut"></div>
+      <p class="field-hint" id="reserveOut" style="font-size:.8rem;color:var(--muted);line-height:1.5;margin:10px 0 0"></p>
+    </div>
+  </section>
+
+  <section id="spxCalcSection">
+    <h2>标普500定投计算器 <span class="hint">每月基准 2000 · 回撤阶梯和纳指不同 · P60 只用标普</span></h2>
+    <div class="card">
+      <div class="form-row" style="grid-template-columns:1fr;margin-bottom:12px">
+        <div>
+          <label for="spxSelect">选择标普500 ETF</label>
+          <select id="spxSelect"></select>
+          <div class="field-hint" style="font-size:.75rem;color:var(--muted);margin-top:.35rem;line-height:1.45">买多少默认按这只标普 ETF 的今日盘中 IOPV，相对它自己近一年最高公布净值。没有今日 IOPV 时退回已公布净值。溢价系数只用标普自己的 P 和 P60。</div>
+        </div>
+      </div>
+      <div class="form-row">
+        <div>
+          <label for="spxBaseline">每月基准（元）</label>
+          <input id="spxBaseline" type="number" min="0" step="100" value="2000" />
+          <div class="field-hint" style="font-size:.75rem;color:var(--muted);margin-top:.35rem;line-height:1.45">标普自己的每月基准，默认 2000，不和纳指的 3000 合并。</div>
+        </div>
+        <div>
+          <label for="spxPeakDd">距近一年最高净值回撤 %（按今日盘中 IOPV）</label>
+          <input id="spxPeakDd" type="number" min="0" step="0.01" />
+          <div class="field-hint" id="spxPeakHint" style="font-size:.75rem;color:var(--muted);margin-top:.35rem;line-height:1.45">口径：这只标普 ETF 的最新净值相对近一年内最高净值。</div>
+        </div>
+        <div>
+          <label for="spxDayChg">前一净值日涨跌 %</label>
+          <input id="spxDayChg" type="number" step="0.01" />
+          <div class="field-hint" id="spxDayHint" style="font-size:.75rem;color:var(--muted);margin-top:.35rem;line-height:1.45">跌幅达到 3%，回撤系数当天 +0.5。</div>
+        </div>
+        <div>
+          <label for="spxPToday">今日溢价 P %（可改）</label>
+          <input id="spxPToday" type="number" step="0.01" />
+        </div>
+        <div>
+          <label for="spxP60">近60日溢价中位数 P60 %（可改）</label>
+          <input id="spxP60" type="number" step="0.01" />
+        </div>
+        <div>
+          <label for="spxPeerMin">最便宜标普同类溢价 %（可改）</label>
+          <input id="spxPeerMin" type="number" step="0.01" />
+        </div>
+        <div>
+          <label for="spxNavHigh">净值是否近60日新高（1=是 0=否）</label>
+          <input id="spxNavHigh" type="number" min="0" max="1" step="1" />
+        </div>
+      </div>
+      <p class="field-hint" id="spxMom" style="font-size:.8rem;color:var(--muted);line-height:1.5;margin:10px 0 0">较上月净值（参照，不进系数）：—</p>
+      <div class="form-row" style="margin-top:12px">
+        <div>
+          <label for="spxMonthInvested">本月已投（元）</label>
+          <input id="spxMonthInvested" type="number" min="0" step="0.01" value="0" />
+          <div class="field-hint" id="spxMonthInvestedHint" style="font-size:.75rem;color:var(--muted);margin-top:.35rem;line-height:1.45">已按本机流水合计当月标普买入（北京时间自然月，不含卖出）。公开页面没有你的流水时这里是 0。改数字后本月改用手填。</div>
+          <button type="button" class="btn tiny" id="spxMonthInvestedReset" style="margin-top:8px">改回流水合计</button>
+        </div>
+      </div>
+      <details class="advanced">
+        <summary>标普系数规则</summary>
+        <p style="font-size:.85rem;line-height:1.55;margin:.6rem 0 0">
+          每月基准默认 <strong>2000</strong> 元。<strong>本月目标上限</strong> = 每月基准 × 回撤系数 × 溢价系数。这是本月上限，不是每天一笔。回撤默认用今日盘中 IOPV 相对近一年最高公布净值；没有今日 IOPV 时用已公布净值，并标明滞后。回撤不足 5% 时系数为 1，上限就是每月基准再乘溢价系数。从 5% 起，系数为回撤百分点 ÷ 2，上限大约是回撤百分点 × 1000：5%→2.5（上限 ¥5000），10%→5（¥10000），15%→7.5（¥15000），20%→10（¥20000），25%→12.5（¥25000），30%→15（¥30000），35%→17.5（¥35000），40%→20（¥40000）。中间线性，例如 7.5%→3.75（上限 ¥7500）。比 40% 更深仍按同一斜率，<strong>不封顶</strong>。前一净值日跌幅 ≥3%，系数再 +0.5。<br/>
+          溢价系数和纳指同一套轻度修正（大约 0.85–1.15，高溢价软顶，深回撤有下限），但 P、P60、最便宜同类都只取标普500短名单。513500 明显贵时，买入代码改到标普短名单里更合适的一只。<br/>
+          没投满每月基准时，今日可补 = max(0, 本月目标上限 − 本月已投标普)。已投 ≥ 每月基准后：回撤不到 5% 提示今天不用买；回撤 ≥5% 才建议加仓差额；差额为 0 则这一档已经加完，等回撤更深。和纳指分开算，卖出不从已投里扣。<br/>
+          卖出只在这只净值处于近 60 日新高且溢价明显贵时触发，金额只按标普持仓：大约标普市值的 6%，且不超过标普本年剩余的 20% 额度，卖后仍留下至少 75% 的标普峰值市值。仅供个人记录辅助，非投资建议。
+        </p>
+      </details>
+      <div class="calc-out" id="spxCalcOut"></div>
+    </div>
+  </section>
+
+  <section id="picksSection">
+    <h2>今日同类怎么选 <span class="hint">纳指100和标普500的全部同类 · 不改顶部的本月金额</span></h2>
+    <div class="card">
+      <p class="pick-intro">纳指顶部按 159501 的每月基准、回撤和溢价算出本月目标上限，再扣掉本月已投。标普金额在标普卡片，按 513500 和标普自己的每月基准，两笔互不替换。这里回答今天买哪只，并把全部同类放在同一张表里。综合分越低越优先：溢价权重最大，再看跟踪误差、费率、今年净值收益是否落后，以及规模和成交。净值日相差一个公布日不影响今天买哪只。落后超过一个公布日的会标明，不拿它的回撤和已更新的基金比。</p>
+      <div id="picksRoot">短名单加载中…</div>
+      <h3 class="ledger-h">纳指100</h3>
+      <p class="scroll-hint">表格可左右滑动</p>
+      <div class="table-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>名次</th><th>代码</th><th>名称</th><th>综合分<span class="sub">越低越好</span></th><th>参考溢价</th><th>今年收益率（净值）<span class="sub" id="nasdaqYtdHead"></span></th><th>跟踪误差<span class="sub">越低越好</span></th><th>管理+托管费</th><th>基金规模</th><th>净值溢价</th><th>收盘/现价</th><th>IOPV</th><th>说明</th>
+            </tr>
+          </thead>
+          <tbody id="peerBody"></tbody>
+        </table>
+      </div>
+      <h3 class="ledger-h">标普500</h3>
+      <p class="scroll-hint">表格可左右滑动</p>
+      <div class="table-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>名次</th><th>代码</th><th>名称</th><th>综合分<span class="sub">越低越好</span></th><th>参考溢价</th><th>今年收益率（净值）<span class="sub" id="spxYtdHead"></span></th><th>跟踪误差<span class="sub">越低越好</span></th><th>管理+托管费</th><th>基金规模</th><th>净值溢价</th><th>收盘/现价</th><th>IOPV</th><th>说明</th>
+            </tr>
+          </thead>
+          <tbody id="peerBodySpx"></tbody>
+        </table>
+      </div>
+      <p class="pick-src" id="peerSizeNote"></p>
+    </div>
+  </section>
+
+
   <section>
     <h2>历史溢价 <span class="hint">净值折溢价 = 收盘价 ÷ 单位净值 − 1 · 含 P60 / 10% / 18% 参考线</span></h2>
     <div class="card">
@@ -780,42 +847,6 @@
     </div>
   </section>
 
-  <section id="peerCompare">
-    <h2>同类对比 <span class="hint">纳指和标普分开，各自按参考溢价从低到高 · 今天怎么选看上面的短名单</span></h2>
-    <div class="card">
-      <h3 class="ledger-h">纳指100</h3>
-      <p class="scroll-hint">表格可左右滑动</p>
-      <div class="table-scroll">
-        <table>
-          <thead>
-            <tr>
-              <th>代码</th><th>名称</th><th>参考溢价</th><th>净值溢价</th><th>收盘/现价</th><th>IOPV</th><th>基金规模</th><th>跟踪误差<span class="sub">越低越好</span></th><th>今年收益率（净值）<span class="sub" id="nasdaqYtdHead"></span></th><th>备注</th>
-            </tr>
-          </thead>
-          <tbody id="peerBody"></tbody>
-        </table>
-      </div>
-      <h3 class="ledger-h">标普500</h3>
-      <p class="scroll-hint">表格可左右滑动</p>
-      <div class="table-scroll">
-        <table>
-          <thead>
-            <tr>
-              <th>代码</th><th>名称</th><th>参考溢价</th><th>净值溢价</th><th>收盘/现价</th><th>IOPV</th><th>基金规模</th><th>跟踪误差<span class="sub">越低越好</span></th><th>今年收益率（净值）<span class="sub" id="spxYtdHead"></span></th><th>备注</th>
-            </tr>
-          </thead>
-          <tbody id="peerBodySpx"></tbody>
-        </table>
-      </div>
-      <p class="pick-src" id="peerSizeNote"></p>
-    </div>
-  </section>
-
-  <section>
-    <h2>159501 今日概览</h2>
-    <div class="card" id="overviewCard"></div>
-  </section>
-
   <section>
     <h2>每日 / 定投日操作清单</h2>
     <div class="card">
@@ -826,44 +857,6 @@
         <li><span class="n">4</span><div>有持仓才看止盈。场内按现价（含溢价），场外按净值。利润 ≥10% 卖这只的 10%，≥15% 再卖 10%，≥20% 再卖 5%，合计 25%。场内溢价 ≥15% 的先卖；溢价低于 5% 或 IOPV 回撤 ≥10% 先不止盈。场外不看溢价，但提示持有满 7 天再赎回。这一边卖到只剩峰值的 75% 就停。卖出的钱留作回撤加仓备用金。</div></li>
         <li><span class="n">5</span><div>数据在交易日大约每小时刷新一次（北京时间 <strong>10:20–14:20</strong>），不是实时行情；下单仍以券商 IOPV 为准。也可在仓库 Actions 里手动运行「刷新并部署日报」。不需要 Grok Bot。</div></li>
       </ul>
-    </div>
-  </section>
-
-  <section id="usSection">
-    <h2>美股回撤与恐慌指数 <span class="hint">QQQ 对应纳指 · SPY 对应标普 · VIX 用右轴</span></h2>
-    <div class="card">
-      <div class="ledger-actions" id="usRanges">
-        <button type="button" class="btn primary" data-us-range="31">近一个月</button>
-        <button type="button" class="btn" data-us-range="183">近半年</button>
-        <button type="button" class="btn" data-us-range="365">近一年</button>
-        <button type="button" class="btn" data-us-range="1095">近3年</button>
-        <button type="button" class="btn" data-us-range="1825">近5年</button>
-      </div>
-      <div class="grid" id="usChips" style="margin-top:12px"></div>
-      <div class="chart-box" style="margin-top:12px">
-        <canvas id="usChart"></canvas>
-        <svg class="fallback-chart" id="usSvg" style="display:none" viewBox="0 0 1000 320" preserveAspectRatio="none"></svg>
-      </div>
-      <p class="pick-src" id="usCaption"></p>
-    </div>
-  </section>
-
-  <section id="pxSection">
-    <h2>美股收盘价 <span class="hint">QQQ 左轴 · SPY 右轴 · 和上面同一份日线</span></h2>
-    <div class="card">
-      <div class="ledger-actions" id="pxRanges">
-        <button type="button" class="btn primary" data-px-range="31">近一个月</button>
-        <button type="button" class="btn" data-px-range="183">近半年</button>
-        <button type="button" class="btn" data-px-range="365">近1年</button>
-        <button type="button" class="btn" data-px-range="1825">近5年</button>
-        <button type="button" class="btn" data-px-range="3650">近10年</button>
-      </div>
-      <div class="grid" id="pxChips" style="margin-top:12px"></div>
-      <div class="chart-box" style="margin-top:12px">
-        <canvas id="pxChart"></canvas>
-        <svg class="fallback-chart" id="pxSvg" style="display:none" viewBox="0 0 1000 320" preserveAspectRatio="none"></svg>
-      </div>
-      <p class="pick-src" id="pxCaption"></p>
     </div>
   </section>
 
@@ -2386,17 +2379,6 @@
   }
   document.getElementById('asofMeta').textContent = meta;
 
-  document.getElementById('overviewCard').innerHTML = `
-    <div class="grid" style="margin-top:0">
-      <div class="kpi"><div class="k">${P.quote_price ? '盘中价' : '最新收盘价'}</div><div class="v">${fmt(P.quote_price || P.close, 3)}</div><div class="s">${P.quote_price ? (P.quote_date || '') + ' · 昨收 ' + fmt(P.close, 3) + '（' + P.close_date + '）' : P.close_date}</div></div>
-      <div class="kpi"><div class="k">单位净值</div><div class="v">${fmt(P.nav, 4)}</div><div class="s">估值日 ${P.nav_date}</div></div>
-      <div class="kpi"><div class="k">净值折溢价</div><div class="v">${fmt(P.premium_nav_pct)}%</div><div class="s">收盘价÷净值−1</div></div>
-      <div class="kpi"><div class="k">收盘参考溢价(IOPV)</div><div class="v">${fmt(P.premium_ref_iopv_pct)}%</div><div class="s">${P.premium_ref_date}</div></div>
-      <div class="kpi"><div class="k">P60</div><div class="v">${fmt(P.p60)}%</div><div class="s">近60日净值溢价中位数</div></div>
-      <div class="kpi"><div class="k">60日净值新高</div><div class="v">${P.is_nav_60_high ? '是' : '否'}</div><div class="s">60日最高净值 ${fmt(P.nav_60_high, 4)}</div></div>
-    </div>
-  `;
-
   function fmtAum(p) {
     const n = Number(p && p.aum_cny);
     if (!Number.isFinite(n)) return '—';
@@ -2426,39 +2408,64 @@
     const dates = (rows || []).map(p => p.ytd_nav_asof).filter(Boolean).sort();
     el.textContent = dates.length ? '截至 ' + dates[dates.length - 1] : '';
   }
-  function paintPeerTable(tbody, rows) {
+  function pickMeta(code) {
+    const groups = (D.picks && D.picks.groups) || [];
+    for (let i = 0; i < groups.length; i++) {
+      const it = (groups[i].items || []).find(x => x && x.code === code);
+      if (it) return it;
+    }
+    return {};
+  }
+  function paintPeerTable(tbody, rows, family) {
     if (!tbody) return;
-    const list = (rows || []).slice().sort((a, b) => {
-      const av = a.ref_premium_pct == null ? 999 : a.ref_premium_pct;
-      const bv = b.ref_premium_pct == null ? 999 : b.ref_premium_pct;
-      return av - bv;
+    const list = (rows || []).slice();
+    const pool = list.filter(p => p && isOnExchange(p.code) && p.ref_premium_pct != null && !Number.isNaN(Number(p.ref_premium_pct)));
+    const rankOf = {};
+    const scoreOf = {};
+    pool.slice().sort((a, b) => compositeScore(a, pool) - compositeScore(b, pool)
+      || Number(a.ref_premium_pct) - Number(b.ref_premium_pct)
+      || (Number(b.aum_cny) || 0) - (Number(a.aum_cny) || 0)
+    ).forEach((p, i) => {
+      rankOf[p.code] = i + 1;
+      scoreOf[p.code] = compositeScore(p, pool);
     });
-    const cheap = list.find(p => !p.is_primary && p.ref_premium_pct != null);
+    const best = bestPeer(family);
+    list.sort((a, b) => (rankOf[a.code] || 999) - (rankOf[b.code] || 999) || String(a.code).localeCompare(String(b.code)));
     tbody.innerHTML = '';
     list.forEach(p => {
+      const extra = pickMeta(p.code);
+      const merged = Object.assign({}, extra, p);
       const tr = document.createElement('tr');
-      if (p.is_primary) tr.className = 'primary';
-      else if (cheap && p.code === cheap.code) tr.className = 'cheap';
-      const note = p.note || (p.is_primary ? '主标的' : (cheap && p.code === cheap.code ? '同类最低溢价' : ''));
+      const isToday = !!(best && p.code === best.code);
+      if (isToday) tr.className = 'today-row';
+      else if (p.is_primary) tr.className = 'primary';
+      const noteBits = [];
+      if (isToday) noteBits.push(best.reason || extra.why || '今日优先');
+      else if (extra.why) noteBits.push(extra.why);
+      else if (p.is_primary) noteBits.push('主标的');
+      if (extra.nav_stale) noteBits.push('净值未齐');
       tr.dataset.code = p.code;
       tr.innerHTML = `
+        <td class="num">${rankOf[p.code] || '—'}</td>
         <td><strong>${p.code}</strong></td>
-        <td>${p.name || ''}</td>
+        <td>${p.name || ''}${isToday ? '<span class="tag today">今日优先</span>' : ''}${extra.nav_stale ? '<span class="tag wait">净值未齐</span>' : ''}</td>
+        <td class="num js-score">${scoreOf[p.code] == null ? '—' : fmt(scoreOf[p.code])}</td>
         <td class="js-prem">${p.ref_premium_pct == null ? '—' : fmt(p.ref_premium_pct) + '%'}</td>
+        <td class="js-ytd">${ytdCell(p)}</td>
+        <td class="js-te">${teCell(merged)}</td>
+        <td>${feeCell(merged)}</td>
+        <td class="js-aum">${fmtAum(p)}</td>
         <td>${p.nav_premium_pct == null ? '—' : fmt(p.nav_premium_pct) + '%'}</td>
         <td class="js-px">${p.live_price != null ? fmt(p.live_price, 3) : (p.close != null ? fmt(p.close, 3) : '—')}</td>
         <td class="js-iopv">${p.iopv != null ? fmt(p.iopv, 4) : '—'}</td>
-        <td class="js-aum">${fmtAum(p)}</td>
-        <td class="js-te">${p.tracking_error_pct == null ? '—' : fmt(p.tracking_error_pct) + '%'}${p.tracking_asof ? `<span class="sub">截至 ${p.tracking_asof}</span>` : ''}</td>
-        <td class="js-ytd">${ytdCell(p)}</td>
-        <td>${note}</td>`;
+        <td class="why"><div class="cell-wrap">${noteBits.join(' · ')}</div></td>`;
       tbody.appendChild(tr);
     });
     if (tbody.id === 'peerBody') paintYtdHead('nasdaqYtdHead', list);
     if (tbody.id === 'peerBodySpx') paintYtdHead('spxYtdHead', list);
   }
-  paintPeerTable(document.getElementById('peerBody'), D.peers || []);
-  paintPeerTable(document.getElementById('peerBodySpx'), D.peers_spx || []);
+  paintPeerTable(document.getElementById('peerBody'), D.peers || [], 'nasdaq');
+  paintPeerTable(document.getElementById('peerBodySpx'), D.peers_spx || [], 'sp500');
   const sizeDates = []
     .concat(D.peers || [], D.peers_spx || [])
     .map(p => p.aum_as_of)
@@ -2466,7 +2473,7 @@
   const sizeNote = document.getElementById('peerSizeNote');
   if (sizeNote) {
     const asof = sizeDates.length ? sizeDates.slice().sort().pop() : '—';
-    sizeNote.textContent = `基金规模是公开资料里的期末净资产，截至 ${asof}，不是今日市值。今年收益率（净值）= 最新公布净值 ÷ 上年最后一个净值日的净值 − 1，不用行情价。跟踪误差是天天基金特色数据里的年化跟踪误差，越低越好；没有公开数字就写 —，不估算。没有取到的格子留空。仅供个人记录辅助，非投资建议。`;
+    sizeNote.textContent = `名次和综合分用页面上同一套公式，分越低越优先，只给有参考溢价的场内基金排名。基金规模是公开资料里的期末净资产，截至 ${asof}，不是今日市值。今年收益率（净值）= 最新公布净值 ÷ 上年最后一个净值日的净值 − 1，不用行情价。跟踪误差是天天基金特色数据里的年化跟踪误差，越低越好；没有公开数字就写 —，不估算。仅供个人记录辅助，非投资建议。`;
   }
 
   function shanghaiMonth() {
@@ -2670,38 +2677,14 @@
       ? ` 现价 / IOPV / 参考溢价已按公开行情更新（${liveMeta.stampText}）。`
       : '';
     root.innerHTML = groups.map(group => {
-      const rows = (group.items || []).map(it => {
-        const wait = it.role === 'conditional' && !it.is_today;
-        const stale = it.nav_stale ? '<span class="tag wait">净值未齐</span>' : '';
-        const tag = it.is_today
-          ? '<span class="tag today">今日优先</span>'
-          : (wait ? '<span class="tag wait">等溢价回落</span>' : '');
-        return `<tr class="${it.is_today ? 'today-row' : ''}">
-          <td><strong>${it.code}</strong></td>
-          <td>${it.name || ''}${tag}${stale}</td>
-          <td>${feeCell(it)}</td>
-          <td>${it.ref_premium_pct == null ? '—' : fmt(it.ref_premium_pct) + '%'}</td>
-          <td>${teCell(it)}</td>
-          <td class="why"><div class="cell-wrap">${it.why || ''}</div></td>
-        </tr>`;
-      }).join('');
       const median = group.median_premium_pct == null ? '' : ` · 同类溢价中枢约 ${fmt(group.median_premium_pct)}%`;
       return `<div class="pick-block">
         <div class="pick-head">
           <h3>${group.title}</h3>
           <div class="pick-today">${group.today_line || ''}${median}</div>
         </div>
-        <p class="scroll-hint">表格可左右滑动</p>
-        <div class="table-scroll">
-          <table>
-            <thead><tr>
-              <th>代码</th><th>名称</th><th>管理+托管费</th><th>参考溢价</th><th>年化跟踪误差</th><th>为何入选 / 何时优先</th>
-            </tr></thead>
-            <tbody>${rows}</tbody>
-          </table>
-        </div>
       </div>`;
-    }).join('') + `<p class="pick-src">费率与年化跟踪误差仍是定时快照（规模截至 ${picks.aum_as_of || '—'}，跟踪误差截至 ${picks.tracking_asof || '—'}）。${picks.rule || ''}${liveNote}</p>`;
+    }).join('') + `<p class="pick-src">费率与年化跟踪误差仍是定时快照（规模截至 ${picks.aum_as_of || '—'}，跟踪误差截至 ${picks.tracking_asof || '—'}）。${picks.rule || ''}${liveNote}下面两张表是全部同类，名次 1 就是这一边的今日优先。</p>`;
   }
 
   const LIVE_POLL_MS = 20000;
@@ -2916,8 +2899,8 @@
       if (!q) return p;
       return Object.assign({}, p, { ref_premium_pct: q.premium, live_price: q.price, iopv: q.iopv });
     });
-    paintPeerTable(document.getElementById('peerBody'), withLive(D.peers));
-    paintPeerTable(document.getElementById('peerBodySpx'), withLive(D.peers_spx));
+    paintPeerTable(document.getElementById('peerBody'), withLive(D.peers), 'nasdaq');
+    paintPeerTable(document.getElementById('peerBodySpx'), withLive(D.peers_spx), 'sp500');
     recompute();
     paint159501HeroFromLive();
     if (document.getElementById('spxSelect')) {
