@@ -279,33 +279,30 @@
   .sell-fold .fold-title { display: flex; flex-direction: column; gap: 2px; min-width: 0; font-weight: 700; line-height: 1.35; }
   .sell-fold .fold-title .hint { font-weight: 500; color: var(--muted); font-size: .78rem; }
   .sell-fold .fold-body { padding: 2px 6px 8px; }
-  .kpi.dd-feature {
-    grid-column: 1 / -1;
-    padding: 16px 16px 14px;
-    background: linear-gradient(160deg, rgba(255,176,32,.2), rgba(16,24,42,.78));
-    border-color: rgba(255,196,92,.7);
+  .kpi.dd-accent {
+    background: linear-gradient(90deg, rgba(255,196,92,.16), rgba(255,255,255,.03) 58%);
+    border-color: rgba(255,196,92,.55);
+    box-shadow: inset 3px 0 0 #e8b84a;
   }
-  .kpi.dd-feature .dd-num {
-    font-size: clamp(2.6rem, 10vw, 3.8rem); font-weight: 800; line-height: .95;
-    letter-spacing: -.03em; font-variant-numeric: tabular-nums; color: #ffe3a3;
+  .kpi.dd-accent .v { font-weight: 800; color: #ffe3a3; }
+  .kpi.dd-accent.dd-d1 {
+    background: linear-gradient(90deg, rgba(255,176,32,.2), rgba(255,255,255,.03) 58%);
+    border-color: rgba(255,176,32,.72);
+    box-shadow: inset 3px 0 0 #ffc14d;
   }
-  .kpi.dd-feature .k { margin: 8px 0 0; font-size: .78rem; color: #f6ead2; font-weight: 600; }
-  .kpi.dd-feature .s { color: #d5deee; }
-  .kpi.dd-feature.dd-d1 {
-    background: linear-gradient(160deg, rgba(255,160,32,.32), rgba(24,18,12,.82));
-    border-color: rgba(255,176,32,.9);
+  .kpi.dd-accent.dd-d1 .v { color: #ffc14d; }
+  .kpi.dd-accent.dd-d2 {
+    background: linear-gradient(90deg, rgba(255,120,80,.22), rgba(255,255,255,.03) 58%);
+    border-color: rgba(255,130,90,.75);
+    box-shadow: inset 3px 0 0 #ff8a5c;
   }
-  .kpi.dd-feature.dd-d1 .dd-num { color: #ffc14d; }
-  .kpi.dd-feature.dd-d2 {
-    background: linear-gradient(160deg, rgba(255,107,64,.36), rgba(32,14,12,.86));
-    border-color: rgba(255,130,90,.95);
+  .kpi.dd-accent.dd-d2 .v { color: #ffc2b0; }
+  .kpi.dd-accent.dd-d3 {
+    background: linear-gradient(90deg, rgba(255,107,122,.24), rgba(255,255,255,.03) 58%);
+    border-color: rgba(255,107,122,.8);
+    box-shadow: inset 3px 0 0 #ff6b7a;
   }
-  .kpi.dd-feature.dd-d2 .dd-num { color: #ffc2b0; }
-  .kpi.dd-feature.dd-d3 {
-    background: linear-gradient(160deg, rgba(255,80,96,.42), rgba(36,10,14,.9));
-    border-color: rgba(255,107,122,.95);
-  }
-  .kpi.dd-feature.dd-d3 .dd-num { color: #ffd5d9; }
+  .kpi.dd-accent.dd-d3 .v { color: #ffd0d6; }
   .sell-family .sell-amt { font-size: 1.45rem; }
   .sell-family .grid { grid-template-columns: 1fr 1fr; }
   .btn { background: var(--bg2); color: var(--text); border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px; cursor: pointer; font: inherit; }
@@ -2371,14 +2368,14 @@
     return `没有今日盘中 IOPV，回撤暂用已公布净值 ${pub}（净值日 ${navDate}，高点 ${peakDate}）。这个数字滞后 1–2 天，不是今天的估计净值。${stale}`;
   }
   function ddDepth(raw) {
-    const n = Number(raw);
+    const n = Math.abs(Number(raw));
     if (!Number.isFinite(n) || n < 5) return 'd0';
     if (n < 10) return 'd1';
     if (n < 20) return 'd2';
     return 'd3';
   }
   function ddFeatureHtml(label, raw, sub) {
-    return `<div class="kpi dd-feature dd-${ddDepth(raw)}"><div class="dd-num">${fmt(raw)}%</div><div class="k">${label}</div><div class="s">${sub}</div></div>`;
+    return `<div class="kpi dd-accent dd-${ddDepth(raw)}"><div class="k">${label}</div><div class="v">${fmt(raw)}%</div><div class="s">${sub}</div></div>`;
   }
   function ddKpiSub(etf, inputPct) {
     const info = drawdownView(etf);
@@ -3221,13 +3218,16 @@
     const q = seriesStats(rows, usDdKey('qqq', days));
     const s = seriesStats(rows, usDdKey('spy', days));
     const v = seriesStats(rows, 'vix');
-    const chip = (k, v1, s1) => `<div class="kpi"><div class="k">${k}</div><div class="v">${v1}</div><div class="s">${s1}</div></div>`;
+    const chip = (k, v1, s1, accentRaw) => {
+      const accent = accentRaw == null || !Number.isFinite(Number(accentRaw)) ? '' : ` dd-accent dd-${ddDepth(accentRaw)}`;
+      return `<div class="kpi${accent}"><div class="k">${k}</div><div class="v">${v1}</div><div class="s">${s1}</div></div>`;
+    };
     const fmtDd = (n) => n == null ? '—' : (n > 0 ? '+' : '') + Number(n).toFixed(2) + '%';
     const fmtV = (n) => n == null ? '—' : Number(n).toFixed(2);
     if (chips) {
       chips.innerHTML = [
-        chip('QQQ 当前回撤', fmtDd(q.last), US_RANGES[days] + '最大 ' + fmtDd(q.extreme)),
-        chip('SPY 当前回撤', fmtDd(s.last), US_RANGES[days] + '最大 ' + fmtDd(s.extreme)),
+        chip('QQQ 当前回撤', fmtDd(q.last), US_RANGES[days] + '最大 ' + fmtDd(q.extreme), q.last),
+        chip('SPY 当前回撤', fmtDd(s.last), US_RANGES[days] + '最大 ' + fmtDd(s.extreme), s.last),
         chip('VIX 当前', fmtV(v.last), US_RANGES[days] + '最高 ' + fmtV(v.extreme)),
       ].join('');
     }
