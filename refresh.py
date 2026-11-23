@@ -17,6 +17,7 @@ from calendar import monthrange
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 ROOT = Path(__file__).resolve().parent
 DATA = ROOT / "data"
@@ -2198,6 +2199,18 @@ US_YAHOO_RANGE = {
 }
 
 
+US_EASTERN = ZoneInfo("America/New_York")
+
+
+def _us_last_closed_date(now_utc: datetime | None = None) -> str:
+    """美东 16:30 后才接受当天日线，避免 Yahoo 的盘中 K 线冒充收盘。"""
+    eastern = (now_utc or datetime.now(timezone.utc)).astimezone(US_EASTERN)
+    day = eastern.date()
+    if (eastern.hour, eastern.minute) < (16, 30):
+        day -= timedelta(days=1)
+    return day.isoformat()
+
+
 def _yahoo_daily(symbol: str, range_: str = "5y") -> list[dict]:
     """Yahoo chart API v8 日线。日期用 UTC，避免北京时间把美股交易日拨到下一天。"""
     url = (
@@ -2216,6 +2229,7 @@ def _yahoo_daily(symbol: str, range_: str = "5y") -> list[dict]:
     adj = (((block.get("indicators") or {}).get("adjclose") or [{}])[0] or {}).get("adjclose")
     closes = quote.get("close") or []
     rows = []
+    last_closed_date = _us_last_closed_date()
     for i, t in enumerate(ts):
         c = None
         if adj and i < len(adj) and adj[i] is not None:
@@ -2225,6 +2239,8 @@ def _yahoo_daily(symbol: str, range_: str = "5y") -> list[dict]:
         if c is None or c <= 0:
             continue
         day = datetime.fromtimestamp(int(t), timezone.utc).strftime("%Y-%m-%d")
+        if day > last_closed_date:
+            continue
         rows.append({"date": day, "close": c})
     rows.sort(key=lambda r: r["date"])
     dedup: dict[str, float] = {}
