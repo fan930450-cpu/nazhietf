@@ -459,6 +459,7 @@
         <button type="button" class="btn" data-us-range="1825">近5年</button>
       </div>
       <div class="grid" id="usChips" style="margin-top:12px"></div>
+      <button type="button" class="btn" id="refreshUsData" style="margin-top:12px">刷新美股收盘数据</button>
       <div class="chart-box" style="margin-top:12px">
         <canvas id="usChart"></canvas>
         <svg class="fallback-chart" id="usSvg" style="display:none" viewBox="0 0 1000 320" preserveAspectRatio="none"></svg>
@@ -3227,11 +3228,11 @@
     return prefix + '_dd';
   }
   function seriesStats(rows, key) {
-    const vals = rows.map(r => r[key]).filter(v => v != null && !Number.isNaN(Number(v)));
-    if (!vals.length) return { last: null, extreme: null };
-    const last = Number(vals[vals.length - 1]);
-    const extreme = key === 'vix' ? Math.max(...vals.map(Number)) : Math.min(...vals.map(Number));
-    return { last, extreme };
+    const points = rows.filter(r => r[key] != null && !Number.isNaN(Number(r[key])));
+    if (!points.length) return { last: null, extreme: null, asOf: null };
+    const vals = points.map(r => Number(r[key]));
+    const extreme = key === 'vix' ? Math.max(...vals) : Math.min(...vals);
+    return { last: vals[vals.length - 1], extreme, asOf: points[points.length - 1].date };
   }
   function paintUs(days) {
     usRange = days;
@@ -3266,9 +3267,9 @@
     const fmtV = (n) => n == null ? '—' : Number(n).toFixed(2);
     if (chips) {
       chips.innerHTML = [
-        chip('QQQ 当前回撤', fmtDd(q.last), US_RANGES[days] + '最大 ' + fmtDd(q.extreme), q.last),
-        chip('SPY 当前回撤', fmtDd(s.last), US_RANGES[days] + '最大 ' + fmtDd(s.extreme), s.last),
-        chip('VIX 当前', fmtV(v.last), US_RANGES[days] + '最高 ' + fmtV(v.extreme)),
+        chip('QQQ 当前回撤', fmtDd(q.last), '截至 ' + (q.asOf || '—') + ' · ' + US_RANGES[days] + '最大 ' + fmtDd(q.extreme), q.last),
+        chip('SPY 当前回撤', fmtDd(s.last), '截至 ' + (s.asOf || '—') + ' · ' + US_RANGES[days] + '最大 ' + fmtDd(s.extreme), s.last),
+        chip('VIX 当前', fmtV(v.last), '截至 ' + (v.asOf || '—') + ' · ' + US_RANGES[days] + '最高 ' + fmtV(v.extreme)),
       ].join('');
     }
     const labels = rows.map(r => r.date);
@@ -3351,6 +3352,11 @@
     });
   }
   const usRanges = document.getElementById('usRanges');
+  document.getElementById('refreshUsData').addEventListener('click', () => {
+    const url = new URL(location.href);
+    url.searchParams.set('refresh', String(Date.now()));
+    location.replace(url.toString());
+  });
   if (usRanges) {
     usRanges.addEventListener('click', (ev) => {
       const btn = ev.target.closest('[data-us-range]');
