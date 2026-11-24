@@ -3352,11 +3352,54 @@
     });
   }
   const usRanges = document.getElementById('usRanges');
-  document.getElementById('refreshUsData').addEventListener('click', () => {
+  function reloadFreshUsData() {
+    sessionStorage.setItem('nazhietf.usScroll', String(window.scrollY));
     const url = new URL(location.href);
     url.searchParams.set('refresh', String(Date.now()));
     location.replace(url.toString());
+  }
+  document.getElementById('refreshUsData').addEventListener('click', reloadFreshUsData);
+  const savedUsScroll = sessionStorage.getItem('nazhietf.usScroll');
+  if (savedUsScroll !== null) {
+    sessionStorage.removeItem('nazhietf.usScroll');
+    requestAnimationFrame(() => window.scrollTo(0, Number(savedUsScroll) || 0));
+  }
+  function lastUsDate(rows, key) {
+    for (let i = rows.length - 1; i >= 0; i--) {
+      if (rows[i][key] != null) return rows[i].date;
+    }
+    return '';
+  }
+  let usCheckBusy = false;
+  async function checkForNewUsData() {
+    if (document.hidden || usCheckBusy) return;
+    const active = document.activeElement;
+    if (active && active.matches('input, textarea, select, [contenteditable="true"]')) return;
+    usCheckBusy = true;
+    try {
+      const url = new URL('data.js', location.href);
+      url.searchParams.set('check', String(Date.now()));
+      const response = await fetch(url, { cache: 'no-store' });
+      if (!response.ok) return;
+      const source = await response.text();
+      const equalAt = source.indexOf('=');
+      if (equalAt < 0) return;
+      const fresh = JSON.parse(source.slice(equalAt + 1).trim().replace(/;\s*$/, ''));
+      const oldRows = (D.us && D.us.rows) || [];
+      const newRows = (fresh.us && fresh.us.rows) || [];
+      if (lastUsDate(newRows, 'qqq') > lastUsDate(oldRows, 'qqq') ||
+          lastUsDate(newRows, 'spy') > lastUsDate(oldRows, 'spy')) reloadFreshUsData();
+    } catch (_) {
+      // 页面离线或数据暂时不可用时，下次可见或定时检查会重试。
+    } finally {
+      usCheckBusy = false;
+    }
+  }
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) checkForNewUsData();
   });
+  setInterval(checkForNewUsData, 5 * 60 * 1000);
+  checkForNewUsData();
   if (usRanges) {
     usRanges.addEventListener('click', (ev) => {
       const btn = ev.target.closest('[data-us-range]');
