@@ -493,16 +493,16 @@ def _self_check() -> None:
             {"code": "159501", "ref_premium_pct": 20.24, "fee_total_pct": 0.6, "aum_cny": 134e8, "turnover_cny": 1.5e8},
         ]
     )
-    if not nasdaq_today or nasdaq_today["code"] != "159513":
-        raise SystemExit(f"纳指综合分应先看更低溢价，得到 {nasdaq_today}")
+    if not nasdaq_today or nasdaq_today["code"] != "159632":
+        raise SystemExit(f"纳指 2 点区间内应选费率更低的华安: {nasdaq_today}")
     te_flip = choose_today(
         [
             {"code": "159513", "ref_premium_pct": 8.0, "tracking_error_pct": 5.0, "fee_total_pct": 0.8, "aum_cny": 20e8, "turnover_cny": 2e8, "ytd_nav_pct": 6.0},
             {"code": "159632", "ref_premium_pct": 8.5, "tracking_error_pct": 1.0, "fee_total_pct": 0.8, "aum_cny": 20e8, "turnover_cny": 2e8, "ytd_nav_pct": 6.0},
         ]
     )
-    if not te_flip or te_flip["code"] != "159632" or "跟踪误差" not in (te_flip.get("pick_reason") or ""):
-        raise SystemExit(f"跟踪误差应能盖过一点溢价差: {te_flip}")
+    if not te_flip or te_flip["code"] != "159513":
+        raise SystemExit(f"费率规模相同时应选溢价更低的基金: {te_flip}")
     sp_today = choose_today(
         [
             {"code": "159655", "ref_premium_pct": 7.91, "fee_total_pct": 0.75, "aum_cny": 42e8, "turnover_cny": 2e8},
@@ -510,8 +510,8 @@ def _self_check() -> None:
             {"code": "513500", "ref_premium_pct": 10.28, "fee_total_pct": 0.8, "aum_cny": 252e8, "turnover_cny": 3e8},
         ]
     )
-    if not sp_today or sp_today["code"] != "159655":
-        raise SystemExit(f"标普综合分应先看更低溢价，得到 {sp_today}")
+    if not sp_today or sp_today["code"] != "513650":
+        raise SystemExit(f"标普 2 点区间内同费率应选规模更大的基金: {sp_today}")
     spx_expect = [
         (0, 1.0),
         (4.9, 1.0),
@@ -1193,33 +1193,24 @@ def composite_score(item: dict, peers: list[dict]) -> float:
 
 
 def pick_reason(item: dict, peers: list[dict]) -> str:
-    """给今日优先一句短理由。只提这只相对同组占优的地方。"""
-    bits = []
+    """说明两点溢价带内为何选择更低费率或更大规模的基金。"""
     prem = float(item["ref_premium_pct"])
-    floor = min(float(p["ref_premium_pct"]) for p in peers)
-    bits.append("溢价最低" if prem <= floor + 0.05 else f"溢价 {prem:.2f}%")
-    te = item.get("tracking_error_pct")
-    tes = _pick_nums(peers, "tracking_error_pct")
-    if te is not None and tes and float(te) <= min(tes) + 1e-9:
-        bits.append("跟踪误差小")
-    fees = _pick_nums(peers, "fee_total_pct")
-    if item.get("fee_total_pct") is not None and fees and float(item["fee_total_pct"]) <= min(fees) + 1e-9:
-        bits.append("费率更低")
-    ytds = _pick_nums(peers, "ytd_nav_pct")
-    if item.get("ytd_nav_pct") is not None and ytds:
-        if float(item["ytd_nav_pct"]) + 1e-9 >= statistics.median(ytds):
-            bits.append("净值收益没落后")
-    if len(bits) == 1:
-        bits.append("综合分更低")
-    return "且".join(bits[:3])
+    floor_item = min(peers, key=lambda p: float(p["ref_premium_pct"]))
+    gap = prem - float(floor_item["ref_premium_pct"])
+    if gap <= 0.05:
+        return "溢价处于最低一档"
+    bits = [f"溢价高出最低 {gap:.2f} 个点（在 2 点区间内）"]
+    fee = item.get("fee_total_pct")
+    floor_fee = floor_item.get("fee_total_pct")
+    if fee is not None and floor_fee is not None and float(fee) < float(floor_fee) - 1e-9:
+        bits.append(f"费率低 {float(floor_fee) - float(fee):.2f} 个点")
+    if float(item.get("aum_cny") or 0) > float(floor_item.get("aum_cny") or 0):
+        bits.append("规模更大")
+    return "，".join(bits)
 
 
-def choose_today(items: list[dict]) -> dict | None:
-    """同指数场内基金按综合分选今日优先。场外代码不参加。
-
-    综合分 = 溢价 + 2×跟踪误差 + 1×费率差 + 0.5×净值收益落后中枢
-    + 规模不足 5 亿或成交额过低的罚分。分越低越好。
-    """
+def rank_peers(items: list[dict]) -> list[dict]:
+    """先取最低溢价附近 2 个点，再比费率、规模；低成交额不参加。"""
     usable = []
     for item in items:
         if not is_on_exchange(str(item.get("code") or "")):
@@ -1228,18 +1219,30 @@ def choose_today(items: list[dict]) -> dict | None:
             continue
         usable.append(item)
     if not usable:
+        return []
+    liquid = [it for it in usable if it.get("turnover_cny") is None or float(it["turnover_cny"]) >= PICK_MIN_TURNOVER]
+    candidates = liquid or usable
+    floor = min(float(it["ref_premium_pct"]) for it in candidates)
+
+    def priority(it: dict) -> tuple:
+        prem = float(it["ref_premium_pct"])
+        fee = float(it["fee_total_pct"]) if it.get("fee_total_pct") is not None else 999.0
+        aum = -(float(it.get("aum_cny") or 0))
+        if prem <= floor + PICK_SPREAD + 1e-9:
+            return (0, fee, aum, prem, composite_score(it, candidates))
+        return (1, prem, fee, aum, composite_score(it, candidates))
+
+    return sorted(candidates, key=priority)
+
+
+def choose_today(items: list[dict]) -> dict | None:
+    """同指数场内基金按两点溢价带、费率、规模选今日优先。"""
+    ranked = rank_peers(items)
+    if not ranked:
         return None
-    ranked = sorted(
-        usable,
-        key=lambda it: (
-            composite_score(it, usable),
-            float(it["ref_premium_pct"]),
-            -(float(it.get("aum_cny") or 0)),
-        ),
-    )
     best = ranked[0]
-    best["pick_score"] = round(composite_score(best, usable), 4)
-    best["pick_reason"] = pick_reason(best, usable)
+    best["pick_score"] = composite_score(best, ranked)
+    best["pick_reason"] = pick_reason(best, ranked)
     return best
 
 
@@ -1333,7 +1336,7 @@ def build_picks(catalog: dict, tracking: dict[str, dict]) -> dict:
         "tracking_asof": max(te_dates) if te_dates else None,
         "aum_as_of": max(aum_dates) if aum_dates else None,
         "spread_pct": PICK_SPREAD,
-        "rule": "同一指数里按综合分选今日优先：溢价权重最大，其次是更低的跟踪误差、净值收益别明显落后、更低的管理+托管费，以及够用的规模和成交额。场外不参加。净值日相差一个公布日不改变今日优先。",
+        "rule": "同一指数里先找最低溢价，差 2 个百分点内的场内 ETF 再按管理+托管费低、规模大排序；成交额低于 5000 万元的暂不参与。综合分仅作参考。净值日相差一个公布日不改变今日优先。",
         "groups": groups,
     }
 
@@ -1880,6 +1883,54 @@ def align_pick_nav_dates(picks: dict | None, nav_dates: dict[str, str]) -> dict 
     return picks
 
 
+def sync_pick_groups_to_peers(picks: dict | None, universes: dict[str, list[dict]]) -> dict | None:
+    """让短名单的实时溢价、综合分和今日优先与完整同类表使用同一份数据。"""
+    if not isinstance(picks, dict):
+        return picks
+    for group in picks.get("groups") or []:
+        universe = [
+            row for row in universes.get(group.get("id") or "", [])
+            if row.get("ref_premium_pct") is not None and is_on_exchange(str(row.get("code") or ""))
+        ]
+        best = choose_today(universe)
+        if not best:
+            continue
+        ranked = rank_peers(universe)
+        by_code = {row["code"]: row for row in universe}
+        median = group.get("median_premium_pct")
+        floor = min(float(row["ref_premium_pct"]) for row in ranked)
+        anchor = next(
+            (spec["conditional"][0] for spec in PICK_GROUPS if spec["id"] == group.get("id")),
+            "",
+        )
+        group["today_code"] = best["code"]
+        group["today_line"] = (
+            f"今日优先 {best['code']} {best.get('name') or ''} · {best.get('pick_reason') or '综合分更低'}"
+        )
+        for item in group.get("items") or []:
+            row = by_code.get(item.get("code"))
+            if row:
+                for key in ("ref_premium_pct", "tracking_error_pct", "fee_total_pct", "aum_cny", "turnover_cny", "ytd_nav_pct"):
+                    item[key] = row.get(key)
+                item["pick_score"] = composite_score(row, universe)
+            item["is_today"] = item.get("code") == best["code"]
+            if item["is_today"]:
+                item["why"] = "今日优先：" + (best.get("pick_reason") or "综合分更低") + "。"
+            elif row and item.get("code") == anchor and median is not None and float(row["ref_premium_pct"]) > float(median) + 1:
+                item["why"] = _why(item, best, floor, median, anchor)
+            elif row:
+                gap = float(row["ref_premium_pct"]) - floor
+                if row.get("turnover_cny") is not None and float(row["turnover_cny"]) < PICK_MIN_TURNOVER:
+                    item["why"] = "成交额不足 5000 万元，暂不参加今日优先。"
+                elif gap <= PICK_SPREAD + 1e-9:
+                    item["why"] = "同在最低溢价附近 2 个点内，今日优先按费率和规模排序。"
+                else:
+                    item["why"] = f"溢价比最低一档高 {gap:.2f} 个点，超出 2 点区间。"
+            if item.get("nav_stale"):
+                item["why"] += " 净值未齐，不拿回撤与已更新的基金比较。"
+    return picks
+
+
 def _group_items(picks: dict | None, group_id: str) -> list[dict]:
     if not picks:
         return []
@@ -1901,7 +1952,7 @@ def resolve_buy_target(
     cheap_reason: str,
     hold_reason: str,
 ) -> dict:
-    """买入目标用同指数综合分，不单看最低溢价。场外代码不能成为买入目标。"""
+    """买入目标用同指数 2 点溢价带内的费率和规模排序。场外不参加。"""
     del is_expensive, shortlist_reason
     if fallback and not is_on_exchange(str(fallback.get("code") or "")):
         fallback = None
@@ -1987,8 +2038,8 @@ def _check_one_day_nav_lag_does_not_pick_expensive() -> None:
     group = aligned["groups"][0]
     if group["today_code"] == "159501":
         raise SystemExit(f"净值只差一天时今日优先不应是更贵的 159501: {group['today_code']}")
-    if group["today_code"] != "513110":
-        raise SystemExit(f"综合分应落到溢价更低的 513110，得到 {group['today_code']}")
+    if group["today_code"] != "159632":
+        raise SystemExit(f"2 点区间内应落到费率更低的 159632，得到 {group['today_code']}")
     for it in group["items"]:
         if it.get("nav_stale"):
             raise SystemExit(f"差一个公布日不应标净值陈旧: {it['code']} {it.get('nav_date')}")
@@ -2010,8 +2061,8 @@ def _check_one_day_nav_lag_does_not_pick_expensive() -> None:
     )
     if target["code"] == "159501":
         raise SystemExit(f"159501 明显贵且有更便宜短名单时买入目标不能是 159501: {target}")
-    if target["code"] != "513110":
-        raise SystemExit(f"买入目标应跟综合分今日优先一致: {target}")
+    if target["code"] != "159632":
+        raise SystemExit(f"买入目标应与今日优先一致: {target}")
 
     # 便宜的一只净值落后超过一个公布日：可以警告，但仍按溢价当今日优先。
     lagged = {
@@ -2037,7 +2088,7 @@ def _check_one_day_nav_lag_does_not_pick_expensive() -> None:
     if not cheap.get("nav_stale") or "回撤" not in (cheap.get("why") or ""):
         raise SystemExit(f"落后超过一个公布日应保留回撤警告: {cheap}")
 
-    # 价差不到 2 个点，但溢价系数已经判贵：费率优势不能把买入目标留在 159501。
+    # 价差不到 2 个点：即使主标的被判贵，低费率仍可使它排第一。
     near = resolve_buy_target(
         primary_code=PRIMARY,
         primary_name="嘉实纳斯达克100",
@@ -2052,10 +2103,10 @@ def _check_one_day_nav_lag_does_not_pick_expensive() -> None:
         cheap_reason="cheap",
         hold_reason="hold",
     )
-    if near["code"] == "159501":
-        raise SystemExit(f"综合分更低时不能买 159501: {near}")
+    if near["code"] != "159501":
+        raise SystemExit(f"2 点区间内应优先低费率: {near}")
 
-    # 溢价只差 0.4、费率差 0.4 时，综合分仍偏向更低溢价，不再因为主代码没被判贵就留着。
+    # 溢价只差 0.4、费率差 0.4 时，仍按 2 点区间内的费率选。
     held = resolve_buy_target(
         primary_code=PRIMARY,
         primary_name="嘉实纳斯达克100",
@@ -2070,8 +2121,14 @@ def _check_one_day_nav_lag_does_not_pick_expensive() -> None:
         cheap_reason="cheap",
         hold_reason="hold",
     )
-    if held["code"] != "513110":
-        raise SystemExit(f"综合分应改买溢价更低的 513110: {held}")
+    if held["code"] != "159501":
+        raise SystemExit(f"2 点区间内应保留低费率的 159501: {held}")
+    outside = choose_today([
+        item("159632", 12.01, 0.8, 118e8, 4e8),
+        item("159501", 10.0, 1.0, 134e8, 1.5e8),
+    ])
+    if not outside or outside["code"] != "159501":
+        raise SystemExit(f"溢价差超过 2 点时应先选低溢价: {outside}")
 
 
 def build_spx_block(picks: dict | None, peer_stats: dict[str, dict] | None) -> dict:
@@ -2593,24 +2650,7 @@ def build_payload(
     nav_dates[PRIMARY] = latest_nav_date
     picks = align_pick_nav_dates(picks, nav_dates)
     tracking_left = (picks or {}).pop("_tracking", {}) if isinstance(picks, dict) else {}
-    if isinstance(picks, dict):
-        universes = {"nasdaq-100": peers_sorted, "sp-500": spx_sorted}
-        for group in picks.get("groups") or []:
-            universe = [
-                row for row in universes.get(group.get("id") or "", [])
-                if row.get("ref_premium_pct") is not None and is_on_exchange(str(row.get("code") or ""))
-            ]
-            best = choose_today(universe)
-            if not best:
-                continue
-            group["today_code"] = best["code"]
-            group["today_line"] = (
-                f"今日优先 {best['code']} {best.get('name') or ''} · {best.get('pick_reason') or '综合分更低'}"
-            )
-            for item in group.get("items") or []:
-                item["is_today"] = item.get("code") == best["code"]
-                if item["is_today"]:
-                    item["why"] = "今日优先：" + (best.get("pick_reason") or "综合分更低") + "。"
+    picks = sync_pick_groups_to_peers(picks, {"nasdaq-100": peers_sorted, "sp-500": spx_sorted})
     iopv_dd = iopv_drawdown_pct(metrics.get("peak_nav"), live_primary.get("iopv") if use_live else None)
     dd_for_amount = iopv_dd if iopv_dd is not None else peak_dd
     # 溢价系数仍用原始 IOPV 回撤做深回撤下限。回撤系数改用扣溢价后的数。
@@ -2621,7 +2661,7 @@ def build_payload(
         primary_name="嘉实纳斯达克100",
         primary_premium=p_for_calc,
         is_expensive=is_expensive,
-        shortlist=_group_items(picks, "nasdaq-100"),
+        shortlist=peers_sorted,
         fallback=peer_min_fund,
         shortlist_reason="159501明显贵；短名单在约 2 个点价差内优先更低费率或更大规模",
         cheap_reason="159501明显贵，优先同类更便宜",

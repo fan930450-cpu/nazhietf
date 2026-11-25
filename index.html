@@ -814,8 +814,8 @@
           溢价系数只轻度修正金额，买多少仍主要由回撤系数决定。相对自己的 P60 连续变化：比 P60 低 5 个点及以上为 1.15，持平为 1.00，高出 5 个点及以上为 0.85，中间线性。绝对软顶：P≥22% 时不超过 0.85，P≥18% 时不超过 0.90，P≥15% 时不超过 0.95。比最便宜同类贵 5 个点及以上时不超过 0.90。回撤够深时设下限，避免溢价把金额砍得太狠：距高点回撤 ≥15% 时系数不低于 0.95，≥10% 时不低于 0.90。这样长期高溢价不会被抬高的 P60 洗成中性，但也不再把系数一刀砍到 0.50。<br/>
           <strong>本月目标上限</strong> = 每月基准 × 回撤系数 × 溢价系数，<strong>没有 2 倍上限</strong>。这是本月上限，不是每天都要买的金额。深回撤时可以到每月基准的 13.33 倍，先看备用金。<br/>
           没投满每月基准时，今日可补 = max(0, 本月目标上限 − 本月已投)。本月已投默认是这台浏览器流水里、北京时间这个自然月的纳指买入合计，不减卖出；直接改数字就改成手填，可再点「改回流水合计」。<br/>
-          本月已投 ≥ 每月基准时，顶部写明「本月定投已完成（已投 ¥X / 基准 ¥Y）」。这时如果扣溢价后回撤不到 5%，提示「本月已完成，今天不用买」。扣溢价后回撤达到 5% 才按差额提示加仓，一笔买进同指数里溢价最低的场内 ETF，不拆成多天。扣溢价后回撤 = 今日 IOPV 回撤 − max(0, 场内买入标的溢价 − 其 P60)；没有 P60 时常态按 3%。页面同时写出原始回撤。Z 已经是 0，就提示「当前回撤档位已加仓完，回撤更深再加」。<br/>
-          纳指先看场所。场内最低溢价高于页面上的阈值（默认 10%），并且 IOPV 回撤低于另一阈值（默认 5%）时，是场外模式：只定投 021000，每天默认 160 元，本月目标是每天 × 30（默认 ¥4,800），不买场内。最低溢价不超过阈值，或回撤达到阈值，是场内模式：买溢价最低的场内 ETF，金额仍按每月基准、扣溢价后回撤和溢价系数。这三个数可以在顶部改。<br/>
+          本月已投 ≥ 每月基准时，顶部写明「本月定投已完成（已投 ¥X / 基准 ¥Y）」。这时如果扣溢价后回撤不到 5%，提示「本月已完成，今天不用买」。扣溢价后回撤达到 5% 才按差额提示加仓，一笔买进「今日同类怎么选」里的今日优先 ETF，不拆成多天。扣溢价后回撤 = 今日 IOPV 回撤 − max(0, 场内买入标的溢价 − 其 P60)；没有 P60 时常态按 3%。页面同时写出原始回撤。Z 已经是 0，就提示「当前回撤档位已加仓完，回撤更深再加」。<br/>
+          纳指先看场所。场内最低溢价高于页面上的阈值（默认 10%），并且 IOPV 回撤低于另一阈值（默认 5%）时，是场外模式：只定投 021000，每天默认 160 元，本月目标是每天 × 30（默认 ¥4,800），不买场内。最低溢价不超过阈值，或回撤达到阈值，是场内模式：按「今日同类怎么选」的规则买场内 ETF，金额仍按每月基准、扣溢价后回撤和溢价系数。这三个数可以在顶部改。<br/>
           有持仓时，止盈按单只利润分档（≥10% 卖这只的 10%，≥15% 再卖 10%，≥20% 再卖 5%，合计 25%）。分档写在 TP_TIERS。场内溢价 ≥15% 的优先；场内溢价低于 5% 或这只 IOPV 回撤 ≥10% 先不止盈。场外持仓按净值算利润，不看溢价，并提示持有满 7 天再赎回。纳指底仓把场内和场外算在一起，卖到只剩峰值的 75% 就停，本年也不超过 20%。卖出的钱留作回撤加仓备用金。<br/>
           盘中「今日溢价 P」和「距高点回撤」在页面打开且处于 A 股交易时段时，大约每 20 秒按公开行情重取。回撤跟着今日 IOPV 变。P60 和单日净值涨跌仍用定时快照。没有今日 IOPV 时，回撤退回已公布净值。
         </p>
@@ -899,7 +899,7 @@
   <section id="picksSection">
     <h2>今日同类怎么选 <span class="hint">纳指100和标普500的全部同类 · 不改顶部的本月金额</span></h2>
     <div class="card">
-      <p class="pick-intro">纳指顶部按 159501 的每月基准、回撤和溢价算出本月目标上限，再扣掉本月已投。标普金额在标普卡片，按 513500 和标普自己的每月基准，两笔互不替换。这里回答今天买哪只，并把全部同类放在同一张表里。综合分越低越优先：溢价权重最大，再看跟踪误差、费率、今年净值收益是否落后，以及规模和成交。净值日相差一个公布日不影响今天买哪只。落后超过一个公布日的会标明，不拿它的回撤和已更新的基金比。</p>
+      <p class="pick-intro">纳指顶部按 159501 的每月基准、回撤和溢价算出本月目标上限，再扣掉本月已投。标普金额在标普卡片，按 513500 和标普自己的每月基准，两笔互不替换。这里回答今天买哪只，并把全部同类放在同一张表里。先找同组最低溢价，溢价相差不超过 2 个百分点的场内 ETF 再按管理+托管费低、规模大排序；成交额低于 5000 万元的暂不参与。综合分保留作参考，不决定名次。净值日相差一个公布日不影响今天买哪只。落后超过一个公布日的会标明，不拿它的回撤和已更新的基金比。</p>
       <div id="picksRoot">短名单加载中…</div>
       <h3 class="ledger-h">纳指100</h3>
       <p class="scroll-hint">表格可左右滑动</p>
@@ -907,7 +907,7 @@
         <table>
           <thead>
             <tr>
-              <th>名次</th><th>代码</th><th>名称</th><th>综合分<span class="sub">越低越好</span></th><th>参考溢价</th><th>今年收益率（净值）<span class="sub" id="nasdaqYtdHead"></span></th><th>跟踪误差<span class="sub">越低越好</span></th><th>管理+托管费</th><th>基金规模</th><th>净值溢价</th><th>收盘/现价</th><th>IOPV</th><th>说明</th>
+              <th>名次</th><th>代码</th><th>名称</th><th>参考综合分<span class="sub">不决定名次</span></th><th>参考溢价</th><th>今年收益率（净值）<span class="sub" id="nasdaqYtdHead"></span></th><th>跟踪误差<span class="sub">越低越好</span></th><th>管理+托管费</th><th>基金规模</th><th>净值溢价</th><th>收盘/现价</th><th>IOPV</th><th>说明</th>
             </tr>
           </thead>
           <tbody id="peerBody"></tbody>
@@ -919,7 +919,7 @@
         <table>
           <thead>
             <tr>
-              <th>名次</th><th>代码</th><th>名称</th><th>综合分<span class="sub">越低越好</span></th><th>参考溢价</th><th>今年收益率（净值）<span class="sub" id="spxYtdHead"></span></th><th>跟踪误差<span class="sub">越低越好</span></th><th>管理+托管费</th><th>基金规模</th><th>净值溢价</th><th>收盘/现价</th><th>IOPV</th><th>说明</th>
+              <th>名次</th><th>代码</th><th>名称</th><th>参考综合分<span class="sub">不决定名次</span></th><th>参考溢价</th><th>今年收益率（净值）<span class="sub" id="spxYtdHead"></span></th><th>跟踪误差<span class="sub">越低越好</span></th><th>管理+托管费</th><th>基金规模</th><th>净值溢价</th><th>收盘/现价</th><th>IOPV</th><th>说明</th>
             </tr>
           </thead>
           <tbody id="peerBodySpx"></tbody>
@@ -950,7 +950,7 @@
     <h2>每日 / 定投日操作清单</h2>
     <div class="card">
       <ul class="checklist">
-        <li><span class="n">1</span><div>先看顶部的<strong>场外模式 / 场内模式</strong>。场内最低溢价高于阈值（默认 10%）且 IOPV 回撤低于阈值（默认 5%）时，纳指只买场外 021000，每天默认 160 元，本月目标默认 ¥4,800。否则买溢价最低的场内 ETF，金额按每月基准和扣溢价后回撤。标普仍是下面那张卡片。</div></li>
+        <li><span class="n">1</span><div>先看顶部的<strong>场外模式 / 场内模式</strong>。场内最低溢价高于阈值（默认 10%）且 IOPV 回撤低于阈值（默认 5%）时，纳指只买场外 021000，每天默认 160 元，本月目标默认 ¥4,800。否则按「今日同类怎么选」的规则买场内 ETF，金额按每月基准和扣溢价后回撤。标普仍是下面那张卡片。</div></li>
         <li><span class="n">2</span><div>核对<strong>今日溢价 P</strong>与<strong>P60</strong>。159501 明显贵时，到「今日同类怎么选」里看纳指短名单的今日优先；标普500是另一条可选，不替换顶部金额。</div></li>
         <li><span class="n">3</span><div>看<strong>原始回撤</strong>和<strong>扣溢价后回撤</strong>。回撤系数和投满基准后的 5% 加仓线用扣溢价后的数。没有今日 IOPV 时用已公布数字，并标明滞后。较上月净值只作参照。</div></li>
         <li><span class="n">4</span><div>有持仓才看止盈。场内按现价（含溢价），场外按净值。利润 ≥10% 卖这只的 10%，≥15% 再卖 10%，≥20% 再卖 5%，合计 25%。场内溢价 ≥15% 的先卖；溢价低于 5% 或 IOPV 回撤 ≥10% 先不止盈。场外不看溢价，但提示持有满 7 天再赎回。这一边卖到只剩峰值的 75% 就停。卖出的钱留作回撤加仓备用金。</div></li>
@@ -1133,7 +1133,7 @@
         + fmt(cfg.premiumCut) + '%。今天买这只场内 ETF。';
     } else if (dd != null && dd >= cfg.drawdownCut) {
       reason = '场内模式：IOPV 回撤 ' + fmt(dd) + '% 已达到 ' + fmt(cfg.drawdownCut)
-        + '%。今天买场内溢价最低的' + (floor ? ' ' + floor.code + ' ' + (floor.name || '') : ' ETF') + '。';
+        + '%。今天按“今日同类怎么选”的规则挑选场内 ETF。';
     }
     return { mode, floor, prem, dd, reason, cfg };
   }
@@ -1759,7 +1759,7 @@
   const PICK_SPREAD = 2;
   const PICK_MIN_TURNOVER = 50000000;
   const PICK_EXPENSIVE_GAP = 5;
-  // 和 refresh.py 的 SCORE_* 一致。综合分越低越好。
+  // 和 refresh.py 的 SCORE_* 一致。参考综合分只作对照；今日优先按 2 点溢价带、费率和规模选。
   const SCORE_TE_WEIGHT = 2;
   const SCORE_FEE_WEIGHT = 1;
   const SCORE_YTD_LAG_WEIGHT = 0.5;
@@ -1817,34 +1817,39 @@
   }
   function pickReason(item, peers) {
     const prem = Number(item.ref_premium_pct);
-    const floor = Math.min.apply(null, peers.map(p => Number(p.ref_premium_pct)));
-    const bits = [prem <= floor + 0.05 ? '溢价最低' : ('溢价 ' + fmt(prem) + '%')];
-    const tes = pickNums(peers, 'tracking_error_pct');
-    if (item.tracking_error_pct != null && tes.length && Number(item.tracking_error_pct) <= Math.min.apply(null, tes) + 1e-9) {
-      bits.push('跟踪误差小');
+    const floorItem = peers.reduce((a, b) => Number(a.ref_premium_pct) <= Number(b.ref_premium_pct) ? a : b);
+    const gap = prem - Number(floorItem.ref_premium_pct);
+    if (gap <= 0.05) return '溢价处于最低一档';
+    const bits = [`溢价高出最低 ${fmt(gap)} 个点（在 2 点区间内）`];
+    if (item.fee_total_pct != null && floorItem.fee_total_pct != null &&
+        Number(item.fee_total_pct) < Number(floorItem.fee_total_pct) - 1e-9) {
+      bits.push(`费率低 ${fmt(Number(floorItem.fee_total_pct) - Number(item.fee_total_pct))} 个点`);
     }
-    const fees = pickNums(peers, 'fee_total_pct');
-    if (item.fee_total_pct != null && fees.length && Number(item.fee_total_pct) <= Math.min.apply(null, fees) + 1e-9) {
-      bits.push('费率更低');
-    }
-    const ytds = pickNums(peers, 'ytd_nav_pct');
-    if (item.ytd_nav_pct != null && ytds.length) {
-      const sorted = ytds.slice().sort((a, b) => a - b);
-      const mid = Math.floor(sorted.length / 2);
-      const median = sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
-      if (Number(item.ytd_nav_pct) + 1e-9 >= median) bits.push('净值收益没落后');
-    }
-    if (bits.length === 1) bits.push('综合分更低');
-    return bits.slice(0, 3).join('且');
+    if (Number(item.aum_cny || 0) > Number(floorItem.aum_cny || 0)) bits.push('规模更大');
+    return bits.join('，');
+  }
+  function rankPeers(items) {
+    const usable = (items || []).filter(it => it && isOnExchange(it.code) && it.ref_premium_pct != null && !Number.isNaN(Number(it.ref_premium_pct)));
+    if (!usable.length) return [];
+    const liquid = usable.filter(it => it.turnover_cny == null || Number(it.turnover_cny) >= PICK_MIN_TURNOVER);
+    const candidates = liquid.length ? liquid : usable;
+    const floor = Math.min.apply(null, candidates.map(it => Number(it.ref_premium_pct)));
+    return candidates.slice().sort((a, b) => {
+      const pa = Number(a.ref_premium_pct), pb = Number(b.ref_premium_pct);
+      const ba = pa <= floor + PICK_SPREAD + 1e-9, bb = pb <= floor + PICK_SPREAD + 1e-9;
+      if (ba !== bb) return ba ? -1 : 1;
+      const fa = a.fee_total_pct == null ? 999 : Number(a.fee_total_pct);
+      const fb = b.fee_total_pct == null ? 999 : Number(b.fee_total_pct);
+      const size = (Number(b.aum_cny) || 0) - (Number(a.aum_cny) || 0);
+      if (ba) return fa - fb || size || pa - pb || compositeScore(a, candidates) - compositeScore(b, candidates);
+      return pa - pb || fa - fb || size || compositeScore(a, candidates) - compositeScore(b, candidates);
+    });
   }
   function chooseToday(items) {
-    const usable = (items || []).filter(it => it && isOnExchange(it.code) && it.ref_premium_pct != null && !Number.isNaN(Number(it.ref_premium_pct)));
-    if (!usable.length) return null;
-    usable.sort((a, b) => compositeScore(a, usable) - compositeScore(b, usable)
-      || Number(a.ref_premium_pct) - Number(b.ref_premium_pct)
-      || (Number(b.aum_cny) || 0) - (Number(a.aum_cny) || 0));
-    const best = usable[0];
-    best.pick_reason = pickReason(best, usable);
+    const ranked = rankPeers(items);
+    if (!ranked.length) return null;
+    const best = ranked[0];
+    best.pick_reason = pickReason(best, ranked);
     return best;
   }
   function cheaperShortlistTarget(primaryCode, primaryPremium, expensive, items) {
@@ -2531,13 +2536,12 @@
     const pool = list.filter(p => p && isOnExchange(p.code) && p.ref_premium_pct != null && !Number.isNaN(Number(p.ref_premium_pct)));
     const rankOf = {};
     const scoreOf = {};
-    pool.slice().sort((a, b) => compositeScore(a, pool) - compositeScore(b, pool)
-      || Number(a.ref_premium_pct) - Number(b.ref_premium_pct)
-      || (Number(b.aum_cny) || 0) - (Number(a.aum_cny) || 0)
-    ).forEach((p, i) => {
+    const ranked = rankPeers(pool);
+    ranked.forEach((p, i) => {
       rankOf[p.code] = i + 1;
-      scoreOf[p.code] = compositeScore(p, pool);
     });
+    pool.forEach(p => { scoreOf[p.code] = compositeScore(p, pool); });
+    const floor = ranked.length ? Math.min.apply(null, ranked.map(p => Number(p.ref_premium_pct))) : null;
     const best = bestPeer(family);
     list.sort((a, b) => (rankOf[a.code] || 999) - (rankOf[b.code] || 999) || String(a.code).localeCompare(String(b.code)));
     tbody.innerHTML = '';
@@ -2550,7 +2554,13 @@
       else if (p.is_primary) tr.className = 'primary';
       const noteBits = [];
       if (isToday) noteBits.push(best.reason || extra.why || '今日优先');
-      else if (extra.why) noteBits.push(extra.why);
+      else if (best && p.turnover_cny != null && Number(p.turnover_cny) < PICK_MIN_TURNOVER)
+        noteBits.push('成交额不足 5000 万元，暂不参与今日优先');
+      else if (best && floor != null && p.ref_premium_pct != null && Number(p.ref_premium_pct) <= floor + PICK_SPREAD + 1e-9)
+        noteBits.push('同在最低溢价附近 2 个点内，按费率和规模排序');
+      else if (best && floor != null && p.ref_premium_pct != null)
+        noteBits.push(`溢价比最低一档高 ${fmt(Number(p.ref_premium_pct) - floor)} 个点，超出 2 点区间`);
+      else if (extra.why && !extra.why.startsWith('今日优先')) noteBits.push(extra.why);
       else if (p.is_primary) noteBits.push('主标的');
       if (extra.nav_stale) noteBits.push('净值未齐');
       tr.dataset.code = p.code;
@@ -2582,7 +2592,7 @@
   const sizeNote = document.getElementById('peerSizeNote');
   if (sizeNote) {
     const asof = sizeDates.length ? sizeDates.slice().sort().pop() : '—';
-    sizeNote.textContent = `名次和综合分用页面上同一套公式，分越低越优先，只给有参考溢价的场内基金排名。基金规模是公开资料里的期末净资产，截至 ${asof}，不是今日市值。今年收益率（净值）= 最新公布净值 ÷ 上年最后一个净值日的净值 − 1，不用行情价。跟踪误差是天天基金特色数据里的年化跟踪误差，越低越好；没有公开数字就写 —，不估算。仅供个人记录辅助，非投资建议。`;
+    sizeNote.textContent = `名次按同组最低溢价附近 2 个点内的费率、规模排序；成交额低于 5000 万元的暂不参与。参考综合分保留作对照，不决定今日优先。基金规模是公开资料里的期末净资产，截至 ${asof}，不是今日市值。今年收益率（净值）= 最新公布净值 ÷ 上年最后一个净值日的净值 − 1，不用行情价。跟踪误差是天天基金特色数据里的年化跟踪误差，越低越好；没有公开数字就写 —，不估算。仅供个人记录辅助，非投资建议。`;
   }
 
   function shanghaiMonth() {
