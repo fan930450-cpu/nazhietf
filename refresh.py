@@ -198,6 +198,112 @@ def _fill_missing_aum(rows: list[dict]) -> None:
             row["aum_as_of"] = got["aum_as_of"]
 
 
+def fetch_sse_etf_shares(codes: set[str]) -> dict[str, dict]:
+    """上交所清算后的 ETF 总份额，接口单位为万份。"""
+    wanted = {code for code in codes if code.startswith("5")}
+    if not wanted:
+        return {}
+    latest = now_cst().date() - timedelta(days=1)
+    for offset in range(7):
+        day = (latest - timedelta(days=offset)).isoformat()
+        query = urllib.parse.urlencode({
+            "isPagination": "true",
+            "sqlId": "COMMON_SSE_ZQPZ_ETFZL_XXPL_ETFGM_SEARCH_L",
+            "STAT_DATE": day,
+            "pageHelp.pageSize": "2000",
+            "pageHelp.pageNo": "1",
+            "pageHelp.beginPage": "1",
+            "pageHelp.endPage": "1",
+        })
+        try:
+            raw = json.loads(get(
+                "https://query.sse.com.cn/commonQuery.do?" + query,
+                {"Referer": "https://www.sse.com.cn/market/funddata/volumn/etfvolumn/"},
+                retries=1, timeout=18,
+            ))
+            rows = raw.get("result") or []
+            total = int((raw.get("pageHelp") or {}).get("total") or 0)
+            if total > len(rows):
+                raise RuntimeError(f"上交所份额分页不完整 {len(rows)}/{total}")
+            found = {}
+            for row in rows:
+                code = str(row.get("SEC_CODE") or "")
+                if code not in wanted or not row.get("TOT_VOL"):
+                    continue
+                found[code] = {
+                    "shares": float(str(row["TOT_VOL"]).replace(",", "")) * 10_000,
+                    "date": str(row.get("STAT_DATE") or day)[:10],
+                }
+            if found:
+                return found
+        except Exception as e:  # noqa: BLE001
+            print("上交所份额失败", day, e)
+    return {}
+
+
+def fetch_szse_etf_shares(codes: set[str]) -> dict[str, dict]:
+    """深交所官方 ETF 规模表的场内份额，接口单位为万份。"""
+    wanted = {code for code in codes if code.startswith("159")}
+    if not wanted:
+        return {}
+    end = now_cst().date() - timedelta(days=1)
+    start = end - timedelta(days=25)
+
+    def one(code: str) -> tuple[str, dict | None]:
+        query = urllib.parse.urlencode({
+            "SHOWTYPE": "JSON",
+            "CATALOGID": "scsj_fund_jjgm",
+            "jjlb": "ETF",
+            "txtStart": start.isoformat(),
+            "txtEnd": end.isoformat(),
+            "txtDm": code,
+        })
+        try:
+            raw = json.loads(get(
+                "https://www.szse.cn/api/report/ShowReport/data?" + query,
+                {"Referer": "https://www.szse.cn/market/fund/volume/etf/index.html"},
+                retries=1, timeout=18,
+            ))
+            rows = raw[0].get("data") or []
+            matches = [r for r in rows if str(r.get("fund_code")) == code and r.get("current_size")]
+            if matches:
+                row = max(matches, key=lambda r: r["size_date"])
+                return code, {
+                    "shares": float(str(row["current_size"]).replace(",", "")) * 10_000,
+                    "date": row["size_date"],
+                }
+        except Exception as e:  # noqa: BLE001
+            print("深交所份额失败", code, e)
+        return code, None
+
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        return {code: value for code, value in pool.map(one, sorted(wanted)) if value}
+
+
+def attach_estimated_aum(rows: list[dict], shares: dict[str, dict], navs: dict[str, dict]) -> None:
+    """份额×最新公布净值为估算净资产；季报净资产另存以免混淆。"""
+    for row in rows:
+        code = row.get("code")
+        share = shares.get(code) or {}
+        nav = navs.get(code) or {}
+        nav_value, nav_date = nav.get("nav"), nav.get("nav_date")
+        share_date = share.get("date")
+        if not share_date or not nav_date or nav_value is None:
+            continue
+        if abs((datetime.strptime(share_date, "%Y-%m-%d") - datetime.strptime(nav_date, "%Y-%m-%d")).days) > 7:
+            continue
+        estimate = float(share["shares"]) * float(nav_value)
+        if estimate <= 0:
+            continue
+        if row.get("aum_basis") != "shares_times_nav":
+            row["aum_report_cny"] = row.get("aum_cny")
+            row["aum_report_as_of"] = row.get("aum_as_of")
+        row["aum_cny"] = round(estimate, 2)
+        row["aum_as_of"] = share_date
+        row["aum_basis"] = "shares_times_nav"
+        row["aum_nav_as_of"] = nav_date
+
+
 def nasdaq_venue_mode(
     lowest_on_exchange_premium: float | None,
     iopv_drawdown: float | None,
@@ -710,6 +816,17 @@ def _self_check() -> None:
     live_dd = iopv_drawdown_pct(1.9591, 1.7586)
     if published is None or live_dd is None or not (live_dd > published + 1.0):
         raise SystemExit(f"IOPV 回撤应高于已公布净值回撤: {published} {live_dd}")
+    sma_rows = [{"date": f"day-{i:03d}", "close": i / 2, "raw_close": i} for i in range(1, 202)]
+    if qqq_sma200(sma_rows[:199]) is not None:
+        raise SystemExit("未满 200 个收盘日不应显示均线")
+    sma = qqq_sma200(sma_rows)
+    if not sma or abs(sma["value"] - 101.5) > 1e-9 or sma["close"] != 201:
+        raise SystemExit(f"QQQ 均线应使用最近 200 个未复权收盘价: {sma}")
+    sample_fund = {"code": "159632", "aum_cny": 1e8, "aum_as_of": "2026-09-30"}
+    attach_estimated_aum([sample_fund], {"159632": {"shares": 2e8, "date": "2026-11-24"}},
+                         {"159632": {"nav": 1.5, "nav_date": "2026-11-23"}})
+    if sample_fund.get("aum_cny") != 3e8 or sample_fund.get("aum_report_cny") != 1e8:
+        raise SystemExit(f"规模应由份额乘净值，并保留季报值: {sample_fund}")
     _check_one_day_nav_lag_does_not_pick_expensive()
 
 
@@ -1409,6 +1526,10 @@ def _load_peers_csv(path: Path | None = None) -> list[dict]:
                     "nav_premium_pct": num("nav_premium_pct"),
                     "aum_cny": num("aum_cny"),
                     "aum_as_of": (r.get("aum_as_of") or "").strip() or None,
+                    "aum_basis": (r.get("aum_basis") or "").strip() or None,
+                    "aum_nav_as_of": (r.get("aum_nav_as_of") or "").strip() or None,
+                    "aum_report_cny": num("aum_report_cny"),
+                    "aum_report_as_of": (r.get("aum_report_as_of") or "").strip() or None,
                     "note": (r.get("note") or "").strip() or None,
                     "ytd_nav_pct": num("ytd_nav_pct"),
                     "ytd_nav_base_date": (r.get("ytd_nav_base_date") or "").strip() or None,
@@ -1910,7 +2031,7 @@ def sync_pick_groups_to_peers(picks: dict | None, universes: dict[str, list[dict
         for item in group.get("items") or []:
             row = by_code.get(item.get("code"))
             if row:
-                for key in ("ref_premium_pct", "tracking_error_pct", "fee_total_pct", "aum_cny", "turnover_cny", "ytd_nav_pct"):
+                for key in ("ref_premium_pct", "tracking_error_pct", "fee_total_pct", "aum_cny", "aum_as_of", "aum_basis", "aum_nav_as_of", "aum_report_cny", "aum_report_as_of", "turnover_cny", "ytd_nav_pct"):
                     item[key] = row.get(key)
                 item["pick_score"] = composite_score(row, universe)
             item["is_today"] = item.get("code") == best["code"]
@@ -2298,12 +2419,17 @@ def _yahoo_daily(symbol: str, range_: str = "5y") -> list[dict]:
         day = datetime.fromtimestamp(int(t), timezone.utc).strftime("%Y-%m-%d")
         if day > last_closed_date:
             continue
-        rows.append({"date": day, "close": c})
+        raw_close = closes[i] if i < len(closes) else None
+        rows.append({
+            "date": day,
+            "close": c,
+            "raw_close": float(raw_close) if raw_close is not None and float(raw_close) > 0 else c,
+        })
     rows.sort(key=lambda r: r["date"])
-    dedup: dict[str, float] = {}
+    dedup: dict[str, dict] = {}
     for r in rows:
-        dedup[r["date"]] = r["close"]
-    return [{"date": d, "close": dedup[d]} for d in sorted(dedup)]
+        dedup[r["date"]] = r
+    return [dedup[d] for d in sorted(dedup)]
 
 
 def _cboe_vix() -> list[dict]:
@@ -2372,6 +2498,23 @@ def _downsample_us_rows(rows: list[dict], daily_tail: int = US_DAILY_TAIL) -> li
         else:
             weekly[-1] = row
     return weekly + tail
+
+
+def qqq_sma200(rows: list[dict]) -> dict | None:
+    """最近 200 个已收盘交易日的 QQQ 未复权收盘价简单平均。"""
+    closes = [r for r in rows if r.get("raw_close") is not None]
+    if len(closes) < 200:
+        return None
+    latest = closes[-1]
+    average = sum(float(r["raw_close"]) for r in closes[-200:]) / 200
+    close = float(latest["raw_close"])
+    return {
+        "value": round(average, 4),
+        "close": round(close, 4),
+        "distance_pct": round((close / average - 1) * 100, 4),
+        "as_of": latest["date"],
+        "sample_count": 200,
+    }
 
 
 def _load_saved_us() -> dict | None:
@@ -2461,6 +2604,7 @@ def fetch_us_block() -> tuple[dict, list[str]]:
         "peak_window_label": "近 365 天滚动最高收盘价",
         "sources": sources,
         "warnings": warnings,
+        "qqq_sma200": qqq_sma200(series.get("qqq") or []),
         "rows": rows_out,
     }
     return block, warnings
@@ -2543,6 +2687,9 @@ def build_payload(
                 row["aum_cny"] = round(float(s["aum_cny"]), 2)
                 if s.get("aum_as_of"):
                     row["aum_as_of"] = s["aum_as_of"]
+                for key in ("aum_basis", "aum_nav_as_of", "aum_report_cny", "aum_report_as_of"):
+                    if s.get(key) is not None:
+                        row[key] = s[key]
             if s.get("note"):
                 row["note"] = s["note"]
             out.append(row)
@@ -2604,6 +2751,10 @@ def build_payload(
         "is_primary",
         "aum_cny",
         "aum_as_of",
+        "aum_basis",
+        "aum_nav_as_of",
+        "aum_report_cny",
+        "aum_report_as_of",
         "note",
         "ytd_nav_pct",
         "ytd_nav_base_date",
@@ -2909,6 +3060,23 @@ def main() -> None:
     except Exception as e:  # noqa: BLE001
         print("规模补齐失败:", e)
         warnings.append("部分基金规模没有取到")
+    share_codes = {r["code"] for r in list(peers) + list(spx_peers) if is_on_exchange(r.get("code") or "")}
+    shares = {}
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        sources = [pool.submit(fetch_sse_etf_shares, share_codes), pool.submit(fetch_szse_etf_shares, share_codes)]
+        for source in sources:
+            try:
+                shares.update(source.result())
+            except Exception as e:  # noqa: BLE001
+                print("交易所份额失败:", e)
+                warnings.append("部分 ETF 每日份额没有取到，规模沿用季报")
+    navs = {code: stats for code, stats in peer_stats.items() if stats.get("nav") and stats.get("nav_date")}
+    if nav_rows:
+        navs[PRIMARY] = nav_metrics(nav_rows)
+    attach_estimated_aum(peers, shares, navs)
+    attach_estimated_aum(spx_peers, shares, navs)
+    print(f"每日 ETF 份额取到 {len(shares)} 只，估算规模取到 "
+          f"{sum(r.get('aum_basis') == 'shares_times_nav' for r in list(peers) + list(spx_peers))} 只")
     us_block, us_warnings = fetch_us_block()
     warnings.extend(us_warnings)
     payload = build_payload(
