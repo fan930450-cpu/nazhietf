@@ -216,7 +216,7 @@ def nasdaq_venue_mode(
 
 
 def is_on_exchange(code: str) -> bool:
-    """场内 ETF。深市 159xxx、沪市 5xxxxx。021000 这类场外联接不是。"""
+    """场内 ETF。深市 159xxx、沪市 5xxxxx。021000 这类场外基金不是。"""
     return re.fullmatch(r"(?:159\d{3}|5\d{5})", str(code or "")) is not None
 
 
@@ -2575,7 +2575,7 @@ def build_payload(
         peers_sorted.append(
             {
                 "code": OTC_NASDAQ_CODE,
-                "name": "华夏纳斯达克100ETF联接",
+                "name": "南方纳斯达克100指数发起（QDII）I",
                 "close": None,
                 "iopv": None,
                 "ref_premium_pct": None,
