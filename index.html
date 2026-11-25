@@ -111,8 +111,12 @@
   }
   .tp-card .pick-intro { margin: 8px 0 0; }
   .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 14px; }
+  #usChips.grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .js-aum { min-width: 190px; }
   @media (max-width: 800px) { .grid { grid-template-columns: 1fr 1fr; } }
+  @media (max-width: 1050px) { #usChips.grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
   @media (max-width: 520px) { .grid { grid-template-columns: 1fr; } }
+  @media (max-width: 520px) { #usChips.grid { grid-template-columns: 1fr; } }
   .kpi {
     background: rgba(255,255,255,.03); border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px;
   }
@@ -459,7 +463,7 @@
         <button type="button" class="btn" data-us-range="1825">近5年</button>
       </div>
       <div class="grid" id="usChips" style="margin-top:12px"></div>
-      <button type="button" class="btn" id="refreshUsData" style="margin-top:12px">刷新美股收盘数据</button>
+      <button type="button" class="btn" id="refreshUsData" style="margin-top:12px">刷新日报数据</button>
       <div class="chart-box" style="margin-top:12px">
         <canvas id="usChart"></canvas>
         <svg class="fallback-chart" id="usSvg" style="display:none" viewBox="0 0 1000 320" preserveAspectRatio="none"></svg>
@@ -2494,9 +2498,18 @@
   document.getElementById('asofMeta').textContent = meta;
 
   function fmtAum(p) {
+    if (!p || p.aum_cny == null) return '—';
     const n = Number(p && p.aum_cny);
     if (!Number.isFinite(n)) return '—';
-    const asof = p.aum_as_of ? `<span class="sub">截至 ${p.aum_as_of}</span>` : '';
+    if (p.aum_basis === 'shares_times_nav') {
+      const shareDate = p.aum_as_of || '—';
+      const navDate = p.aum_nav_as_of || '—';
+      const report = Number(p.aum_report_cny);
+      const reportText = Number.isFinite(report) && report > 0
+        ? `<span class="sub">季报净资产 ${(report / 1e8).toFixed(1)} 亿 · ${p.aum_report_as_of || '—'}</span>` : '';
+      return `${(n / 1e8).toFixed(1)} 亿<span class="sub">估算 · 份额 ${shareDate} · 净值 ${navDate}</span>${reportText}`;
+    }
+    const asof = p.aum_as_of ? `<span class="sub">季报净资产 · 截至 ${p.aum_as_of}</span>` : '';
     return `${(n / 1e8).toFixed(1)} 亿${asof}`;
   }
   function ytdText(n) {
@@ -2592,7 +2605,7 @@
   const sizeNote = document.getElementById('peerSizeNote');
   if (sizeNote) {
     const asof = sizeDates.length ? sizeDates.slice().sort().pop() : '—';
-    sizeNote.textContent = `名次按同组最低溢价附近 2 个点内的费率、规模排序；成交额低于 5000 万元的暂不参与。参考综合分保留作对照，不决定今日优先。基金规模是公开资料里的期末净资产，截至 ${asof}，不是今日市值。今年收益率（净值）= 最新公布净值 ÷ 上年最后一个净值日的净值 − 1，不用行情价。跟踪误差是天天基金特色数据里的年化跟踪误差，越低越好；没有公开数字就写 —，不估算。仅供个人记录辅助，非投资建议。`;
+    sizeNote.textContent = `名次按同组最低溢价附近 2 个点内的费率、规模排序；成交额低于 5000 万元的暂不参与。参考综合分保留作对照，不决定今日优先。估算规模 = 交易所公布 ETF 份额 × 最新公布单位净值，分别标出份额日和净值日；这不是实时市值或正式披露的净资产。表内另列最近季报净资产；缺少每日份额或净值时只显示季报。当前规模日期最晚 ${asof}。今年收益率（净值）= 最新公布净值 ÷ 上年最后一个净值日的净值 − 1，不用行情价。跟踪误差是天天基金特色数据里的年化跟踪误差，越低越好；没有公开数字就写 —，不估算。仅供个人记录辅助，非投资建议。`;
   }
 
   function shanghaiMonth() {
@@ -2803,7 +2816,7 @@
           <div class="pick-today">${group.today_line || ''}${median}</div>
         </div>
       </div>`;
-    }).join('') + `<p class="pick-src">费率与年化跟踪误差仍是定时快照（规模截至 ${picks.aum_as_of || '—'}，跟踪误差截至 ${picks.tracking_asof || '—'}）。${picks.rule || ''}${liveNote}下面两张表是全部同类，名次 1 就是这一边的今日优先。</p>`;
+    }).join('') + `<p class="pick-src">费率与年化跟踪误差仍是定时快照（规模日期逐只见下表，跟踪误差截至 ${picks.tracking_asof || '—'}）。${picks.rule || ''}${liveNote}下面两张表是全部同类，名次 1 就是这一边的今日优先。</p>`;
   }
 
   const LIVE_POLL_MS = 20000;
@@ -3263,12 +3276,13 @@
           ? '近 3 年滚动最高收盘价；历史不够 3 年时，用已有数据里的最高收盘价'
           : (us.peak_window_label || '近 365 天滚动最高收盘价'));
       caption.textContent = rows.length
-        ? `回撤 = 收盘价 ÷ ${peakHow} − 1。近一个月、近半年、近一年仍用近 365 天高点，只改图上的窗口，同一天的回撤不因切换而变。近 3 年和近 5 年改用更长的滚动高点。更早的点按周留下，最近一段仍是日线。QQQ 是纳斯达克100，SPY 是标普500，VIX 是恐慌指数（右轴）。${srcText ? '来源 ' + srcText + '。' : ''}${warn ? '注意：' + warn + '。' : ''}仅供个人记录辅助，非投资建议。`
+        ? `回撤 = 收盘价 ÷ ${peakHow} − 1。近一个月、近半年、近一年仍用近 365 天高点，只改图上的窗口，同一天的回撤不因切换而变。近 3 年和近 5 年改用更长的滚动高点。QQQ 200 日均线用最近 200 个已收盘交易日的未复权收盘价算术平均，不随图表区间变化。更早的点按周留下，最近一段仍是日线。QQQ 是纳斯达克100，SPY 是标普500，VIX 是恐慌指数（右轴）。${srcText ? '来源 ' + srcText + '。' : ''}${warn ? '注意：' + warn + '。' : ''}仅供个人记录辅助，非投资建议。`
         : `还没有 QQQ / SPY / VIX 日线。${warn ? warn + '。' : ''}仅供个人记录辅助，非投资建议。`;
     }
     const q = seriesStats(rows, usDdKey('qqq', days));
     const s = seriesStats(rows, usDdKey('spy', days));
     const v = seriesStats(rows, 'vix');
+    const ma = us.qqq_sma200;
     const chip = (k, v1, s1, accentRaw) => {
       const accent = accentRaw == null || !Number.isFinite(Number(accentRaw)) ? '' : ` dd-accent dd-${ddDepth(accentRaw)}`;
       return `<div class="kpi${accent}"><div class="k">${k}</div><div class="v">${v1}</div><div class="s">${s1}</div></div>`;
@@ -3280,6 +3294,10 @@
         chip('QQQ 当前回撤', fmtDd(q.last), '截至 ' + (q.asOf || '—') + ' · ' + US_RANGES[days] + '最大 ' + fmtDd(q.extreme), q.last),
         chip('SPY 当前回撤', fmtDd(s.last), '截至 ' + (s.asOf || '—') + ' · ' + US_RANGES[days] + '最大 ' + fmtDd(s.extreme), s.last),
         chip('VIX 当前', fmtV(v.last), '截至 ' + (v.asOf || '—') + ' · ' + US_RANGES[days] + '最高 ' + fmtV(v.extreme)),
+        chip('QQQ 200 日均线', ma && ma.value != null ? '$' + Number(ma.value).toFixed(2) : '—',
+          ma && ma.value != null
+            ? `收盘 $${Number(ma.close).toFixed(2)} · ${ma.distance_pct >= 0 ? '高于' : '低于'}均线 ${Math.abs(Number(ma.distance_pct)).toFixed(2)}% · 截至 ${ma.as_of}`
+            : '未取得 200 个已收盘交易日数据'),
       ].join('');
     }
     const labels = rows.map(r => r.date);
@@ -3381,7 +3399,7 @@
     return '';
   }
   let usCheckBusy = false;
-  async function checkForNewUsData() {
+  async function checkForNewDashboardData() {
     if (document.hidden || usCheckBusy) return;
     const active = document.activeElement;
     if (active && active.matches('input, textarea, select, [contenteditable="true"]')) return;
@@ -3397,8 +3415,20 @@
       const fresh = JSON.parse(source.slice(equalAt + 1).trim().replace(/;\s*$/, ''));
       const oldRows = (D.us && D.us.rows) || [];
       const newRows = (fresh.us && fresh.us.rows) || [];
-      if (lastUsDate(newRows, 'qqq') > lastUsDate(oldRows, 'qqq') ||
-          lastUsDate(newRows, 'spy') > lastUsDate(oldRows, 'spy')) reloadFreshUsData();
+      const oldBuild = (D.asof && D.asof.built_at) || '';
+      const newBuild = (fresh.asof && fresh.asof.built_at) || '';
+      const newer = (newBuild && newBuild > oldBuild) ||
+        lastUsDate(newRows, 'qqq') > lastUsDate(oldRows, 'qqq') ||
+        lastUsDate(newRows, 'spy') > lastUsDate(oldRows, 'spy');
+      if (newer) {
+        // Pages 的 HTML 与 data.js 可能短暂跨版本；同一构建每分钟最多重载一次。
+        const key = 'nazhietf.lastAutoReload';
+        const prior = (sessionStorage.getItem(key) || '').split('|');
+        if (prior[0] !== newBuild || Date.now() - Number(prior[1] || 0) > 60 * 1000) {
+          sessionStorage.setItem(key, `${newBuild}|${Date.now()}`);
+          reloadFreshUsData();
+        }
+      }
     } catch (_) {
       // 页面离线或数据暂时不可用时，下次可见或定时检查会重试。
     } finally {
@@ -3406,10 +3436,10 @@
     }
   }
   document.addEventListener('visibilitychange', () => {
-    if (!document.hidden) checkForNewUsData();
+    if (!document.hidden) checkForNewDashboardData();
   });
-  setInterval(checkForNewUsData, 5 * 60 * 1000);
-  checkForNewUsData();
+  setInterval(checkForNewDashboardData, 5 * 60 * 1000);
+  checkForNewDashboardData();
   if (usRanges) {
     usRanges.addEventListener('click', (ev) => {
       const btn = ev.target.closest('[data-us-range]');
