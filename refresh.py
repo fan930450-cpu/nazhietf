@@ -262,7 +262,7 @@ def fetch_szse_etf_shares(codes: set[str]) -> dict[str, dict]:
             raw = json.loads(get(
                 "https://www.szse.cn/api/report/ShowReport/data?" + query,
                 {"Referer": "https://www.szse.cn/market/fund/volume/etf/index.html"},
-                retries=1, timeout=18,
+                retries=3, timeout=18,
             ))
             rows = raw[0].get("data") or []
             matches = [r for r in rows if str(r.get("fund_code")) == code and r.get("current_size")]
@@ -276,8 +276,15 @@ def fetch_szse_etf_shares(codes: set[str]) -> dict[str, dict]:
             print("深交所份额失败", code, e)
         return code, None
 
-    with ThreadPoolExecutor(max_workers=4) as pool:
-        return {code: value for code, value in pool.map(one, sorted(wanted)) if value}
+    # 深交所接口在 GitHub Actions 同时建立多条连接时会重置首批请求。
+    # 顺序请求并留短间隔，使首批暂时失败的代码也能通过 get 的重试取到。
+    found = {}
+    for code in sorted(wanted):
+        _, value = one(code)
+        if value:
+            found[code] = value
+        time.sleep(0.6)
+    return found
 
 
 def attach_estimated_aum(rows: list[dict], shares: dict[str, dict], navs: dict[str, dict]) -> None:
