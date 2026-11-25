@@ -916,7 +916,7 @@
   <section id="picksSection">
     <h2>今日同类怎么选 <span class="hint">纳指100和标普500的全部同类 · 不改顶部的本月金额</span></h2>
     <div class="card">
-      <p class="pick-intro">纳指顶部按 159501 的每月基准、回撤和溢价算出本月目标上限，再扣掉本月已投。标普金额在标普卡片，按 513500 和标普自己的每月基准，两笔互不替换。这里回答今天买哪只，并把全部同类放在同一张表里。先找同组最低溢价，溢价相差不超过 2 个百分点的场内 ETF 再按管理+托管费低、规模大排序；成交额低于 5000 万元的暂不参与。综合分保留作参考，不决定名次。净值日相差一个公布日不影响今天买哪只。落后超过一个公布日的会标明，不拿它的回撤和已更新的基金比。</p>
+      <p class="pick-intro">纳指顶部按每月基准、回撤和溢价算出本月目标上限，再扣掉本月已投；标普金额单独计算。今日同类按五项加权综合分从高到低排名，名次 1 决定“今日优先”和场内买入标的。买入参考溢价 29.4%、持续费用 29.4%、净值跟踪表现 23.5%、跟踪误差及稳定性 11.8%、规模与运作历史 5.9%。成交额低于 5000 万元暂不参与；落后超过一个净值公布日的基金会标明。</p>
       <div id="picksRoot">短名单加载中…</div>
       <h3 class="ledger-h">纳指100</h3>
       <p class="scroll-hint">表格可左右滑动 · 点击指标列排序</p>
@@ -925,7 +925,7 @@
           <thead>
             <tr>
               <th>名次</th><th>代码</th><th>名称</th>
-              <th aria-sort="none"><button type="button" class="sort-btn peer-sort-btn" data-peer-sort="score">参考综合分<span class="sort-ind" aria-hidden="true"><span class="tri up">▲</span><span class="tri dn">▼</span></span></button><span class="sub">不决定名次</span></th>
+              <th aria-sort="none"><button type="button" class="sort-btn peer-sort-btn" data-peer-sort="score">五项综合分<span class="sort-ind" aria-hidden="true"><span class="tri up">▲</span><span class="tri dn">▼</span></span></button><span class="sub">越高越好 · 决定名次</span></th>
               <th aria-sort="none"><button type="button" class="sort-btn peer-sort-btn" data-peer-sort="premium">参考溢价<span class="sort-ind" aria-hidden="true"><span class="tri up">▲</span><span class="tri dn">▼</span></span></button></th>
               <th aria-sort="none"><button type="button" class="sort-btn peer-sort-btn" data-peer-sort="ytd">今年收益率（净值）<span class="sort-ind" aria-hidden="true"><span class="tri up">▲</span><span class="tri dn">▼</span></span></button><span class="sub" id="nasdaqYtdHead"></span></th>
               <th aria-sort="none"><button type="button" class="sort-btn peer-sort-btn" data-peer-sort="tracking">跟踪误差<span class="sort-ind" aria-hidden="true"><span class="tri up">▲</span><span class="tri dn">▼</span></span></button><span class="sub">越低越好</span></th>
@@ -944,7 +944,7 @@
           <thead>
             <tr>
               <th>名次</th><th>代码</th><th>名称</th>
-              <th aria-sort="none"><button type="button" class="sort-btn peer-sort-btn" data-peer-sort="score">参考综合分<span class="sort-ind" aria-hidden="true"><span class="tri up">▲</span><span class="tri dn">▼</span></span></button><span class="sub">不决定名次</span></th>
+              <th aria-sort="none"><button type="button" class="sort-btn peer-sort-btn" data-peer-sort="score">五项综合分<span class="sort-ind" aria-hidden="true"><span class="tri up">▲</span><span class="tri dn">▼</span></span></button><span class="sub">越高越好 · 决定名次</span></th>
               <th aria-sort="none"><button type="button" class="sort-btn peer-sort-btn" data-peer-sort="premium">参考溢价<span class="sort-ind" aria-hidden="true"><span class="tri up">▲</span><span class="tri dn">▼</span></span></button></th>
               <th aria-sort="none"><button type="button" class="sort-btn peer-sort-btn" data-peer-sort="ytd">今年收益率（净值）<span class="sort-ind" aria-hidden="true"><span class="tri up">▲</span><span class="tri dn">▼</span></span></button><span class="sub" id="spxYtdHead"></span></th>
               <th aria-sort="none"><button type="button" class="sort-btn peer-sort-btn" data-peer-sort="tracking">跟踪误差<span class="sort-ind" aria-hidden="true"><span class="tri up">▲</span><span class="tri dn">▼</span></span></button><span class="sub">越低越好</span></th>
@@ -1241,11 +1241,14 @@
         aum_cny: row.aum_cny != null ? row.aum_cny : extra.aum_cny,
         turnover_cny: row.turnover_cny != null ? row.turnover_cny : extra.turnover_cny,
         ytd_nav_pct: row.ytd_nav_pct != null ? row.ytd_nav_pct : extra.ytd_nav_pct,
+        score_nav_pct: row.score_nav_pct != null ? row.score_nav_pct : extra.score_nav_pct,
+        score_nav_asof: row.score_nav_asof || extra.score_nav_asof,
+        nav_history_start: row.nav_history_start || extra.nav_history_start,
       });
     });
     const best = chooseToday(usable);
     if (!best) return null;
-    return { code: best.code, name: best.name, premium: Number(best.ref_premium_pct), reason: best.pick_reason || '综合分更低' };
+    return { code: best.code, name: best.name, premium: Number(best.ref_premium_pct), reason: best.pick_reason || '五项综合分最高' };
   }
   function lowestOnExchange(family) {
     const rows = family === 'sp500' ? (D.peers_spx || []) : (D.peers || []);
@@ -1786,17 +1789,11 @@
     return { c, label, expensive };
   }
 
-  // 与 refresh.py 的 choose_today / resolve_buy_target 一致。净值日不参与这个选择。
+  // 与 refresh.py 的 choose_today / resolve_buy_target 一致。
   const PICK_SPREAD = 2;
   const PICK_MIN_TURNOVER = 50000000;
   const PICK_EXPENSIVE_GAP = 5;
-  // 和 refresh.py 的 SCORE_* 一致。参考综合分只作对照；今日优先按 2 点溢价带、费率和规模选。
-  const SCORE_TE_WEIGHT = 2;
-  const SCORE_FEE_WEIGHT = 1;
-  const SCORE_YTD_LAG_WEIGHT = 0.5;
-  const SCORE_SIZE_MIN_CNY = 5e8;
-  const SCORE_SIZE_PENALTY = 2;
-  const SCORE_TURNOVER_PENALTY = 3;
+  const SCORE_WEIGHTS = { premium: .294, fee: .294, nav: .235, tracking: .118, sizeHistory: .059 };
 
   function withQuotePremium(it) {
     const q = liveMap[it.code];
@@ -1820,67 +1817,57 @@
     return band[0] || null;
   }
   function pickNums(items, key) {
-    return (items || []).map(it => Number(it && it[key])).filter(n => Number.isFinite(n));
+    return (items || []).map(it => it && it[key]).filter(v => v != null && v !== '').map(Number).filter(Number.isFinite);
+  }
+  function relativeScore(item, peers, key, higherIsBetter) {
+    const raw = item && item[key];
+    const values = pickNums(peers, key);
+    if (raw == null || raw === '' || !Number.isFinite(Number(raw)) || !values.length) return 0;
+    const lo = Math.min(...values), hi = Math.max(...values);
+    if (hi - lo < 1e-12) return 100;
+    return 100 * (higherIsBetter ? Number(raw) - lo : hi - Number(raw)) / (hi - lo);
+  }
+  function ageScore(item) {
+    const start = Date.parse(item.nav_history_start || '');
+    const end = Date.parse(item.score_nav_asof || item.ytd_nav_asof || '');
+    if (!Number.isFinite(start) || !Number.isFinite(end)) return 0;
+    return Math.min(100, Math.max(0, (end - start) / 86400000 / 1826 * 100));
   }
   function compositeScore(item, peers) {
-    let score = Number(item.ref_premium_pct);
-    if (item.tracking_error_pct != null && Number.isFinite(Number(item.tracking_error_pct))) {
-      score += SCORE_TE_WEIGHT * Number(item.tracking_error_pct);
-    }
-    const fees = pickNums(peers, 'fee_total_pct');
-    if (item.fee_total_pct != null && Number.isFinite(Number(item.fee_total_pct)) && fees.length) {
-      score += SCORE_FEE_WEIGHT * (Number(item.fee_total_pct) - Math.min.apply(null, fees));
-    }
-    const ytds = pickNums(peers, 'ytd_nav_pct');
-    if (item.ytd_nav_pct != null && Number.isFinite(Number(item.ytd_nav_pct)) && ytds.length) {
-      const sorted = ytds.slice().sort((a, b) => a - b);
-      const mid = Math.floor(sorted.length / 2);
-      const median = sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
-      score += SCORE_YTD_LAG_WEIGHT * Math.max(0, median - Number(item.ytd_nav_pct));
-    }
-    if (item.aum_cny != null && Number.isFinite(Number(item.aum_cny)) && Number(item.aum_cny) < SCORE_SIZE_MIN_CNY) {
-      score += SCORE_SIZE_PENALTY;
-    }
-    if (item.turnover_cny != null && Number.isFinite(Number(item.turnover_cny)) && Number(item.turnover_cny) < PICK_MIN_TURNOVER) {
-      score += SCORE_TURNOVER_PENALTY;
-    }
+    const sizePeers = (peers || []).filter(p => p.aum_cny != null && Number(p.aum_cny) > 0)
+      .map(p => Object.assign({}, p, { score_log_aum: Math.log1p(Number(p.aum_cny)) }));
+    const sizeItem = item.aum_cny != null && Number(item.aum_cny) > 0
+      ? Object.assign({}, item, { score_log_aum: Math.log1p(Number(item.aum_cny)) }) : item;
+    const sizeHistory = (relativeScore(sizeItem, sizePeers, 'score_log_aum', true) + ageScore(item)) / 2;
+    const score = SCORE_WEIGHTS.premium * relativeScore(item, peers, 'ref_premium_pct', false)
+      + SCORE_WEIGHTS.fee * relativeScore(item, peers, 'fee_total_pct', false)
+      + SCORE_WEIGHTS.nav * relativeScore(item, peers, 'score_nav_pct', true)
+      + SCORE_WEIGHTS.tracking * relativeScore(item, peers, 'tracking_error_pct', false)
+      + SCORE_WEIGHTS.sizeHistory * sizeHistory;
     return Math.round(score * 10000) / 10000;
   }
   function pickReason(item, peers) {
-    const prem = Number(item.ref_premium_pct);
-    const floorItem = peers.reduce((a, b) => Number(a.ref_premium_pct) <= Number(b.ref_premium_pct) ? a : b);
-    const gap = prem - Number(floorItem.ref_premium_pct);
-    if (gap <= 0.05) return '溢价处于最低一档';
-    const bits = [`溢价高出最低 ${fmt(gap)} 个点（在 2 点区间内）`];
-    if (item.fee_total_pct != null && floorItem.fee_total_pct != null &&
-        Number(item.fee_total_pct) < Number(floorItem.fee_total_pct) - 1e-9) {
-      bits.push(`费率低 ${fmt(Number(floorItem.fee_total_pct) - Number(item.fee_total_pct))} 个点`);
-    }
-    if (Number(item.aum_cny || 0) > Number(floorItem.aum_cny || 0)) bits.push('规模更大');
-    return bits.join('，');
+    return `五项加权综合分 ${fmt(compositeScore(item, peers))}，同类排名第 1`;
   }
   function rankPeers(items) {
     const usable = (items || []).filter(it => it && isOnExchange(it.code) && it.ref_premium_pct != null && !Number.isNaN(Number(it.ref_premium_pct)));
     if (!usable.length) return [];
     const liquid = usable.filter(it => it.turnover_cny == null || Number(it.turnover_cny) >= PICK_MIN_TURNOVER);
-    const candidates = liquid.length ? liquid : usable;
-    const floor = Math.min.apply(null, candidates.map(it => Number(it.ref_premium_pct)));
+    const candidates = liquid;
+    if (!candidates.length) return [];
     return candidates.slice().sort((a, b) => {
-      const pa = Number(a.ref_premium_pct), pb = Number(b.ref_premium_pct);
-      const ba = pa <= floor + PICK_SPREAD + 1e-9, bb = pb <= floor + PICK_SPREAD + 1e-9;
-      if (ba !== bb) return ba ? -1 : 1;
-      const fa = a.fee_total_pct == null ? 999 : Number(a.fee_total_pct);
-      const fb = b.fee_total_pct == null ? 999 : Number(b.fee_total_pct);
-      const size = (Number(b.aum_cny) || 0) - (Number(a.aum_cny) || 0);
-      if (ba) return fa - fb || size || pa - pb || compositeScore(a, candidates) - compositeScore(b, candidates);
-      return pa - pb || fa - fb || size || compositeScore(a, candidates) - compositeScore(b, candidates);
+      return compositeScore(b, usable) - compositeScore(a, usable)
+        || Number(a.ref_premium_pct) - Number(b.ref_premium_pct)
+        || String(a.code).localeCompare(String(b.code));
     });
   }
   function chooseToday(items) {
     const ranked = rankPeers(items);
     if (!ranked.length) return null;
     const best = ranked[0];
-    best.pick_reason = pickReason(best, ranked);
+    const usable = (items || []).filter(it => it && isOnExchange(it.code) && it.ref_premium_pct != null);
+    best.pick_score = compositeScore(best, usable);
+    best.pick_reason = pickReason(best, usable);
     return best;
   }
   function cheaperShortlistTarget(primaryCode, primaryPremium, expensive, items) {
@@ -2621,10 +2608,8 @@
       if (isToday) noteBits.push(best.reason || extra.why || '今日优先');
       else if (best && p.turnover_cny != null && Number(p.turnover_cny) < PICK_MIN_TURNOVER)
         noteBits.push('成交额不足 5000 万元，暂不参与今日优先');
-      else if (best && floor != null && p.ref_premium_pct != null && Number(p.ref_premium_pct) <= floor + PICK_SPREAD + 1e-9)
-        noteBits.push('同在最低溢价附近 2 个点内，按费率和规模排序');
-      else if (best && floor != null && p.ref_premium_pct != null)
-        noteBits.push(`溢价比最低一档高 ${fmt(Number(p.ref_premium_pct) - floor)} 个点，超出 2 点区间`);
+      else if (best && scoreOf[p.code] != null)
+        noteBits.push(`五项综合分 ${fmt(scoreOf[p.code])}，按分数排名`);
       else if (extra.why && !extra.why.startsWith('今日优先')) noteBits.push(extra.why);
       else if (p.is_primary) noteBits.push('主标的');
       if (extra.nav_stale) noteBits.push('净值未齐');
@@ -2633,7 +2618,7 @@
         <td class="num">${rankOf[p.code] || '—'}</td>
         <td><strong>${p.code}</strong></td>
         <td>${p.name || ''}${isToday ? '<span class="tag today">今日优先</span>' : ''}${extra.nav_stale ? '<span class="tag wait">净值未齐</span>' : ''}</td>
-        <td class="num js-score">${scoreOf[p.code] == null ? '—' : fmt(scoreOf[p.code])}</td>
+        <td class="num js-score" title="净值比较日：${p.score_nav_asof || '缺失'}；首条可得净值：${p.nav_history_start || '缺失'}">${scoreOf[p.code] == null ? '—' : fmt(scoreOf[p.code])}</td>
         <td class="js-prem">${p.ref_premium_pct == null ? '—' : fmt(p.ref_premium_pct) + '%'}</td>
         <td class="js-ytd">${ytdCell(p)}</td>
         <td class="js-te">${teCell(merged)}</td>
@@ -2675,7 +2660,7 @@
   const sizeNote = document.getElementById('peerSizeNote');
   if (sizeNote) {
     const asof = sizeDates.length ? sizeDates.slice().sort().pop() : '—';
-    sizeNote.textContent = `点击指标列标题可在从高到低和从低到高之间切换；名次仍表示今日优先顺序。名次按同组最低溢价附近 2 个点内的费率、规模排序；成交额低于 5000 万元的暂不参与。参考综合分保留作对照，不决定今日优先。估算规模 = 交易所公布 ETF 份额 × 最新公布单位净值，分别标出份额日和净值日；这不是实时市值或正式披露的净资产。表内另列最近季报净资产；缺少每日份额或净值时只显示季报。当前规模日期最晚 ${asof}。今年收益率（净值）= 最新公布净值 ÷ 上年最后一个净值日的净值 − 1，不用行情价。跟踪误差是天天基金特色数据里的年化跟踪误差，越低越好；没有公开数字就写 —，不估算。仅供个人记录辅助，非投资建议。`;
+    sizeNote.textContent = `点击指标列标题可切换从高到低或从低到高；名次与“今日优先”始终按五项综合分确定。五项各按同指数基金的最高与最低值换算为 0–100 分，再按权重加总：买入参考溢价 29.4%、管理加托管费 29.4%、同日净值今年收益率 23.5%、年化跟踪误差 11.8%、规模和运作历史各占 2.95%。分数越高越好，缺项记 0 分；同项数值全相同时均得 100 分。规模先取对数；运作历史用可取得的首条净值日估算，满 5 年得满分，并非官方成立日期。净值收益统一比较同组可用的最近共同净值日；落后超过一个公布日的该项记 0 分。成交额低于 5000 万元的场内基金不参与今日优先。估算规模 = 交易所公布 ETF 份额 × 最新公布单位净值，当前规模日期最晚 ${asof}。表中“今年收益率”仍展示各只最新净值日，并标出日期；跟踪误差为公开披露的年化跟踪误差，兼作稳定性代理。仅供个人记录辅助，非投资建议。`;
   }
 
   function shanghaiMonth() {
@@ -2886,7 +2871,7 @@
           <div class="pick-today">${group.today_line || ''}${median}</div>
         </div>
       </div>`;
-    }).join('') + `<p class="pick-src">费率与年化跟踪误差仍是定时快照（规模日期逐只见下表，跟踪误差截至 ${picks.tracking_asof || '—'}）。${picks.rule || ''}${liveNote}下面两张表是全部同类，名次 1 就是这一边的今日优先。</p>`;
+    }).join('') + `<p class="pick-src">费率与年化跟踪误差仍是定时快照（规模日期逐只见下表，跟踪误差截至 ${picks.tracking_asof || '—'}）。五项综合分决定同类名次与今日优先；成交额低于 5000 万元的场内 ETF 暂不参与。${liveNote}下面两张表是全部同类，名次 1 就是这一边的今日优先。</p>`;
   }
 
   const LIVE_POLL_MS = 20000;
