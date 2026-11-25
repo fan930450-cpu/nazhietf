@@ -123,6 +123,18 @@
   .kpi .k { color: var(--muted); font-size: .78rem; margin-bottom: 4px; }
   .kpi .v { font-size: 1.25rem; font-weight: 700; font-variant-numeric: tabular-nums; }
   .kpi .s { color: var(--muted); font-size: .75rem; margin-top: 2px; }
+  .ma-distance .k { display: flex; align-items: center; gap: 7px; }
+  .ma-distance .v { font-size: 2rem; line-height: 1.2; }
+  .ma-info { position: relative; display: inline-block; }
+  .ma-info summary { list-style: none; cursor: pointer; font-size: 1rem; line-height: 1; }
+  .ma-info summary::-webkit-details-marker { display: none; }
+  .ma-info summary:focus-visible { outline: 2px solid var(--blue); outline-offset: 3px; }
+  .ma-info .ma-popover {
+    position: absolute; top: 24px; right: 0; z-index: 5; width: min(280px, 75vw);
+    padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px;
+    background: var(--card); color: var(--text); font-size: .8rem; line-height: 1.5;
+    box-shadow: 0 10px 24px rgba(0,0,0,.35);
+  }
   #holdingCards.grid { margin-top: 10px; }
   #holdingBrokers.grid { margin-top: 8px; }
   .holdings-broker-label {
@@ -174,6 +186,7 @@
   th[aria-sort="descending"] .sort-btn { color: var(--text); }
   th[aria-sort="ascending"] .sort-ind .up,
   th[aria-sort="descending"] .sort-ind .dn { color: var(--amber); }
+  .peer-sort-btn { white-space: nowrap; }
   .up { color: var(--red); } .down { color: var(--green); } .flat { color: var(--amber); }
   /* A-share convention: up red down green */
   .badge {
@@ -906,24 +919,38 @@
       <p class="pick-intro">纳指顶部按 159501 的每月基准、回撤和溢价算出本月目标上限，再扣掉本月已投。标普金额在标普卡片，按 513500 和标普自己的每月基准，两笔互不替换。这里回答今天买哪只，并把全部同类放在同一张表里。先找同组最低溢价，溢价相差不超过 2 个百分点的场内 ETF 再按管理+托管费低、规模大排序；成交额低于 5000 万元的暂不参与。综合分保留作参考，不决定名次。净值日相差一个公布日不影响今天买哪只。落后超过一个公布日的会标明，不拿它的回撤和已更新的基金比。</p>
       <div id="picksRoot">短名单加载中…</div>
       <h3 class="ledger-h">纳指100</h3>
-      <p class="scroll-hint">表格可左右滑动</p>
+      <p class="scroll-hint">表格可左右滑动 · 点击指标列排序</p>
       <div class="table-scroll">
         <table>
           <thead>
             <tr>
-              <th>名次</th><th>代码</th><th>名称</th><th>参考综合分<span class="sub">不决定名次</span></th><th>参考溢价</th><th>今年收益率（净值）<span class="sub" id="nasdaqYtdHead"></span></th><th>跟踪误差<span class="sub">越低越好</span></th><th>管理+托管费</th><th>基金规模</th><th>净值溢价</th><th>收盘/现价</th><th>IOPV</th><th>说明</th>
+              <th>名次</th><th>代码</th><th>名称</th>
+              <th aria-sort="none"><button type="button" class="sort-btn peer-sort-btn" data-peer-sort="score">参考综合分<span class="sort-ind" aria-hidden="true"><span class="tri up">▲</span><span class="tri dn">▼</span></span></button><span class="sub">不决定名次</span></th>
+              <th aria-sort="none"><button type="button" class="sort-btn peer-sort-btn" data-peer-sort="premium">参考溢价<span class="sort-ind" aria-hidden="true"><span class="tri up">▲</span><span class="tri dn">▼</span></span></button></th>
+              <th aria-sort="none"><button type="button" class="sort-btn peer-sort-btn" data-peer-sort="ytd">今年收益率（净值）<span class="sort-ind" aria-hidden="true"><span class="tri up">▲</span><span class="tri dn">▼</span></span></button><span class="sub" id="nasdaqYtdHead"></span></th>
+              <th aria-sort="none"><button type="button" class="sort-btn peer-sort-btn" data-peer-sort="tracking">跟踪误差<span class="sort-ind" aria-hidden="true"><span class="tri up">▲</span><span class="tri dn">▼</span></span></button><span class="sub">越低越好</span></th>
+              <th aria-sort="none"><button type="button" class="sort-btn peer-sort-btn" data-peer-sort="fee">管理+托管费<span class="sort-ind" aria-hidden="true"><span class="tri up">▲</span><span class="tri dn">▼</span></span></button></th>
+              <th aria-sort="none"><button type="button" class="sort-btn peer-sort-btn" data-peer-sort="aum">基金规模<span class="sort-ind" aria-hidden="true"><span class="tri up">▲</span><span class="tri dn">▼</span></span></button></th>
+              <th>净值溢价</th><th>收盘/现价</th><th>IOPV</th><th>说明</th>
             </tr>
           </thead>
           <tbody id="peerBody"></tbody>
         </table>
       </div>
       <h3 class="ledger-h">标普500</h3>
-      <p class="scroll-hint">表格可左右滑动</p>
+      <p class="scroll-hint">表格可左右滑动 · 点击指标列排序</p>
       <div class="table-scroll">
         <table>
           <thead>
             <tr>
-              <th>名次</th><th>代码</th><th>名称</th><th>参考综合分<span class="sub">不决定名次</span></th><th>参考溢价</th><th>今年收益率（净值）<span class="sub" id="spxYtdHead"></span></th><th>跟踪误差<span class="sub">越低越好</span></th><th>管理+托管费</th><th>基金规模</th><th>净值溢价</th><th>收盘/现价</th><th>IOPV</th><th>说明</th>
+              <th>名次</th><th>代码</th><th>名称</th>
+              <th aria-sort="none"><button type="button" class="sort-btn peer-sort-btn" data-peer-sort="score">参考综合分<span class="sort-ind" aria-hidden="true"><span class="tri up">▲</span><span class="tri dn">▼</span></span></button><span class="sub">不决定名次</span></th>
+              <th aria-sort="none"><button type="button" class="sort-btn peer-sort-btn" data-peer-sort="premium">参考溢价<span class="sort-ind" aria-hidden="true"><span class="tri up">▲</span><span class="tri dn">▼</span></span></button></th>
+              <th aria-sort="none"><button type="button" class="sort-btn peer-sort-btn" data-peer-sort="ytd">今年收益率（净值）<span class="sort-ind" aria-hidden="true"><span class="tri up">▲</span><span class="tri dn">▼</span></span></button><span class="sub" id="spxYtdHead"></span></th>
+              <th aria-sort="none"><button type="button" class="sort-btn peer-sort-btn" data-peer-sort="tracking">跟踪误差<span class="sort-ind" aria-hidden="true"><span class="tri up">▲</span><span class="tri dn">▼</span></span></button><span class="sub">越低越好</span></th>
+              <th aria-sort="none"><button type="button" class="sort-btn peer-sort-btn" data-peer-sort="fee">管理+托管费<span class="sort-ind" aria-hidden="true"><span class="tri up">▲</span><span class="tri dn">▼</span></span></button></th>
+              <th aria-sort="none"><button type="button" class="sort-btn peer-sort-btn" data-peer-sort="aum">基金规模<span class="sort-ind" aria-hidden="true"><span class="tri up">▲</span><span class="tri dn">▼</span></span></button></th>
+              <th>净值溢价</th><th>收盘/现价</th><th>IOPV</th><th>说明</th>
             </tr>
           </thead>
           <tbody id="peerBodySpx"></tbody>
@@ -2543,6 +2570,13 @@
     }
     return {};
   }
+  const peerSort = { peerBody: null, peerBodySpx: null };
+  function livePeerRows(rows) {
+    return (rows || []).map(p => {
+      const q = liveMap[p.code];
+      return q ? Object.assign({}, p, { ref_premium_pct: q.premium, live_price: q.price, iopv: q.iopv }) : p;
+    });
+  }
   function paintPeerTable(tbody, rows, family) {
     if (!tbody) return;
     const list = (rows || []).slice();
@@ -2556,7 +2590,25 @@
     pool.forEach(p => { scoreOf[p.code] = compositeScore(p, pool); });
     const floor = ranked.length ? Math.min.apply(null, ranked.map(p => Number(p.ref_premium_pct))) : null;
     const best = bestPeer(family);
-    list.sort((a, b) => (rankOf[a.code] || 999) - (rankOf[b.code] || 999) || String(a.code).localeCompare(String(b.code)));
+    const byRank = (a, b) => (rankOf[a.code] || 999) - (rankOf[b.code] || 999) || String(a.code).localeCompare(String(b.code));
+    const sort = peerSort[tbody.id];
+    const sortValue = (p) => {
+      const merged = Object.assign({}, pickMeta(p.code), p);
+      const raw = sort.key === 'score' ? scoreOf[p.code]
+        : sort.key === 'premium' ? p.ref_premium_pct
+        : sort.key === 'ytd' ? p.ytd_nav_pct
+        : sort.key === 'tracking' ? merged.tracking_error_pct
+        : sort.key === 'fee' ? merged.fee_total_pct
+        : p.aum_cny;
+      return raw == null || raw === '' || !Number.isFinite(Number(raw)) ? null : Number(raw);
+    };
+    list.sort(sort ? (a, b) => {
+      const av = sortValue(a);
+      const bv = sortValue(b);
+      if (av == null) return bv == null ? byRank(a, b) : 1;
+      if (bv == null) return -1;
+      return (sort.direction === 'desc' ? bv - av : av - bv) || byRank(a, b);
+    } : byRank);
     tbody.innerHTML = '';
     list.forEach(p => {
       const extra = pickMeta(p.code);
@@ -2598,6 +2650,24 @@
   }
   paintPeerTable(document.getElementById('peerBody'), D.peers || [], 'nasdaq');
   paintPeerTable(document.getElementById('peerBodySpx'), D.peers_spx || [], 'sp500');
+  document.getElementById('picksSection').addEventListener('click', (ev) => {
+    const button = ev.target.closest('[data-peer-sort]');
+    if (!button) return;
+    const table = button.closest('table');
+    const tbody = table && table.querySelector('tbody');
+    if (!tbody || !(tbody.id in peerSort)) return;
+    const key = button.dataset.peerSort;
+    const previous = peerSort[tbody.id];
+    const direction = previous && previous.key === key && previous.direction === 'desc' ? 'asc' : 'desc';
+    peerSort[tbody.id] = { key, direction };
+    table.querySelectorAll('[data-peer-sort]').forEach(item => {
+      const active = item === button;
+      item.closest('th').setAttribute('aria-sort', active ? (direction === 'desc' ? 'descending' : 'ascending') : 'none');
+      item.setAttribute('aria-label', `${item.childNodes[0].textContent.trim()}，${active ? (direction === 'desc' ? '当前从高到低，点击改为从低到高' : '当前从低到高，点击改为从高到低') : '点击从高到低排序'}`);
+    });
+    const isNasdaq = tbody.id === 'peerBody';
+    paintPeerTable(tbody, livePeerRows(isNasdaq ? D.peers : D.peers_spx), isNasdaq ? 'nasdaq' : 'sp500');
+  });
   const sizeDates = []
     .concat(D.peers || [], D.peers_spx || [])
     .map(p => p.aum_as_of)
@@ -2605,7 +2675,7 @@
   const sizeNote = document.getElementById('peerSizeNote');
   if (sizeNote) {
     const asof = sizeDates.length ? sizeDates.slice().sort().pop() : '—';
-    sizeNote.textContent = `名次按同组最低溢价附近 2 个点内的费率、规模排序；成交额低于 5000 万元的暂不参与。参考综合分保留作对照，不决定今日优先。估算规模 = 交易所公布 ETF 份额 × 最新公布单位净值，分别标出份额日和净值日；这不是实时市值或正式披露的净资产。表内另列最近季报净资产；缺少每日份额或净值时只显示季报。当前规模日期最晚 ${asof}。今年收益率（净值）= 最新公布净值 ÷ 上年最后一个净值日的净值 − 1，不用行情价。跟踪误差是天天基金特色数据里的年化跟踪误差，越低越好；没有公开数字就写 —，不估算。仅供个人记录辅助，非投资建议。`;
+    sizeNote.textContent = `点击指标列标题可在从高到低和从低到高之间切换；名次仍表示今日优先顺序。名次按同组最低溢价附近 2 个点内的费率、规模排序；成交额低于 5000 万元的暂不参与。参考综合分保留作对照，不决定今日优先。估算规模 = 交易所公布 ETF 份额 × 最新公布单位净值，分别标出份额日和净值日；这不是实时市值或正式披露的净资产。表内另列最近季报净资产；缺少每日份额或净值时只显示季报。当前规模日期最晚 ${asof}。今年收益率（净值）= 最新公布净值 ÷ 上年最后一个净值日的净值 − 1，不用行情价。跟踪误差是天天基金特色数据里的年化跟踪误差，越低越好；没有公开数字就写 —，不估算。仅供个人记录辅助，非投资建议。`;
   }
 
   function shanghaiMonth() {
@@ -3026,13 +3096,8 @@
       if (info.pct != null) document.getElementById('peakDd').value = fmt(info.pct);
       setPeakHint(etf);
     }
-    const withLive = (rows) => (rows || []).map(p => {
-      const q = liveMap[p.code];
-      if (!q) return p;
-      return Object.assign({}, p, { ref_premium_pct: q.premium, live_price: q.price, iopv: q.iopv });
-    });
-    paintPeerTable(document.getElementById('peerBody'), withLive(D.peers), 'nasdaq');
-    paintPeerTable(document.getElementById('peerBodySpx'), withLive(D.peers_spx), 'sp500');
+    paintPeerTable(document.getElementById('peerBody'), livePeerRows(D.peers), 'nasdaq');
+    paintPeerTable(document.getElementById('peerBodySpx'), livePeerRows(D.peers_spx), 'sp500');
     recompute();
     paint159501HeroFromLive();
     if (document.getElementById('spxSelect')) {
@@ -3276,7 +3341,7 @@
           ? '近 3 年滚动最高收盘价；历史不够 3 年时，用已有数据里的最高收盘价'
           : (us.peak_window_label || '近 365 天滚动最高收盘价'));
       caption.textContent = rows.length
-        ? `回撤 = 收盘价 ÷ ${peakHow} − 1。近一个月、近半年、近一年仍用近 365 天高点，只改图上的窗口，同一天的回撤不因切换而变。近 3 年和近 5 年改用更长的滚动高点。QQQ 200 日均线用最近 200 个已收盘交易日的未复权收盘价算术平均，不随图表区间变化。更早的点按周留下，最近一段仍是日线。QQQ 是纳斯达克100，SPY 是标普500，VIX 是恐慌指数（右轴）。${srcText ? '来源 ' + srcText + '。' : ''}${warn ? '注意：' + warn + '。' : ''}仅供个人记录辅助，非投资建议。`
+        ? `回撤 = 收盘价 ÷ ${peakHow} − 1。近一个月、近半年、近一年仍用近 365 天高点，只改图上的窗口，同一天的回撤不因切换而变。近 3 年和近 5 年改用更长的滚动高点。QQQ 200 日均线用最近 200 个已收盘交易日的未复权收盘价算术平均；偏离 = 最新收盘价 ÷ 均线 − 1，不随图表区间变化。更早的点按周留下，最近一段仍是日线。QQQ 是纳斯达克100，SPY 是标普500，VIX 是恐慌指数（右轴）。${srcText ? '来源 ' + srcText + '。' : ''}${warn ? '注意：' + warn + '。' : ''}仅供个人记录辅助，非投资建议。`
         : `还没有 QQQ / SPY / VIX 日线。${warn ? warn + '。' : ''}仅供个人记录辅助，非投资建议。`;
     }
     const q = seriesStats(rows, usDdKey('qqq', days));
@@ -3289,15 +3354,14 @@
     };
     const fmtDd = (n) => n == null ? '—' : (n > 0 ? '+' : '') + Number(n).toFixed(2) + '%';
     const fmtV = (n) => n == null ? '—' : Number(n).toFixed(2);
+    const maAvailable = ma && ma.distance_pct != null && Number.isFinite(Number(ma.distance_pct));
+    const maChip = `<div class="kpi ma-distance"><div class="k">QQQ–200日均线偏离<details class="ma-info"><summary aria-label="查看QQQ 200日均线说明" title="查看计算说明">ⓘ</summary><div class="ma-popover">偏离 = 最新收盘价 ÷ 最近 200 个交易日的平均收盘价 − 1。${maAvailable ? `收盘 $${Number(ma.close).toFixed(2)} · 均线 $${Number(ma.value).toFixed(2)} · 截至 ${ma.as_of || '—'}` : '尚未取得 200 个交易日的完整数据。'}</div></details></div><div class="v">${maAvailable ? fmtDd(Number(ma.distance_pct)) : '—'}</div><div class="s">${maAvailable ? `截至 ${ma.as_of || '—'} · ${Number(ma.distance_pct) >= 0 ? '高于' : '低于'}均线` : '未取得 200 个已收盘交易日数据'}</div></div>`;
     if (chips) {
       chips.innerHTML = [
         chip('QQQ 当前回撤', fmtDd(q.last), '截至 ' + (q.asOf || '—') + ' · ' + US_RANGES[days] + '最大 ' + fmtDd(q.extreme), q.last),
         chip('SPY 当前回撤', fmtDd(s.last), '截至 ' + (s.asOf || '—') + ' · ' + US_RANGES[days] + '最大 ' + fmtDd(s.extreme), s.last),
         chip('VIX 当前', fmtV(v.last), '截至 ' + (v.asOf || '—') + ' · ' + US_RANGES[days] + '最高 ' + fmtV(v.extreme)),
-        chip('QQQ 200 日均线', ma && ma.value != null ? '$' + Number(ma.value).toFixed(2) : '—',
-          ma && ma.value != null
-            ? `收盘 $${Number(ma.close).toFixed(2)} · ${ma.distance_pct >= 0 ? '高于' : '低于'}均线 ${Math.abs(Number(ma.distance_pct)).toFixed(2)}% · 截至 ${ma.as_of}`
-            : '未取得 200 个已收盘交易日数据'),
+        maChip,
       ].join('');
     }
     const labels = rows.map(r => r.date);
